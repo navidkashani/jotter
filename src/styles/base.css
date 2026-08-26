@@ -19,9 +19,17 @@
  *   panels  660px article beside a 218px sticky rail holding the outline and
  *           backlinks, above 1100px. Below that it folds back into `column`.
  *
- * Nothing is hidden at either width. The rail's contents are *reordered* by
- * grid placement alone, so the DOM order — head, outline, prose, backlinks —
- * is the reading order at every size.
+ * Nothing is hidden at either width, and nothing is duplicated: `Note.astro`
+ * emits one shape or the other at build time.
+ *
+ * The DOM order differs between them, which it did not use to. `column` is
+ * head, outline, prose, backlinks — visual order and reading order both.
+ * `panels` is head, aside(outline + rail), prose, because the outline and the
+ * rail have to be one element to be one sticky column; as two grid items they
+ * pushed the prose down and overprinted each other on scroll. Below 1100px
+ * that wrapper dissolves to `display: contents` and the rail is placed after
+ * the prose, so the folded shape looks like `column` while keeping the DOM
+ * order `panels` needs. See the two blocks at the fold-back for the detail.
  */
 
 *,
@@ -435,13 +443,30 @@ body {
 
 /**
  * Panels, and only above the fold-back width. The rail is a real second
- * column: the outline beside the title block, backlinks beside the prose, both
- * sticky within their own rows.
+ * column: the outline above the graph and backlinks, the whole column sticky
+ * beside the prose.
+ *
+ * One sticky element, not two, and that is the whole trick. The outline and
+ * the rail used to be separate grid items in rows 1 and 2 of column 2, which
+ * broke twice over. A grid row is as tall as its tallest cell, so an outline
+ * taller than the title block pushed the prose down by the difference — 151px
+ * on the kitchen sink. And two `position: sticky` siblings resolve their
+ * containing block to the grid *container* rather than to their own rows, so
+ * past the first screen they both pinned to the same offset and drew on top of
+ * each other.
+ *
+ * Wrapping them means row 1 is sized by `.note-head` alone and there is only
+ * one thing in the column that can stick. `Note.astro` emits that wrapper for
+ * this layout only; `column` keeps the flat order, where the outline belongs
+ * above the prose and backlinks below it.
  */
 @media (min-width: 1101px) {
   .note-layout[data-layout='panels'] {
     grid-template-columns: minmax(0, var(--column-width)) var(--rail-width);
     column-gap: var(--rail-gap);
+    /* Two *explicit* rows, so the aside's span below resolves against them.
+       Without this the grid is implicit and `1 / -1` collapses to row 1. */
+    grid-template-rows: auto 1fr;
     align-items: start;
   }
 
@@ -450,25 +475,29 @@ body {
     grid-row: 1;
   }
 
-  .note-layout[data-layout='panels'] > .note-toc {
-    grid-column: 2;
-    grid-row: 1;
-  }
-
   .note-layout[data-layout='panels'] > .note-body {
     grid-column: 1;
     grid-row: 2;
   }
 
-  .note-layout[data-layout='panels'] > .note-rail {
+  /**
+   * `align-self: start` matters: the aside spans both rows, and row 2 is as
+   * tall as the article. Without it a short rail would stretch to the full
+   * height of the prose and its sticky offset would never bite.
+   */
+  .note-layout[data-layout='panels'] > .note-aside {
     grid-column: 2;
-    grid-row: 2;
-  }
-
-  /* In the rail both are bare, sticky columns rather than boxes in the flow. */
-  .note-layout[data-layout='panels'] > :is(.note-toc, .note-rail) {
+    grid-row: 1 / span 2;
+    align-self: start;
     position: sticky;
     inset-block-start: calc(var(--header-height) + var(--space-m));
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-l);
+  }
+
+  /* Inside it both are bare columns rather than boxes in the flow. */
+  .note-layout[data-layout='panels'] :is(.note-toc, .note-rail) {
     margin: 0;
     padding: 0;
     background: none;
@@ -480,11 +509,11 @@ body {
    * label, matching "Linked from" below it, and because the disclosure marker
    * is already suppressed it reads as a heading that happens to collapse.
    */
-  .note-layout[data-layout='panels'] > .note-toc > summary {
+  .note-layout[data-layout='panels'] .note-toc > summary {
     margin-block-end: var(--space-3xs);
   }
 
-  .note-layout[data-layout='panels'] > .note-toc .toc-list {
+  .note-layout[data-layout='panels'] .note-toc .toc-list {
     max-block-size: none;
     overflow-y: visible;
   }
@@ -510,6 +539,33 @@ body {
 
   .note-layout[data-layout='panels'] .backlink-card-excerpt {
     display: none;
+  }
+}
+
+/**
+ * The fold-back. Below 1100px `panels` becomes the column stack, and the
+ * wrapper has no job there — `display: contents` removes it so the outline and
+ * the rail are ordinary stacked children again.
+ *
+ * The rail is then placed *after* the prose. This is the one place where DOM
+ * order and visual order part company, and it is the lesser of the two evils:
+ * the wrapper has to hold the rail before the body for the sticky column
+ * above 1100px, and a graph card wedged between the outline and the first
+ * paragraph is not a reading experience anyone wants on a phone. The reading
+ * order is the same one `panels` already has at full width, so the two states
+ * at least agree with each other.
+ */
+@media (max-width: 1100px) {
+  .note-layout[data-layout='panels'] > .note-aside {
+    display: contents;
+  }
+
+  .note-layout[data-layout='panels'] > .note-body {
+    grid-row: 3;
+  }
+
+  .note-layout[data-layout='panels'] .note-rail {
+    grid-row: 4;
   }
 }
 

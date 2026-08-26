@@ -2,12 +2,26 @@
 /**
  * A note, with — or without — its rail.
  *
- * The DOM order is head, outline, body, rail, and that is the reading order at
- * every width and in both layouts. `column` stacks it: the outline is a
- * collapsible `<details>` above the prose and backlinks are cards below it.
- * `panels` places the outline and the rail into a second column with grid, and
- * folds back to the stack below 1100px. Nothing is duplicated, nothing is
- * hidden; the same markup is simply placed differently.
+ * Two shapes, and the DOM differs between them — which it did not use to, and
+ * the reason is worth recording.
+ *
+ * `column` is head, outline, body, rail: the outline is a collapsible
+ * `<details>` above the prose and backlinks are cards below it, which is both
+ * the visual order and the reading order.
+ *
+ * `panels` is head, aside(outline + rail), body. The outline and the rail are
+ * wrapped because as separate grid items they broke twice: the outline sized
+ * the grid row it shared with the title block, pushing the prose down by up to
+ * 151px, and two sticky siblings in one column pinned to the same offset and
+ * overprinted each other on scroll. See the panels block in `base.css`.
+ *
+ * The cost is that in `panels` the graph and backlinks are read before the
+ * prose rather than after it. That is the trade the wrapper forces, and it is
+ * softened by the rail being a complementary landmark — skippable in one
+ * keystroke — with `<main>` and the skip link already in place.
+ *
+ * `config.layout` is build-time, so exactly one of these branches is ever
+ * emitted. Nothing is duplicated in the output, nothing is hidden with CSS.
  *
  * The rail is genuinely absent in `column` rather than merely narrow: a 660px
  * reading column with nothing beside it is the point of that layout, and
@@ -55,6 +69,11 @@ const description =
  */
 const showGraph: boolean = import.meta.env.JOTTER_GRAPH
 const LocalGraph = showGraph ? (await import('../components/LocalGraph.astro')).default : null
+
+/** Which of the two DOM shapes above to emit. Resolved at build. */
+const panels = config.layout === 'panels'
+const hasToc = config.features.toc
+const hasRail = config.features.backlinks || showGraph
 ---
 
 <Base title={note.title} description={description} current={note.slug}>
@@ -66,7 +85,21 @@ const LocalGraph = showGraph ? (await import('../components/LocalGraph.astro')).
       {config.features.tags && <TagList tags={note.tags} />}
     </header>
 
-    {config.features.toc && <Toc headings={headings} />}
+    {
+      panels && (hasToc || hasRail) && (
+        <div class="note-aside">
+          {hasToc && <Toc headings={headings} />}
+          {hasRail && (
+            <aside class="note-rail" aria-label={t('note.context')}>
+              {LocalGraph && <LocalGraph neighbourhood={neighbourhood} current={note.slug} />}
+              {config.features.backlinks && <Backlinks links={backlinks} />}
+            </aside>
+          )}
+        </div>
+      )
+    }
+
+    {!panels && hasToc && <Toc headings={headings} />}
 
     <div class="note-body prose">
       <slot />
@@ -74,7 +107,7 @@ const LocalGraph = showGraph ? (await import('../components/LocalGraph.astro')).
     </div>
 
     {
-      (config.features.backlinks || showGraph) && (
+      !panels && hasRail && (
         <aside class="note-rail" aria-label={t('note.context')}>
           {LocalGraph && <LocalGraph neighbourhood={neighbourhood} current={note.slug} />}
           {config.features.backlinks && <Backlinks links={backlinks} />}
