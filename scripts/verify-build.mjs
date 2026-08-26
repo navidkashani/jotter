@@ -363,10 +363,18 @@ if (FULL) {
   {
     const configPath = join(ROOT, 'jotter.config.ts')
     const original = await readFile(configPath, 'utf8')
-    const off = original.replace(
-      /features:\s*\{[\s\S]*?\}/,
-      `features: { toc: true, backlinks: true, tags: false, themeToggle: false, graph: false, search: false, hoverPreview: false, rss: false }`,
-    )
+    /**
+     * `nav` goes off alongside the feature flags because the drawer
+     * enhancement is gated on it rather than on `features`. It is the one
+     * script that is not a feature, so leaving `nav: 'tree'` here would assert
+     * "no JavaScript" against a page that legitimately ships some.
+     */
+    const off = original
+      .replace(
+        /features:\s*\{[\s\S]*?\}/,
+        `features: { toc: true, backlinks: true, tags: false, themeToggle: false, graph: false, search: false, hoverPreview: false, rss: false }`,
+      )
+      .replace(/\bnav:\s*'(?:tree|tags|none)'/, `nav: 'none'`)
     await writeFile(configPath, off)
     await rm(join(ROOT, 'node_modules', '.astro'), { recursive: true, force: true })
 
@@ -386,7 +394,7 @@ if (FULL) {
       check(tagChips.length === 0, 'tags off removes every tag chip')
       check(
         inline.length === 0 && offJs.length === 0,
-        'no JavaScript at all when every scripted feature is off',
+        'no JavaScript at all when every scripted feature and the nav are off',
         `${inline.length} inline block(s), ${offJs.length} file(s)`,
       )
     }

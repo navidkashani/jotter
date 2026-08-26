@@ -264,8 +264,8 @@ sneaks in.
 WCAG AA contrast on every token pair, in both themes, asserted at build.
 Visible focus everywhere, a skip link, landmarks, `prefers-reduced-motion`,
 and a print stylesheet. The navigation tree, the outline, the drawer and every
-callout work with JavaScript disabled — the only script in a v1 build is the
-~600-byte theme toggle and drawer enhancement.
+callout work with JavaScript disabled — the only scripts in a v1 build are the
+theme island and the drawer enhancement, about 1.1 KB together.
 
 ---
 

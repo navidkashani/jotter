@@ -62,7 +62,7 @@ export default defineConfig({ linkResolution: 'absolute' })
   filename you typed.
 - **A design system you can actually change.** Forty tokens, one file, WCAG AA
   asserted at build in both themes.
-- **Almost no JavaScript.** v1 ships about 600 bytes per page. Quartz's client
+- **Almost no JavaScript.** v1 ships about 1.1 KB per page. Quartz's client
   bundle is a documented complaint.
 - **Images optimized by default.** AVIF/WebP with intrinsic dimensions; SVG and
   GIF passed through untouched.
