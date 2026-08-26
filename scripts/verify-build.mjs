@@ -17,6 +17,7 @@ import { spawn } from 'node:child_process'
 import { tmpdir } from 'node:os'
 
 import { readTokens, contrastOklch } from './lib/color.mjs'
+import { runningDevServers, devServerWarning } from './lib/dev-server.mjs'
 
 const ROOT = join(import.meta.dirname, '..')
 const DIST = join(ROOT, 'dist')
@@ -345,7 +346,19 @@ const run = (args, options = {}) =>
     child.on('exit', (code) => resolve({ code, out }))
   })
 
+/**
+ * `--full` rebuilds twice, and both rebuilds clear `node_modules/.astro`. It
+ * also rewrites `jotter.config.ts` for the duration of the feature-flag pass.
+ * Neither is survivable by a dev server reading the same files, so it refuses
+ * for the same reason `npm run clean` does.
+ */
 if (FULL) {
+  const servers = runningDevServers(ROOT)
+  if (servers.length > 0) {
+    console.error(`\n${devServerWarning(servers, 'npm run verify:full')}`)
+    process.exit(1)
+  }
+
   section('Feature flags off means no JavaScript')
   {
     const configPath = join(ROOT, 'jotter.config.ts')

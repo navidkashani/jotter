@@ -16,7 +16,7 @@
     "check": "astro check",
     "verify": "node scripts/verify-build.mjs",
     "verify:full": "astro build && node scripts/verify-build.mjs --full",
-    "clean": "rm -rf dist .astro node_modules/.astro node_modules/.vite"
+    "clean": "node scripts/clean.mjs"
   },
   "dependencies": {
     "@astrojs/markdown-satteri": "^0.3.8",
