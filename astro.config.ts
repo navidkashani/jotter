@@ -92,6 +92,13 @@ export default defineConfig({
       name: 'IBM Plex Mono',
       cssVariable: '--font-mono',
       weights: [400, 500],
+      /**
+       * Normal only. Astro requests both styles when this is unset, and the
+       * mono face is never italic anywhere in the theme — the two italic rules
+       * in `prose.css` are on a blockquote and a stopped transclusion, both
+       * body font. Four files, built and served for nothing.
+       */
+      styles: ['normal'],
       subsets: ['latin', 'latin-ext'],
       fallbacks: ['ui-monospace', 'SFMono-Regular', 'monospace'],
     },

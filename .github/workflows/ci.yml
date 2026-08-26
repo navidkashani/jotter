@@ -1,0 +1,64 @@
+# The claims jotter makes about itself, checked on every push.
+#
+# `verify:full` rather than `verify` on purpose. The extra passes are the ones
+# that are easy to break and impossible to notice: that a disabled feature
+# ships *no JavaScript at all* rather than hidden markup, and that a 1,000-note
+# vault still builds inside the tested envelope. Both rewrite files and clear
+# caches, which is why they are unsafe to run casually and exactly right here,
+# in a checkout nobody is working in.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A superseded run tells you nothing you want to know.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    strategy:
+      # Both versions' results are worth having; stopping at the first failure
+      # hides whether a break is version-specific.
+      fail-fast: false
+      matrix:
+        # 22.12 is the floor `engines` promises, so it is the one that makes
+        # the promise true. 24 is what the theme is developed on.
+        node: ['22.12', '24']
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # `src/lib/dates.ts` reads each note's first and last commit time out
+          # of `git log`. At the default depth of 1 there is no history to read,
+          # so every note would silently inherit the checkout commit's date and
+          # the demo's "recently updated" ordering would be fiction.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - run: npm ci
+
+      - name: Types
+        run: npx astro check
+
+      - name: Unit tests
+        run: npm test
+
+      # JOTTER_DEMO builds /library too, so the component page is covered by
+      # the same assertions as everything else rather than rotting unbuilt.
+      - name: Build and verify
+        run: npm run verify:full
+        env:
+          JOTTER_DEMO: '1'
