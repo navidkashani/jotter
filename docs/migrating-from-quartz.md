@@ -63,7 +63,7 @@ export default defineConfig({ linkResolution: 'absolute' })
 - **A design system you can actually change.** Forty tokens, one file, WCAG AA
   asserted at build in both themes.
 - **Almost no JavaScript.** A default build ships about 1.1 KB per page, and
-  about 19 KB on a note page with the local graph turned on. Quartz's client
+  about 22 KB on a note page with the local graph turned on. Quartz's client
   bundle — `d3` entire, `pixi.js` and `@tweenjs/tween.js`, 107 KB before its
   graph draws anything — is a documented complaint.
 - **Images optimized by default.** AVIF/WebP with intrinsic dimensions; SVG and
@@ -77,7 +77,9 @@ export default defineConfig({ linkResolution: 'absolute' })
 - **The global graph.** jotter has the *local* graph — `features.graph`, in
   the `panels` rail — but there is no whole-site graph page. The local one is
   `d3-force` on a 2D canvas rather than Pixi, and it keeps the readable list of
-  neighbours underneath the picture rather than instead of it.
+  neighbours underneath the picture rather than instead of it. It also names
+  every node at rest — Quartz hides its labels until you zoom in — with an
+  expand button that opens the same graph in a full-size dialog.
 - **Mermaid, KaTeX rendering, Dataview, `.canvas`, Excalidraw.** Out of scope,
   documented rather than silently missing.
 - **The plugin ecosystem.** jotter has six small markdown plugins over pure

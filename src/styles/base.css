@@ -555,22 +555,29 @@ body {
 /* ---- The local graph --------------------------------------------------- */
 
 /**
- * The mount is empty until `src/scripts/local-graph.ts` puts a canvas in it,
- * and `:empty` is doing real work here: with scripting off it collapses
- * completely rather than leaving a bordered blank above the list that is the
- * actual fallback. The aspect ratio is the mockup's own viewBox.
+ * The mount is empty until `src/scripts/local-graph.ts` puts a canvas and an
+ * expand button in it, and `:empty` is doing real work here: with scripting
+ * off it collapses completely rather than leaving a bordered blank above the
+ * list that is the actual fallback.
  *
- * The type is set on the mount rather than in the script because the canvas
+ * Taller than the mockup's own 200/170, because every node is now named and
+ * labels need rows to tile into. Vertical room is the one thing a sticky rail
+ * has going spare.
+ *
+ * The type is set on the box rather than in the script because the canvas
  * reads its own computed style for the labels — one more thing that stays a
- * token instead of becoming a literal in JavaScript.
+ * token instead of becoming a literal in JavaScript. The sans rather than the
+ * mono is worth about 17% of every label's width, which at 216px is the
+ * difference between a name and an ellipsis.
  */
 .graph-canvas {
-  aspect-ratio: 200 / 170;
+  position: relative;
+  aspect-ratio: 200 / 210;
   /* Where `panels` has folded the rail into the column the card is as wide as
      the prose, and the ratio alone would make that a 560px square. */
-  max-block-size: 240px;
+  max-block-size: 260px;
   overflow: hidden;
-  font-family: var(--font-code);
+  font-family: var(--font-body);
   font-size: var(--step-label);
   background: var(--surface);
   border: var(--hairline) solid var(--rule);
@@ -581,13 +588,64 @@ body {
   display: none;
 }
 
-.graph-canvas canvas {
+.graph-canvas canvas,
+.graph-stage canvas {
   display: block;
   inline-size: 100%;
   block-size: 100%;
   cursor: grab;
   /* Vertical scrolling stays the browser's. See `local-graph.ts`. */
   touch-action: pan-y;
+}
+
+/**
+ * The way out of a 216px card, and the reason drawing every label in one is
+ * defensible at all. Both the button and the dialog are created by the script,
+ * so neither exists without it.
+ */
+.graph-expand {
+  position: absolute;
+  inset-block-start: var(--space-3xs);
+  inset-inline-end: var(--space-3xs);
+  z-index: 1;
+}
+
+.graph-dialog {
+  inline-size: min(92vw, 1100px);
+  block-size: min(85dvh, 760px);
+  padding: 0;
+  overflow: hidden;
+  background: var(--surface);
+  border: var(--hairline) solid var(--rule);
+  border-radius: var(--radius-l);
+}
+
+/* A modal <dialog> is already `position: fixed`, so the button resolves
+   against it without the dialog needing a position of its own. */
+.graph-close {
+  position: absolute;
+  inset-block-start: var(--space-2xs);
+  inset-inline-end: var(--space-2xs);
+  z-index: 1;
+}
+
+/**
+ * `::backdrop` inherits from its originating element in current browsers, so
+ * `--scrim` resolves here. Where it does not, the backdrop is simply
+ * transparent — the dialog is still legible, still on top and still closes.
+ * A hardcoded fallback is not available: `tokens.css` is the only file allowed
+ * to name a colour, and the build asserts it.
+ */
+.graph-dialog::backdrop {
+  background: var(--scrim);
+}
+
+/* Bigger type than the rail: this is the box you came here to read in. */
+.graph-stage {
+  inline-size: 100%;
+  block-size: 100%;
+  font-family: var(--font-body);
+  font-size: var(--step-nav);
 }
 
 /* ---- Table of contents ------------------------------------------------- */

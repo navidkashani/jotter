@@ -6,8 +6,9 @@
  * the data, and the readable list of relationships underneath it — outgoing
  * above, incoming below.
  *
- * `src/scripts/local-graph.ts` inserts a canvas into the mount and makes the
- * list `.visually-hidden`. Not `display: none`: the list stays in the
+ * `src/scripts/local-graph.ts` inserts a canvas and an expand button into the
+ * mount, appends the dialog that button opens to `<body>`, and makes the list
+ * `.visually-hidden`. Not `display: none`: the list stays in the
  * accessibility tree, because a force-directed canvas is a picture and the
  * list is the only version of it a screen reader or a keyboard can use. With
  * scripting off nothing happens, no canvas appears, and the list is simply
@@ -67,6 +68,12 @@ const data = {
     href: noteHref(n.slug),
   })),
   links,
+  /**
+   * The expand button and the dialog are built in the browser, so their labels
+   * have to travel. Inside the payload rather than as two more attributes: the
+   * channel already exists, and one `JSON.parse` is cheaper than three reads.
+   */
+  labels: { expand: t('note.expandGraph'), close: t('note.closeGraph') },
 }
 ---
 

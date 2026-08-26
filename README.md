@@ -267,7 +267,7 @@ and a print stylesheet. The navigation tree, the outline, the drawer and every
 callout work with JavaScript disabled — the only scripts in a default build
 are the theme island and the drawer enhancement, about 1.1 KB together. Turn
 `features.graph` on and a note page adds an 18 KB `d3-force` chunk, about
-19 KB in all; the graph's own accessible list stays underneath it either way.
+22 KB in all; the graph's own accessible list stays underneath it either way.
 
 ---
 
@@ -282,7 +282,9 @@ migration guide, the demo garden, and the tests.
 
 **Since v1:** the local graph — a `d3-force` layout on a canvas in the
 `panels` rail, off by default, with the readable list of neighbours kept
-underneath it for keyboards, screen readers and scripting-off.
+underneath it for keyboards, screen readers and scripting-off. Every node is
+named; the rail card elides long titles to its width and an expand button
+opens the same graph in a dialog where nothing is elided.
 
 **Still to come:** search (Pagefind), hover previews, OG images, RSS,
 analytics, and the Open Publish `scripts/` layer.
