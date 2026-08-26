@@ -1,0 +1,56 @@
+---
+/**
+ * The local graph.
+ *
+ * v1 renders the neighbourhood as a static, readable list of relationships —
+ * outgoing above, incoming below — and ships no JavaScript. The force-directed
+ * canvas is v2; this is not a placeholder for a missing feature so much as the
+ * accessible fallback the canvas version will keep underneath it.
+ *
+ * When `features.graph` is false this component is never rendered at all, so
+ * the markup and its styles are absent rather than hidden.
+ */
+import type { Neighbourhood } from '../lib/graph.js'
+import { noteHref } from '../lib/href.js'
+import { t } from '../i18n/index.js'
+
+interface Props {
+  neighbourhood: Neighbourhood
+  current: string
+}
+
+const { neighbourhood, current } = Astro.props
+const neighbours = neighbourhood.nodes.filter((n) => n.slug !== current)
+---
+
+{
+  neighbours.length > 0 && (
+    <section class="rail-section" aria-labelledby="graph-heading">
+      <h2 class="meta rail-heading" id="graph-heading">
+        {t('note.graph')}
+      </h2>
+      <div class="rail-links graph-list">
+        {neighbours.map((node) => (
+          <a href={noteHref(node.slug)}>{node.title}</a>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+<style>
+  .graph-list a::before {
+    content: '';
+    display: inline-block;
+    inline-size: 5px;
+    block-size: 5px;
+    margin-inline-end: var(--space-3xs);
+    border-radius: 50%;
+    background: var(--rule-strong);
+    vertical-align: middle;
+  }
+
+  .graph-list a:hover::before {
+    background: var(--accent);
+  }
+</style>

@@ -1,0 +1,147 @@
+---
+/**
+ * The page frame: head, header, sidebar, main.
+ *
+ * The only script in a v1 build is the theme island, and it is inline in
+ * `<head>` on purpose — it has to run before first paint, or a reader who chose
+ * dark gets a white flash on every navigation. Everything else on the page
+ * works with scripting off.
+ */
+import { Font } from 'astro:assets'
+
+import { config } from '../lib/site.js'
+import { t } from '../i18n/index.js'
+import Header from '../components/Header.astro'
+import Sidebar from '../components/Sidebar.astro'
+
+import '../styles/tokens.css'
+import '../styles/base.css'
+import '../styles/prose.css'
+import '../styles/print.css'
+import '../styles/custom.css'
+
+interface Props {
+  title?: string
+  description?: string
+  /** Slug of the current note, so the nav can mark it. */
+  current?: string
+}
+
+const { title, description, current } = Astro.props
+
+const pageTitle = title ? `${title} — ${config.title}` : config.title
+const pageDescription = description || config.description
+const canonical = config.url ? new URL(Astro.url.pathname, config.url).href : undefined
+---
+
+<!doctype html>
+<html lang={config.locale} dir={config.dir}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{pageTitle}</title>
+
+    {pageDescription && <meta name="description" content={pageDescription} />}
+    {canonical && <link rel="canonical" href={canonical} />}
+    {config.noIndex && <meta name="robots" content="noindex, nofollow" />}
+
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={title ?? config.title} />
+    {pageDescription && <meta property="og:description" content={pageDescription} />}
+    {canonical && <meta property="og:url" content={canonical} />}
+    <meta property="og:site_name" content={config.title} />
+    <meta name="twitter:card" content="summary" />
+
+    <Font cssVariable="--font-sans" preload />
+    <Font cssVariable="--font-mono" />
+
+    {
+      /**
+       * Set before first paint, so there is no flash. Kept as a string rather
+       * than a component so nothing schedules it after the stylesheet.
+       * `color-scheme` is set alongside so form controls and scrollbars match.
+       */
+      config.features.themeToggle && (
+        <script is:inline>
+          {`(()=>{try{const s=localStorage.getItem('jotter-theme');const d=matchMedia('(prefers-color-scheme:dark)').matches;const t=s==='dark'||s==='light'?s:(d?'dark':'light');document.documentElement.dataset.theme=t;document.documentElement.style.colorScheme=t}catch(e){}})()`}
+        </script>
+      )
+    }
+  </head>
+
+  <body>
+    <a class="skip-link" href="#content">{t('site.skipToContent')}</a>
+
+    {
+      /**
+       * The drawer toggle is the checkbox itself, not a label for one. A label
+       * is not in the tab order, so a keyboard user with scripting off could
+       * never reach it; a styled checkbox is focusable, operable with Space,
+       * and announced with its own name. The script below only adds
+       * Esc-to-close and `inert` on top of behaviour that already works.
+       */
+      config.nav !== 'none' && (
+        <input
+          type="checkbox"
+          id="jotter-drawer"
+          class="drawer-checkbox"
+          data-drawer-toggle
+          aria-label={t('site.openNavigation')}
+          aria-controls="sidebar"
+        />
+      )
+    }
+
+    <div class="page" data-nav={config.nav}>
+      <Header />
+      {config.nav !== 'none' && <Sidebar current={current} />}
+      <main class="main" id="content">
+        <slot />
+      </main>
+    </div>
+
+    {
+      /**
+       * Enhancement only: the drawer already opens, closes and is keyboard
+       * operable through the checkbox. This adds Esc-to-close, closing on
+       * navigation, and `inert` on the page behind it so focus cannot wander
+       * out of an open drawer into the article underneath.
+       */
+      config.nav !== 'none' && (
+        <script>
+          {`
+          const toggle = document.getElementById('jotter-drawer')
+          const page = document.querySelector('.page')
+          const sidebar = document.getElementById('sidebar')
+          const main = document.querySelector('.main')
+          if (toggle && page && sidebar && main) {
+            const mobile = window.matchMedia('(max-width: 800px)')
+            const sync = () => {
+              const open = toggle.checked && mobile.matches
+              main.inert = open
+              if (open) sidebar.querySelector('a, button, summary')?.focus()
+            }
+            toggle.addEventListener('change', sync)
+            mobile.addEventListener('change', sync)
+            document.addEventListener('keydown', (event) => {
+              if (event.key === 'Escape' && toggle.checked) {
+                toggle.checked = false
+                sync()
+                toggle.focus()
+              }
+            })
+            // A link inside the drawer navigates; leaving it open over the new
+            // page would hide what the reader just asked for.
+            sidebar.addEventListener('click', (event) => {
+              if (event.target.closest('a')) {
+                toggle.checked = false
+                sync()
+              }
+            })
+          }
+        `}
+        </script>
+      )
+    }
+  </body>
+</html>

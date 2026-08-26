@@ -1,0 +1,69 @@
+---
+/**
+ * One page per tag, at every level of the hierarchy.
+ *
+ * A parent tag lists everything beneath it: `/tags/method` shows notes tagged
+ * `method/zettelkasten` too. That rollup is the whole point of nested tags —
+ * without it, `#method` on its own is an empty page.
+ */
+import { notesByTag, tags } from '../../lib/site.js'
+import { tagHref } from '../../lib/href.js'
+import type { TagNode } from '../../lib/tags.js'
+import Base from '../../layouts/Base.astro'
+import NoteList from '../../components/NoteList.astro'
+import { t } from '../../i18n/index.js'
+
+export async function getStaticPaths() {
+  const { notesByTag, config } = await import('../../lib/site.js')
+  if (!config.features.tags) return []
+  return [...notesByTag.keys()].map((tag) => ({ params: { tag }, props: { tag } }))
+}
+
+const { tag } = Astro.props
+const tagged = notesByTag.get(tag) ?? []
+
+const find = (nodes: TagNode[]): TagNode | undefined => {
+  for (const node of nodes) {
+    if (node.tag === tag) return node
+    const found = find(node.children)
+    if (found) return found
+  }
+  return undefined
+}
+const node = find(tags)
+---
+
+<Base title={`#${tag}`} current={`tags/${tag}`}>
+  <div class="stack-l tag-page">
+    <header>
+      <h1 class="note-title">#{tag}</h1>
+      <p class="meta">{t('tags.count', { count: tagged.length })}</p>
+    </header>
+
+    {
+      node && node.children.length > 0 && (
+        <section class="stack">
+          <h2 class="meta">{t('tags.childTags')}</h2>
+          <ul class="tag-list" role="list">
+            {node.children.map((child) => (
+              <li>
+                <a class="tag-chip" href={tagHref(child.tag)}>
+                  #{child.tag}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )
+    }
+
+    <NoteList notes={tagged} variant="rows" />
+  </div>
+</Base>
+
+<style>
+  .tag-page {
+    max-inline-size: calc(var(--column-width) + var(--rail-width) + var(--space-xl));
+    margin-inline: auto;
+  }
+</style>

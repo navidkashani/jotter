@@ -1,0 +1,191 @@
+/**
+ * Every colour, space, type step, radius and duration in jotter.
+ *
+ * This is the whole visual system. Components reference these and nothing else;
+ * `scripts/verify-build.mjs` fails the build on a colour literal anywhere
+ * outside this file. That constraint is what makes "change the accent, change
+ * the site" literally true instead of aspirational.
+ *
+ * Colours are OKLCH: perceptually uniform, so a lightness step means the same
+ * amount of visible change at every hue, and a palette can be shifted by
+ * editing one hue angle without re-tuning every swatch.
+ *
+ * Dark mode is defined twice on purpose — under `[data-theme="dark"]` for an
+ * explicit choice, and under `prefers-color-scheme` for the system default —
+ * so the toggle wins in both directions and there is no "system says light,
+ * user said dark" gap.
+ */
+
+:root {
+  /* ---- Colour: surfaces ------------------------------------------------ */
+  --paper: oklch(98.8% 0.004 85);
+  --surface: oklch(100% 0 0);
+  --surface-sunken: oklch(96.6% 0.005 85);
+  --surface-raised: oklch(99.6% 0.003 85);
+
+  /* ---- Colour: ink ----------------------------------------------------- */
+  --ink: oklch(27% 0.012 65);
+  --ink-strong: oklch(18% 0.014 65);
+  --ink-muted: oklch(46% 0.011 68);
+  --ink-faint: oklch(60% 0.009 70);
+
+  /* ---- Colour: lines --------------------------------------------------- */
+  --rule: oklch(91.5% 0.005 80);
+  --rule-strong: oklch(85% 0.007 80);
+
+  /* ---- Colour: accent -------------------------------------------------- */
+  --accent: oklch(48% 0.135 252);
+  --accent-hover: oklch(38% 0.145 252);
+  --accent-soft: oklch(95% 0.028 252);
+  --accent-ink: oklch(100% 0 0);
+
+  /* ---- Colour: semantics ----------------------------------------------- */
+  --mark: oklch(91% 0.145 96);
+  --mark-ink: oklch(28% 0.06 80);
+  --focus: oklch(55% 0.19 252);
+  --selection: oklch(90% 0.05 252);
+  --scrim: oklch(20% 0.02 265 / 0.35);
+
+  /* Callout hues. One token each; the callout itself mixes them with paper. */
+  --hue-note: 252;
+  --hue-tip: 162;
+  --hue-success: 148;
+  --hue-question: 300;
+  --hue-warning: 74;
+  --hue-danger: 25;
+  --hue-example: 288;
+  --hue-quote: 80;
+  --callout-chroma: 0.11;
+
+  /* ---- Type ------------------------------------------------------------ */
+  --font-body: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-code: var(--font-mono), ui-monospace, SFMono-Regular, monospace;
+
+  --step-title: 2.0625rem; /* 33px — note title */
+  --step-section: 1.1875rem; /* 19px — section heading */
+  --step-body: 1.0625rem; /* 17px — prose */
+  --step-small: 0.9375rem; /* 15px — secondary prose */
+  --step-meta: 0.71875rem; /* 11.5px — mono metadata */
+
+  --leading-title: 1.2;
+  --leading-section: 1.3;
+  --leading-body: 1.72;
+  --leading-meta: 1.7;
+
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+
+  --tracking-meta: 0.06em;
+  --tracking-title: -0.011em;
+
+  /* The measure. Everything else in the reading column defers to it. */
+  --measure: 66ch;
+
+  /* ---- Space ----------------------------------------------------------- */
+  --space-3xs: 0.25rem;
+  --space-2xs: 0.5rem;
+  --space-xs: 0.75rem;
+  --space-s: 1rem;
+  --space-m: 1.5rem;
+  --space-l: 2rem;
+  --space-xl: 3rem;
+  --space-2xl: 4.5rem;
+
+  /* ---- Layout ---------------------------------------------------------- */
+  --sidebar-width: 250px;
+  --column-width: 660px;
+  --rail-width: 218px;
+  --header-height: 57px;
+
+  /* ---- Shape and motion ------------------------------------------------ */
+  --radius-s: 3px;
+  --radius-m: 6px;
+  --radius-l: 10px;
+  --hairline: 1px;
+
+  --duration-fast: 90ms;
+  --duration-base: 170ms;
+  --ease: cubic-bezier(0.2, 0, 0.13, 1);
+
+  --shadow-card: 0 1px 2px oklch(20% 0.02 70 / 0.05), 0 4px 14px oklch(20% 0.02 70 / 0.05);
+  --shadow-pop: 0 2px 6px oklch(20% 0.02 70 / 0.07), 0 12px 32px oklch(20% 0.02 70 / 0.11);
+}
+
+/* Dark: an explicit choice. */
+:root[data-theme='dark'] {
+  --paper: oklch(19.5% 0.008 265);
+  --surface: oklch(23% 0.009 265);
+  --surface-sunken: oklch(16.5% 0.008 265);
+  --surface-raised: oklch(26% 0.01 265);
+
+  --ink: oklch(90% 0.006 85);
+  --ink-strong: oklch(97% 0.004 85);
+  --ink-muted: oklch(72% 0.009 80);
+  --ink-faint: oklch(58% 0.01 80);
+
+  --rule: oklch(30% 0.01 265);
+  --rule-strong: oklch(38% 0.012 265);
+
+  --accent: oklch(79% 0.12 252);
+  --accent-hover: oklch(88% 0.1 252);
+  --accent-soft: oklch(30% 0.05 252);
+  --accent-ink: oklch(17% 0.02 265);
+
+  --mark: oklch(52% 0.12 96);
+  --mark-ink: oklch(97% 0.02 96);
+  --focus: oklch(80% 0.15 252);
+  --selection: oklch(36% 0.07 252);
+  --scrim: oklch(8% 0.01 265 / 0.55);
+
+  --shadow-card: 0 1px 2px oklch(0% 0 0 / 0.3), 0 4px 14px oklch(0% 0 0 / 0.28);
+  --shadow-pop: 0 2px 6px oklch(0% 0 0 / 0.36), 0 12px 32px oklch(0% 0 0 / 0.42);
+}
+
+/* Dark: the system default, unless light was explicitly chosen. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --paper: oklch(19.5% 0.008 265);
+    --surface: oklch(23% 0.009 265);
+    --surface-sunken: oklch(16.5% 0.008 265);
+    --surface-raised: oklch(26% 0.01 265);
+
+    --ink: oklch(90% 0.006 85);
+    --ink-strong: oklch(97% 0.004 85);
+    --ink-muted: oklch(72% 0.009 80);
+    --ink-faint: oklch(58% 0.01 80);
+
+    --rule: oklch(30% 0.01 265);
+    --rule-strong: oklch(38% 0.012 265);
+
+    --accent: oklch(79% 0.12 252);
+    --accent-hover: oklch(88% 0.1 252);
+    --accent-soft: oklch(30% 0.05 252);
+    --accent-ink: oklch(17% 0.02 265);
+
+    --mark: oklch(52% 0.12 96);
+    --mark-ink: oklch(97% 0.02 96);
+    --focus: oklch(80% 0.15 252);
+    --selection: oklch(36% 0.07 252);
+    --scrim: oklch(8% 0.01 265 / 0.55);
+
+    --shadow-card: 0 1px 2px oklch(0% 0 0 / 0.3), 0 4px 14px oklch(0% 0 0 / 0.28);
+    --shadow-pop: 0 2px 6px oklch(0% 0 0 / 0.36), 0 12px 32px oklch(0% 0 0 / 0.42);
+  }
+}
+
+/* The type scale steps down one notch on small screens; the measure holds. */
+@media (max-width: 640px) {
+  :root {
+    --step-title: 1.75rem;
+    --step-section: 1.125rem;
+    --step-body: 1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms;
+    --duration-base: 0ms;
+  }
+}

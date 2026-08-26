@@ -1,0 +1,92 @@
+---
+/**
+ * The homepage: a note if one claims it, otherwise a generated landing page.
+ *
+ * The generated page is not a fallback apology — for a garden with no
+ * deliberate front door it is the better default: what to read first, and what
+ * has been tended lately.
+ */
+import { getCollection, render } from 'astro:content'
+
+import { homepage, notes, byUpdated, backlinksFor, graph, config } from '../lib/site.js'
+import { neighbourhood } from '../lib/graph.js'
+import Note from '../layouts/Note.astro'
+import Base from '../layouts/Base.astro'
+import NoteList from '../components/NoteList.astro'
+import { t } from '../i18n/index.js'
+
+type Rendered = Awaited<ReturnType<typeof render>>
+
+let rendered: Rendered | undefined
+
+if (homepage) {
+  const homepagePath = homepage.path
+  const entries = await getCollection('notes')
+  const entry = entries.find((e) => e.id === homepagePath)
+  if (entry) rendered = await render(entry)
+}
+
+const Content = rendered?.Content
+const headings = rendered?.headings ?? []
+
+// "Start here" is the most-linked-to notes: in a garden, the hubs other notes
+// point at are the entrances, and that needs no curation to stay true.
+const hubs = [...notes]
+  .map((note) => ({ note, incoming: backlinksFor(note.slug).length }))
+  .filter((n) => n.incoming > 0)
+  .sort((a, b) => b.incoming - a.incoming || a.note.title.localeCompare(b.note.title))
+  .slice(0, 6)
+  .map((n) => n.note)
+
+const recent = byUpdated.slice(0, 10)
+---
+
+{
+  homepage && Content ? (
+    <Note
+      note={homepage}
+      headings={headings}
+      backlinks={backlinksFor(homepage.slug)}
+      neighbourhood={neighbourhood(graph, homepage.slug, 1)}
+    >
+      <Content />
+    </Note>
+  ) : (
+    <Base description={config.description}>
+      <div class="stack-l landing">
+        <header>
+          <h1 class="note-title">{config.title}</h1>
+          {config.description && <p class="landing-intro">{config.description}</p>}
+        </header>
+
+        {notes.length === 0 ? (
+          <section class="stack">
+            <h2 class="section-heading">{t('empty.title')}</h2>
+            <p class="landing-intro">{t('empty.body')}</p>
+          </section>
+        ) : (
+          <>
+            {hubs.length > 0 && (
+              <section class="stack">
+                <h2 class="section-heading">{t('index.startHere')}</h2>
+                <NoteList notes={hubs} variant="grid" />
+              </section>
+            )}
+
+            <section class="stack">
+              <h2 class="section-heading">{t('index.recentlyUpdated')}</h2>
+              <NoteList notes={recent} variant="rows" />
+            </section>
+          </>
+        )}
+      </div>
+    </Base>
+  )
+}
+
+<style>
+  .landing {
+    max-inline-size: calc(var(--column-width) + var(--rail-width) + var(--space-xl));
+    margin-inline: auto;
+  }
+</style>

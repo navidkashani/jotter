@@ -1,0 +1,66 @@
+---
+/**
+ * The folder tree.
+ *
+ * Native `<details>`, so it expands, collapses and is keyboard-operable with no
+ * JavaScript at all. A folder containing the current note is rendered `open`,
+ * which means a reader landing deep in the tree sees where they are — server
+ * side, before any script runs.
+ *
+ * Folder names are links, not just toggles: every folder has a real page.
+ */
+import type { TreeEntry } from '../lib/tree.js'
+import { contains } from '../lib/tree.js'
+import { noteHref } from '../lib/href.js'
+
+interface Props {
+  entries: TreeEntry[]
+  current?: string
+  depth?: number
+}
+
+const { entries, current = '', depth = 0 } = Astro.props
+---
+
+<ul class="nav-tree" role="list">
+  {
+    entries.map((entry) =>
+      entry.kind === 'folder' ? (
+        <li>
+          <details open={contains(entry, current)}>
+            <summary>
+              <a href={noteHref(entry.slug)}>{entry.name}</a>
+              <span class="nav-count" aria-hidden="true">
+                {entry.count}
+              </span>
+            </summary>
+            <Astro.self entries={entry.children} current={current} depth={depth + 1} />
+          </details>
+        </li>
+      ) : (
+        <li>
+          <a
+            href={noteHref(entry.slug)}
+            aria-current={entry.slug === current ? 'page' : undefined}
+          >
+            {entry.title}
+          </a>
+        </li>
+      ),
+    )
+  }
+</ul>
+
+<style>
+  /* The folder name inside a summary is the link; the row is the toggle. */
+  .nav-tree summary > a {
+    padding: 0;
+    color: inherit;
+    flex: 1;
+  }
+
+  .nav-tree summary > a:hover {
+    background: none;
+    text-decoration: underline;
+  }
+</style>

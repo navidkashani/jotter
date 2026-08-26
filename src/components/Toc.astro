@@ -1,0 +1,34 @@
+---
+/**
+ * The outline.
+ *
+ * A `<details open>` rather than a bare list: at the rail width the summary is
+ * hidden by CSS and it reads as a heading, and when the rail folds into the
+ * article the same element is a collapsible outline. One element, two
+ * behaviours, no duplicate content for a screen reader to read twice.
+ */
+import { t } from '../i18n/index.js'
+import { outlineHeadings, type Heading } from '../lib/headings.js'
+
+interface Props {
+  headings: Heading[]
+}
+
+const { headings } = Astro.props
+const shown = outlineHeadings(headings)
+---
+
+{
+  shown.length > 1 && (
+    <details class="note-toc" open>
+      <summary class="meta">{t('note.contents')}</summary>
+      <nav class="toc-list" aria-label={t('note.contents')}>
+        {shown.map((heading) => (
+          <a href={`#${heading.slug}`} data-depth={heading.depth}>
+            {heading.text}
+          </a>
+        ))}
+      </nav>
+    </details>
+  )
+}

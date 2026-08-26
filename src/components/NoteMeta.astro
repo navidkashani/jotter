@@ -1,0 +1,32 @@
+---
+/**
+ * Created and updated, as machine-readable `<time>`.
+ *
+ * Both are shown because in a garden they mean different things: when a thought
+ * started, and whether it is still being tended.
+ */
+import type { NoteDates } from '../lib/dates.js'
+import { formatDate, isoDate, t } from '../i18n/index.js'
+
+interface Props {
+  dates: NoteDates
+}
+const { dates } = Astro.props
+const sameDay = isoDate(dates.created) === isoDate(dates.updated)
+---
+
+<span class="meta">
+  <time datetime={isoDate(dates.created)}>
+    {t('note.created')} {formatDate(dates.created)}
+  </time>
+  {
+    !sameDay && (
+      <>
+        <span aria-hidden="true"> · </span>
+        <time datetime={isoDate(dates.updated)}>
+          {t('note.updated')} {formatDate(dates.updated)}
+        </time>
+      </>
+    )
+  }
+</span>

@@ -1,0 +1,48 @@
+---
+import type { VaultNote } from '../lib/vault.js'
+import { noteHref } from '../lib/href.js'
+import { t } from '../i18n/index.js'
+
+interface Props {
+  previous?: VaultNote
+  next?: VaultNote
+}
+const { previous, next } = Astro.props
+---
+
+{
+  (previous || next) && (
+    <nav class="prev-next" aria-label={`${t('note.previous')} / ${t('note.next')}`}>
+      {previous && (
+        <a class="previous" href={noteHref(previous.slug)} rel="prev">
+          <span class="meta">{t('note.previous')}</span>
+          <span class="prev-next-title">{previous.title}</span>
+        </a>
+      )}
+      {next && (
+        <a class="next" href={noteHref(next.slug)} rel="next">
+          <span class="meta">{t('note.next')}</span>
+          <span class="prev-next-title">{next.title}</span>
+        </a>
+      )}
+    </nav>
+  )
+}
+
+<style>
+  .prev-next a {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .prev-next-title {
+    font-weight: var(--weight-medium);
+    color: var(--ink-strong);
+    line-height: 1.35;
+  }
+
+  .prev-next a:hover .prev-next-title {
+    color: var(--accent);
+  }
+</style>

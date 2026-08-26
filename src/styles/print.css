@@ -1,0 +1,101 @@
+/**
+ * Print.
+ *
+ * A note is a document. Printing one should give the reader the note, its
+ * metadata and its links as text they can actually follow — not a screenshot of
+ * a website with a navigation column down the side.
+ */
+@media print {
+  :root {
+    --paper: #fff;
+    --surface: #fff;
+    --surface-sunken: #fff;
+    --surface-raised: #fff;
+    --ink: #111;
+    --ink-strong: #000;
+    --ink-muted: #444;
+    --ink-faint: #666;
+    --rule: #ccc;
+    --rule-strong: #999;
+    --accent: #000;
+    --accent-hover: #000;
+    --measure: none;
+  }
+
+  .site-header,
+  .sidebar,
+  .note-rail,
+  .note-toc,
+  .prev-next,
+  .skip-link,
+  .drawer-backdrop,
+  .header-actions {
+    display: none !important;
+  }
+
+  .page {
+    display: block;
+  }
+
+  .main {
+    padding: 0;
+  }
+
+  .note-layout {
+    display: block;
+  }
+
+  body {
+    font-size: 11pt;
+    line-height: 1.5;
+  }
+
+  .prose {
+    max-inline-size: none;
+  }
+
+  /* A printed link is useless without its destination. */
+  .prose a[href^='http']::after {
+    content: ' (' attr(href) ')';
+    font-size: 0.85em;
+    color: #555;
+    word-break: break-all;
+  }
+
+  .prose a {
+    text-decoration: underline;
+  }
+
+  .prose .dead-link {
+    border: 0;
+    color: #666;
+  }
+
+  /* Never break a heading off from what it introduces. */
+  .prose :is(h1, h2, h3, h4, h5, h6) {
+    break-after: avoid;
+    break-inside: avoid;
+  }
+
+  .prose :is(pre, blockquote, figure, table, .callout, .transclusion) {
+    break-inside: avoid;
+    border: 1px solid #ccc;
+  }
+
+  .prose img {
+    max-inline-size: 100%;
+  }
+
+  /* Collapsed content is still content when printed. */
+  details {
+    display: block;
+  }
+
+  details > *:not(summary) {
+    display: revert !important;
+  }
+
+  @page {
+    margin: 18mm 16mm;
+  }
+}

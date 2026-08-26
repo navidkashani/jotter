@@ -1,0 +1,61 @@
+---
+import { tags, config } from '../../lib/site.js'
+import { tagHref } from '../../lib/href.js'
+import type { TagNode } from '../../lib/tags.js'
+import Base from '../../layouts/Base.astro'
+import { t } from '../../i18n/index.js'
+
+if (!config.features.tags) return Astro.rewrite('/404')
+
+const flatten = (nodes: TagNode[]): TagNode[] =>
+  nodes.flatMap((node) => [node, ...flatten(node.children)])
+const all = flatten(tags).sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag))
+---
+
+<Base title={t('tags.title')} current="tags">
+  <div class="stack-l tags-page">
+    <header>
+      <h1 class="note-title">{t('tags.title')}</h1>
+      <p class="landing-intro">{t('tags.intro')}</p>
+    </header>
+
+    <ul class="tag-cloud" role="list">
+      {
+        all.map((node) => (
+          <li>
+            <a class="tag-chip" href={tagHref(node.tag)}>
+              #{node.tag}
+              <span class="tag-count">{node.count}</span>
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+  </div>
+</Base>
+
+<style>
+  .tags-page {
+    max-inline-size: var(--column-width);
+    margin-inline: auto;
+  }
+
+  .tag-cloud {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2xs);
+    list-style: none;
+    padding: 0;
+  }
+
+  .tag-cloud .tag-chip {
+    font-size: var(--step-small);
+    padding: var(--space-3xs) var(--space-2xs);
+    letter-spacing: 0;
+  }
+
+  .tag-count {
+    margin-inline-start: var(--space-3xs);
+    color: var(--ink-faint);
+  }
+</style>

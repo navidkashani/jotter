@@ -1,0 +1,28 @@
+---
+import { config, tree, tags } from '../lib/site.js'
+import { t } from '../i18n/index.js'
+import NavTree from './NavTree.astro'
+import NavTags from './NavTags.astro'
+
+interface Props {
+  current?: string
+}
+const { current } = Astro.props
+---
+
+<label class="drawer-backdrop" for="jotter-drawer" aria-hidden="true"></label>
+
+<aside class="sidebar" id="sidebar">
+  <nav aria-label={t('nav.navigation')}>
+    <p class="meta sidebar-heading">
+      {config.nav === 'tags' ? t('nav.tags') : t('nav.notes')}
+    </p>
+    {
+      config.nav === 'tags' ? (
+        <NavTags tags={tags} current={current} />
+      ) : (
+        <NavTree entries={tree} current={current} />
+      )
+    }
+  </nav>
+</aside>

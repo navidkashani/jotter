@@ -1,0 +1,17 @@
+---
+import type { VaultNote } from '../lib/vault.js'
+import { noteHref } from '../lib/href.js'
+import { formatDate, isoDate } from '../i18n/index.js'
+
+interface Props {
+  note: VaultNote
+  showExcerpt?: boolean
+}
+const { note, showExcerpt = true } = Astro.props
+---
+
+<a class="note-card" href={noteHref(note.slug)}>
+  <span class="note-card-title">{note.title}</span>
+  {showExcerpt && note.excerpt && <span class="note-card-excerpt">{note.excerpt}</span>}
+  <time class="meta" datetime={isoDate(note.dates.updated)}>{formatDate(note.dates.updated)}</time>
+</a>

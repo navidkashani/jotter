@@ -1,0 +1,45 @@
+{
+  "site.skipToContent": "Skip to content",
+  "site.toggleTheme": "Toggle colour theme",
+  "site.openNavigation": "Open navigation",
+  "site.closeNavigation": "Close navigation",
+  "site.search": "Search",
+
+  "nav.notes": "Notes",
+  "nav.tags": "Tags",
+  "nav.allNotes": "All notes",
+  "nav.navigation": "Navigation",
+
+  "note.contents": "Contents",
+  "note.backlinks": "Linked from",
+  "note.noBacklinks": "Nothing links here yet.",
+  "note.links": "Links to",
+  "note.graph": "Local graph",
+  "note.created": "Created",
+  "note.updated": "Updated",
+  "note.tags": "Tags",
+  "note.previous": "Previous",
+  "note.next": "Next",
+  "note.transcludedFrom": "Transcluded from",
+
+  "index.startHere": "Start here",
+  "index.recentlyUpdated": "Recently updated",
+  "index.allNotes": "All notes",
+  "index.noteCount": "{count} notes",
+  "index.inFolder": "In this folder",
+  "index.subfolders": "Folders",
+
+  "tags.title": "Tags",
+  "tags.intro": "Every tag in the garden, nested tags rolled up into their parents.",
+  "tags.taggedWith": "Tagged {tag}",
+  "tags.count": "{count} notes",
+  "tags.childTags": "Nested tags",
+
+  "notFound.title": "Not here",
+  "notFound.body": "That note has moved, been renamed, or was never published. Try the navigation, or start from the top.",
+  "notFound.home": "Go to the homepage",
+  "notFound.allNotes": "Browse all notes",
+
+  "empty.title": "Nothing published yet",
+  "empty.body": "Drop some markdown into your vault folder and it will appear here."
+}

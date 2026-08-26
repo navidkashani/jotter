@@ -1,0 +1,61 @@
+---
+/**
+ * The tag alternative to the folder tree. Same `<details>` mechanics, so the
+ * two sidebar modes behave identically to a keyboard.
+ */
+import type { TagNode } from '../lib/tags.js'
+import { tagHref } from '../lib/href.js'
+
+interface Props {
+  tags: TagNode[]
+  current?: string
+  depth?: number
+}
+
+const { tags, current = '', depth = 0 } = Astro.props
+const isCurrent = (tag: string) => current === `tags/${tag}`
+const containsCurrent = (tag: string) => current === `tags/${tag}` || current.startsWith(`tags/${tag}/`)
+---
+
+<ul class="nav-tree" role="list">
+  {
+    tags.map((node) =>
+      node.children.length > 0 ? (
+        <li>
+          <details open={containsCurrent(node.tag)}>
+            <summary>
+              <a href={tagHref(node.tag)}>{node.label}</a>
+              <span class="nav-count" aria-hidden="true">
+                {node.count}
+              </span>
+            </summary>
+            <Astro.self tags={node.children} current={current} depth={depth + 1} />
+          </details>
+        </li>
+      ) : (
+        <li>
+          <a href={tagHref(node.tag)} aria-current={isCurrent(node.tag) ? 'page' : undefined}>
+            {node.label}
+            <span class="nav-count" aria-hidden="true">
+              {node.count}
+            </span>
+          </a>
+        </li>
+      ),
+    )
+  }
+</ul>
+
+<style>
+  .nav-tree summary > a {
+    padding: 0;
+    color: inherit;
+    flex: 1;
+  }
+
+  .nav-tree a {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2xs);
+  }
+</style>

@@ -1,0 +1,66 @@
+---
+/**
+ * A note, with its rail.
+ *
+ * The DOM order is head, outline, body, rail — not head, body, rail — because
+ * that is the order it must collapse into below 1100px: the outline above the
+ * prose, the graph and backlinks after it. At full width, grid places the
+ * outline and the rail into the second column. Nothing is duplicated and
+ * nothing is hidden; the same markup is simply placed differently.
+ */
+import type { VaultNote } from '../lib/vault.js'
+import type { GraphLink, Neighbourhood } from '../lib/graph.js'
+import { config } from '../lib/site.js'
+import Base from './Base.astro'
+import Toc from '../components/Toc.astro'
+import type { Heading } from '../lib/headings.js'
+import Backlinks from '../components/Backlinks.astro'
+import LocalGraph from '../components/LocalGraph.astro'
+import TagList from '../components/TagList.astro'
+import NoteMeta from '../components/NoteMeta.astro'
+import PrevNext from '../components/PrevNext.astro'
+
+interface Props {
+  note: VaultNote
+  headings: Heading[]
+  backlinks: GraphLink[]
+  neighbourhood: Neighbourhood
+  previous?: VaultNote
+  next?: VaultNote
+}
+
+const { note, headings, backlinks, neighbourhood, previous, next } = Astro.props
+
+const description =
+  typeof note.frontmatter.description === 'string' ? note.frontmatter.description : note.excerpt
+---
+
+<Base title={note.title} description={description} current={note.slug}>
+  <article class="note-layout" data-layout={config.layout}>
+    <header class="note-head">
+      <h1 class="note-title">{note.title}</h1>
+      <div class="note-meta">
+        <NoteMeta dates={note.dates} />
+        {config.features.tags && <TagList tags={note.tags} />}
+      </div>
+    </header>
+
+    {config.features.toc && <Toc headings={headings} />}
+
+    <div class="note-body prose">
+      <slot />
+      <PrevNext previous={previous} next={next} />
+    </div>
+
+    {
+      (config.features.backlinks || config.features.graph) && (
+        <aside class="note-rail" aria-label="Note context">
+          {config.features.graph && (
+            <LocalGraph neighbourhood={neighbourhood} current={note.slug} />
+          )}
+          {config.features.backlinks && <Backlinks links={backlinks} />}
+        </aside>
+      )
+    }
+  </article>
+</Base>

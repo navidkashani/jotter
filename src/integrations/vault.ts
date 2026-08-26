@@ -1,0 +1,160 @@
+/**
+ * Two jobs Astro cannot do for us.
+ *
+ * 1. **Serve vault attachments.** Notes reference images, PDFs and video that
+ *    live beside them in the vault, not in `public/`. Optimizable rasters are
+ *    rewritten to note-relative paths so Astro's image pipeline handles them;
+ *    everything else (SVG, GIF, video, PDF) is served verbatim from `/_vault`,
+ *    which this mounts in dev and copies into `dist/` at build.
+ *
+ * 2. **Report what the scan found.** Ambiguous links, alias collisions and slug
+ *    collisions are real problems in a real vault, and a static site generator
+ *    that swallows them is how a garden quietly rots. They print once, at the
+ *    top of the build, naming files.
+ */
+import { cp, mkdir, readdir, stat, writeFile } from 'node:fs/promises'
+import { createReadStream } from 'node:fs'
+import { join, extname, sep } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import type { AstroIntegration } from 'astro'
+
+import { VAULT_ASSET_BASE } from '../lib/href.js'
+import { toNetlify, toVercel, robotsTxt } from '../lib/redirects.js'
+import type { Vault } from '../lib/vault.js'
+import type { Graph } from '../lib/graph.js'
+
+const MIME: Record<string, string> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.avif': 'image/avif',
+  '.svg': 'image/svg+xml',
+  '.pdf': 'application/pdf',
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
+  '.mp3': 'audio/mpeg',
+  '.wav': 'audio/wav',
+  '.m4a': 'audio/mp4',
+  '.ogg': 'audio/ogg',
+}
+
+const isMarkdown = (name: string) => /\.mdx?$/i.test(name)
+
+/** Every non-markdown file in the vault, as vault-relative paths. */
+async function attachments(root: string, prefix = ''): Promise<string[]> {
+  let entries
+  try {
+    entries = await readdir(join(root, prefix), { withFileTypes: true })
+  } catch {
+    return []
+  }
+  const found: string[] = []
+  for (const entry of entries) {
+    if (entry.name.startsWith('.')) continue
+    const rel = prefix ? `${prefix}/${entry.name}` : entry.name
+    if (entry.isDirectory()) found.push(...(await attachments(root, rel)))
+    else if (entry.isFile() && !isMarkdown(entry.name)) found.push(rel)
+  }
+  return found
+}
+
+export interface VaultIntegrationOptions {
+  vault: Vault
+  graph: Graph
+  /** `from` -> `to`, already merged from aliases and config. */
+  redirects: Record<string, string>
+  noIndex: boolean
+  /** Absolute site URL, when one is configured. */
+  siteUrl?: string
+}
+
+export function jotterVault({
+  vault,
+  graph,
+  redirects,
+  noIndex,
+  siteUrl,
+}: VaultIntegrationOptions): AstroIntegration {
+  return {
+    name: 'jotter:vault',
+    hooks: {
+      'astro:config:done': ({ logger }) => {
+        const warnings = [...vault.warnings, ...graph.warnings]
+        for (const warning of warnings) logger.warn(warning)
+
+        // Degrade loudly, never silently cap: past the tested scale, say so
+        // rather than letting a slow build look like a hang.
+        if (vault.notes.length > 1000) {
+          logger.warn(
+            `${vault.notes.length} notes. jotter is tested to 1,000 notes and a 60s cold ` +
+              `build; past that, build times grow and the graph gets dense. Nothing is dropped.`,
+          )
+        }
+        logger.info(
+          `${vault.notes.filter((n) => n.published).length} notes published ` +
+            `(${vault.notes.length} scanned)${warnings.length ? `, ${warnings.length} warning(s)` : ''}.`,
+        )
+      },
+
+      'astro:server:setup': ({ server }) => {
+        server.middlewares.use((req, res, next) => {
+          const url = req.url ?? ''
+          if (!url.startsWith(`${VAULT_ASSET_BASE}/`)) return next()
+
+          const rel = decodeURIComponent(url.slice(VAULT_ASSET_BASE.length + 1).split('?')[0])
+          // Never let a request climb out of the vault.
+          if (rel.split('/').includes('..')) {
+            res.statusCode = 403
+            return res.end('Forbidden')
+          }
+
+          const file = join(vault.root, rel.split('/').join(sep))
+          stat(file).then(
+            (info) => {
+              if (!info.isFile()) return next()
+              res.setHeader('Content-Type', MIME[extname(file).toLowerCase()] ?? 'application/octet-stream')
+              res.setHeader('Content-Length', String(info.size))
+              createReadStream(file).pipe(res)
+            },
+            () => next(),
+          )
+        })
+      },
+
+      'astro:build:done': async ({ dir, logger }) => {
+        const out = fileURLToPath(dir)
+
+        const files = await attachments(vault.root)
+        if (files.length > 0) {
+          const outRoot = join(out, VAULT_ASSET_BASE.slice(1))
+          for (const file of files) {
+            const to = join(outRoot, file.split('/').join(sep))
+            await mkdir(join(to, '..'), { recursive: true })
+            await cp(join(vault.root, file.split('/').join(sep)), to)
+          }
+          logger.info(`Copied ${files.length} vault attachment(s) to ${VAULT_ASSET_BASE}/.`)
+        }
+
+        /**
+         * Both formats, always. Which host this lands on is not knowable at
+         * build time, and an unused `_redirects` on Vercel (or `vercel.json`
+         * on Netlify) costs a few hundred bytes and is ignored.
+         */
+        const count = Object.keys(redirects).length
+        if (count > 0) {
+          await writeFile(join(out, '_redirects'), toNetlify(redirects))
+          await writeFile(join(out, 'vercel.json'), toVercel(redirects))
+          logger.info(`Wrote ${count} redirect(s) to _redirects and vercel.json.`)
+        }
+
+        await writeFile(
+          join(out, 'robots.txt'),
+          robotsTxt(noIndex, siteUrl && !noIndex ? new URL('/sitemap-index.xml', siteUrl).href : undefined),
+        )
+        if (noIndex) logger.warn('noIndex is set: robots.txt disallows everything and no sitemap was emitted.')
+      },
+    },
+  }
+}

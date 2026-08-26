@@ -1,0 +1,23 @@
+---
+import { tagHref } from '../lib/href.js'
+import { t } from '../i18n/index.js'
+
+interface Props {
+  tags: string[]
+}
+const { tags } = Astro.props
+---
+
+{
+  tags.length > 0 && (
+    <ul class="tag-list" aria-label={t('note.tags')}>
+      {tags.map((tag) => (
+        <li>
+          <a class="tag-chip" href={tagHref(tag)}>
+            #{tag}
+          </a>
+        </li>
+      ))}
+    </ul>
+  )
+}

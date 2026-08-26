@@ -1,0 +1,231 @@
+---
+/**
+ * The component library — the demo site only.
+ *
+ * A rest parameter whose `getStaticPaths` returns nothing unless `JOTTER_DEMO`
+ * is set. That is how the page can live in the repository, be maintained
+ * alongside the components it documents, and still emit *nothing* into a
+ * forked site: not a hidden page, not a redirect, not a byte.
+ *
+ *   JOTTER_DEMO=1 npm run build     builds it at /library
+ */
+import Base from '../../layouts/Base.astro'
+import NoteList from '../../components/NoteList.astro'
+import { byUpdated } from '../../lib/site.js'
+import { CALLOUT_TYPES } from '../../lib/callout.js'
+
+export function getStaticPaths() {
+  return process.env.JOTTER_DEMO ? [{ params: { slug: undefined } }] : []
+}
+
+const SURFACES = ['--paper', '--surface', '--surface-raised', '--surface-sunken']
+const INKS = ['--ink-strong', '--ink', '--ink-muted', '--ink-faint']
+const ACCENTS = ['--accent', '--accent-hover', '--accent-soft', '--mark', '--focus']
+const RULES = ['--rule', '--rule-strong']
+
+const TYPE = [
+  ['--step-title', 'Note title', '33 / 1.2 / 600'],
+  ['--step-section', 'Section heading', '19 / 1.3 / 600'],
+  ['--step-body', 'Body copy at a 66ch measure', '17 / 1.72'],
+  ['--step-small', 'Secondary prose', '15 / 1.5'],
+]
+
+const SPACE = ['3xs', '2xs', 'xs', 's', 'm', 'l', 'xl', '2xl']
+const callouts = [...new Set(Object.values(CALLOUT_TYPES).map((c) => c.label))]
+const calloutKeys = Object.keys(CALLOUT_TYPES)
+---
+
+<Base title="Library" description="Every primitive in the jotter design system, on one page.">
+  <div class="library stack-l">
+    <header>
+      <h1 class="note-title">Library</h1>
+      <p class="landing-intro">
+        Every primitive in the theme, rendered from the same tokens the site uses. If a
+        swatch below changes, the whole site changed with it.
+      </p>
+    </header>
+
+    <section class="stack">
+      <h2 class="section-heading">Colour</h2>
+      <p class="lib-note">
+        OKLCH, in <code>src/styles/tokens.css</code>. Every pair below is asserted against
+        WCAG AA in both themes by <code>scripts/verify-build.mjs</code>.
+      </p>
+      {
+        [
+          ['Surfaces', SURFACES],
+          ['Ink', INKS],
+          ['Accent and semantics', ACCENTS],
+          ['Lines', RULES],
+        ].map(([label, tokens]) => (
+          <>
+            <h3 class="meta">{label}</h3>
+            <ul class="swatches" role="list">
+              {(tokens as string[]).map((token) => (
+                <li>
+                  <span class="swatch" style={`background: var(${token})`}></span>
+                  <code>{token}</code>
+                </li>
+              ))}
+            </ul>
+          </>
+        ))
+      }
+    </section>
+
+    <section class="stack">
+      <h2 class="section-heading">Type</h2>
+      <ul class="type-scale" role="list">
+        {
+          TYPE.map(([token, sample, spec]) => (
+            <li>
+              <span style={`font-size: var(${token}); line-height: 1.25; font-weight: 600; letter-spacing: var(--tracking-title); color: var(--ink-strong)`}>
+                {sample}
+              </span>
+              <code class="meta">{token} — {spec}</code>
+            </li>
+          ))
+        }
+        <li>
+          <span class="meta">Mono metadata — 11.5 / 1.7 / .06em, uppercase</span>
+        </li>
+      </ul>
+    </section>
+
+    <section class="stack">
+      <h2 class="section-heading">Space</h2>
+      <ul class="space-scale" role="list">
+        {
+          SPACE.map((step) => (
+            <li>
+              <span class="space-bar" style={`inline-size: var(--space-${step})`}></span>
+              <code class="meta">--space-{step}</code>
+            </li>
+          ))
+        }
+      </ul>
+    </section>
+
+    <section class="stack prose">
+      <h2 class="section-heading">Callouts</h2>
+      <p>
+        {calloutKeys.length} Obsidian callout types, {callouts.length} distinct labels, styled by
+        hue alone — a type is a <code>--hue-*</code> token and nothing else.
+      </p>
+      <div class="callout" data-callout="note">
+        <div class="callout-title">Note</div>
+        <p>The default. Body copy sits at the same measure as prose.</p>
+      </div>
+      <div class="callout" data-callout="tip">
+        <div class="callout-title">Tip</div>
+        <p>Tips, hints and "important" share a hue.</p>
+      </div>
+      <div class="callout" data-callout="warning">
+        <div class="callout-title">Warning</div>
+        <p>Warnings, cautions and todos share another.</p>
+      </div>
+      <div class="callout" data-callout="danger">
+        <div class="callout-title">Danger</div>
+        <p>Failures, errors and bugs.</p>
+      </div>
+      <details class="callout" data-callout="question">
+        <summary class="callout-title">Collapsible</summary>
+        <p>Native <code>&lt;details&gt;</code>, so it works with no JavaScript.</p>
+      </details>
+    </section>
+
+    <section class="stack prose">
+      <h2 class="section-heading">Prose</h2>
+      <p>
+        Body copy at a 66ch measure, with an <a href="/zettelkasten">internal link</a>, a
+        <span class="dead-link">dead link</span>, <em>emphasis</em>, <strong>strong</strong>,
+        <mark>a highlight</mark> and <code>inline code</code>.
+      </p>
+      <blockquote>An ordinary blockquote, which a callout must never be mistaken for.</blockquote>
+      <aside class="transclusion" data-transclusion>
+        <p>A transcluded note is visibly borrowed, and always links back.</p>
+        <a class="transclusion-source" href="/zettelkasten">Zettelkasten</a>
+      </aside>
+    </section>
+
+    <section class="stack">
+      <h2 class="section-heading">Note lists</h2>
+      <h3 class="meta">Grid</h3>
+      <NoteList notes={byUpdated.slice(0, 3)} variant="grid" />
+      <h3 class="meta">Rows</h3>
+      <NoteList notes={byUpdated.slice(0, 5)} variant="rows" />
+    </section>
+  </div>
+</Base>
+
+<style>
+  .library {
+    max-inline-size: calc(var(--column-width) + var(--rail-width) + var(--space-xl));
+    margin-inline: auto;
+  }
+
+  .lib-note {
+    color: var(--ink-muted);
+    font-size: var(--step-small);
+    max-inline-size: var(--measure);
+  }
+
+  .swatches {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: var(--space-s);
+    list-style: none;
+    padding: 0;
+  }
+
+  .swatches li {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3xs);
+  }
+
+  .swatch {
+    display: block;
+    block-size: 48px;
+    border: var(--hairline) solid var(--rule-strong);
+    border-radius: var(--radius-m);
+  }
+
+  .swatches code,
+  .type-scale code,
+  .space-scale code {
+    font-family: var(--font-code);
+    font-size: var(--step-meta);
+    color: var(--ink-muted);
+  }
+
+  .type-scale,
+  .space-scale {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-s);
+    list-style: none;
+    padding: 0;
+  }
+
+  .type-scale li {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3xs);
+    padding-block-end: var(--space-s);
+    border-block-end: var(--hairline) solid var(--rule);
+  }
+
+  .space-scale li {
+    display: flex;
+    align-items: center;
+    gap: var(--space-s);
+  }
+
+  .space-bar {
+    display: block;
+    block-size: 14px;
+    background: var(--accent-soft);
+    border-inline-start: 2px solid var(--accent);
+  }
+</style>

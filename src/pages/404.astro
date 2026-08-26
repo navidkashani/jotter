@@ -1,0 +1,40 @@
+---
+/**
+ * Offers a way forward, not an apology.
+ */
+import Base from '../layouts/Base.astro'
+import { t } from '../i18n/index.js'
+import { byUpdated } from '../lib/site.js'
+import NoteList from '../components/NoteList.astro'
+---
+
+<Base title={t('notFound.title')}>
+  <div class="stack-l not-found">
+    <header>
+      <h1 class="note-title">{t('notFound.title')}</h1>
+      <p class="landing-intro">{t('notFound.body')}</p>
+      <p class="actions">
+        <a href="/">{t('notFound.home')}</a>
+        <a href="/notes">{t('notFound.allNotes')}</a>
+      </p>
+    </header>
+
+    <section class="stack">
+      <h2 class="section-heading">{t('index.recentlyUpdated')}</h2>
+      <NoteList notes={byUpdated.slice(0, 5)} variant="rows" />
+    </section>
+  </div>
+</Base>
+
+<style>
+  .not-found {
+    max-inline-size: var(--column-width);
+    margin-inline: auto;
+  }
+
+  .actions {
+    display: flex;
+    gap: var(--space-m);
+    margin-block-start: var(--space-s);
+  }
+</style>

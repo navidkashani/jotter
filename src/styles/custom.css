@@ -1,0 +1,20 @@
+/**
+ * Yours.
+ *
+ * This file is never touched by an upstream merge, so anything you put here
+ * survives `git merge upstream/main`. It loads after every other stylesheet.
+ *
+ * The fastest way to re-skin jotter is to override tokens rather than rules:
+ *
+ *   :root {
+ *     --accent: oklch(56% 0.16 25);       // links, current nav item, focus tint
+ *     --font-body: 'Your Face', serif;
+ *     --measure: 72ch;                    // a wider reading column
+ *   }
+ *
+ *   :root[data-theme='dark'] {
+ *     --accent: oklch(80% 0.13 25);
+ *   }
+ *
+ * Every token is listed in `src/styles/tokens.css`.
+ */

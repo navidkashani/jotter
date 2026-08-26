@@ -1,0 +1,45 @@
+---
+import { config } from '../lib/site.js'
+import { t } from '../i18n/index.js'
+import ThemeToggle from './ThemeToggle.astro'
+---
+
+<header class="site-header">
+  {/* The drawer toggle is rendered by Base.astro, before .page, so the sidebar
+      can respond to it with a sibling selector and need no script. */}
+  {config.nav !== 'none' && <span class="drawer-gap" aria-hidden="true"></span>}
+
+  <a class="site-title" href="/">{config.title}</a>
+
+  <span class="header-spacer"></span>
+
+  <nav class="header-actions" aria-label={t('nav.navigation')}>
+    <a class="meta" href="/notes">{t('nav.allNotes')}</a>
+    {config.features.tags && <a class="meta" href="/tags">{t('nav.tags')}</a>}
+    {config.features.themeToggle && <ThemeToggle />}
+  </nav>
+</header>
+
+<style>
+  .header-actions .meta {
+    text-decoration: none;
+    padding-inline: var(--space-2xs);
+  }
+
+  .header-actions .meta:hover {
+    color: var(--ink-strong);
+  }
+
+  /* Space the fixed drawer toggle sits in, at the widths where it is shown. */
+  .drawer-gap {
+    display: none;
+    inline-size: 32px;
+    flex: none;
+  }
+
+  @media (max-width: 800px) {
+    .drawer-gap {
+      display: block;
+    }
+  }
+</style>
