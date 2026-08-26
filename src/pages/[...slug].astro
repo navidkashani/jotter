@@ -110,13 +110,13 @@ const childFolders = children.filter((c): c is Extract<TreeEntry, { kind: 'folde
     <Base title={folder?.name} current={folder?.slug}>
       <div class="stack-l">
         <header>
-          <h1 class="note-title">{folder?.name}</h1>
+          <h1 class="index-title">{folder?.name}</h1>
           <p class="meta">{t('index.noteCount', { count: folder?.count ?? 0 })}</p>
         </header>
 
         {childFolders.length > 0 && (
           <section class="stack">
-            <h2 class="meta">{t('index.subfolders')}</h2>
+            <h2 class="label">{t('index.subfolders')}</h2>
             <div class="note-grid">
               {childFolders.map((child) => (
                 <a class="note-card" href={noteHref(child.slug)}>
@@ -130,7 +130,7 @@ const childFolders = children.filter((c): c is Extract<TreeEntry, { kind: 'folde
 
         {childNotes.length > 0 && (
           <section class="stack">
-            <h2 class="meta">{t('index.inFolder')}</h2>
+            <h2 class="label">{t('index.inFolder')}</h2>
             <NoteList notes={childNotes} variant="rows" />
           </section>
         )}

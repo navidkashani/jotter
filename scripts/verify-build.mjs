@@ -243,7 +243,7 @@ section('Design tokens')
     ['--accent', '--paper', 4.5],
     ['--accent-hover', '--paper', 4.5],
     ['--ink', '--surface', 4.5],
-    ['--ink-muted', '--surface-sunken', 4.5],
+    ['--ink-muted', '--surface', 4.5],
     ['--accent-ink', '--accent', 4.5],
     ['--mark-ink', '--mark', 4.5],
     ['--focus', '--paper', 3],

@@ -4,17 +4,26 @@
  * This file is never touched by an upstream merge, so anything you put here
  * survives `git merge upstream/main`. It loads after every other stylesheet.
  *
- * The fastest way to re-skin jotter is to override tokens rather than rules:
+ * The fastest way to re-skin jotter is to override tokens rather than rules.
+ * The accent and the tint derived from it are the two that change everything:
  *
  *   :root {
- *     --accent: oklch(56% 0.16 25);       // links, current nav item, focus tint
+ *     --accent: oklch(50% 0.13 255);       // links, callout edges, tag chips
+ *     --accent-hover: oklch(40% 0.14 255); // accent text on a --soft ground
+ *     --soft: oklch(50% 0.13 255 / 0.11);  // nav hover, chips, ::selection
  *     --font-body: 'Your Face', serif;
- *     --measure: 72ch;                    // a wider reading column
+ *     --measure: 72ch;                     // a wider reading column
  *   }
  *
  *   :root[data-theme='dark'] {
- *     --accent: oklch(80% 0.13 25);
+ *     --accent: oklch(80% 0.11 255);
+ *     --accent-hover: oklch(88% 0.09 255);
+ *     --soft: oklch(80% 0.11 255 / 0.15);
  *   }
+ *
+ * Neutrals are on hue 60 and the accent on hue 70; moving the accent without
+ * moving the neutrals is fine, and moving both by the same amount re-tints the
+ * whole site. `npm run verify` re-checks WCAG AA over whatever you land on.
  *
  * Every token is listed in `src/styles/tokens.css`.
  */

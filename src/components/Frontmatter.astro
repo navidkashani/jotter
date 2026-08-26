@@ -1,0 +1,78 @@
+---
+/**
+ * The note's own header block, shown as one.
+ *
+ * A vault file opens with a fenced YAML header, and a published note should
+ * look like it still has one: mono, boxed, keys aligned in a column. That reads
+ * as "this is the file's metadata" in a way a comma-separated byline never did.
+ *
+ * The keys are an **allow-list**, not a deny-list. Frontmatter is whatever its
+ * owner typed — drafting notes to themselves, private URLs, a `publish: false`
+ * they forgot to remove — so anything unrecognised stays off the page rather
+ * than leaking by default.
+ *
+ * Created and updated are always shown (updated only when it differs), because
+ * in a garden they answer different questions: when a thought started, and
+ * whether it is still being tended.
+ */
+import type { VaultNote } from '../lib/vault.js'
+import { formatDate, isoDate, t } from '../i18n/index.js'
+
+interface Props {
+  note: VaultNote
+}
+
+const { note } = Astro.props
+
+const SHOWN = ['aliases', 'status', 'source', 'author', 'series'] as const
+
+const scalar = (value: unknown): string | undefined => {
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? undefined : formatDate(value)
+  if (typeof value === 'string') return value.trim() || undefined
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  return undefined
+}
+
+/** Scalars and lists of scalars. Nested objects have no honest one-line form. */
+const format = (value: unknown): string | undefined => {
+  if (!Array.isArray(value)) return scalar(value)
+  const parts = value.map(scalar).filter((part) => part !== undefined)
+  return parts.length > 0 ? parts.join(', ') : undefined
+}
+
+const sameDay = isoDate(note.dates.created) === isoDate(note.dates.updated)
+
+const rows: { key: string; label: string; value: string; datetime?: string }[] = [
+  {
+    key: 'created',
+    label: t('note.created'),
+    value: formatDate(note.dates.created),
+    datetime: isoDate(note.dates.created),
+  },
+  ...(sameDay
+    ? []
+    : [
+        {
+          key: 'updated',
+          label: t('note.updated'),
+          value: formatDate(note.dates.updated),
+          datetime: isoDate(note.dates.updated),
+        },
+      ]),
+  ...SHOWN.flatMap((key) => {
+    const value = format(note.frontmatter[key])
+    return value ? [{ key, label: t(`note.field.${key}`), value }] : []
+  }),
+]
+---
+
+<dl class="note-frontmatter">
+  {
+    rows.map((row) => (
+      <div>
+        <dt>{row.label}</dt>
+        <dd>{row.datetime ? <time datetime={row.datetime}>{row.value}</time> : row.value}</dd>
+      </div>
+    ))
+  }
+</dl>

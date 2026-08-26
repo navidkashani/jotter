@@ -1,9 +1,14 @@
 /**
  * The rendered note: everything the markdown pipeline emits.
  *
- * Scoped under `.prose` so it applies to article content and nothing else. The
- * measure is held here and only here — the column can grow, the line length
- * does not.
+ * Scoped under `.prose` so it applies to article content and nothing else, and
+ * this is the one place that runs at `--step-body` (17/1.72) rather than the
+ * chrome's 16/1.65. The measure is held here and only here — the column can
+ * grow, the line length does not.
+ *
+ * Raised things — code, callouts, transclusions — sit on `--surface` with a
+ * hairline `--rule` around them. Tints are `--soft`, the accent at 11%. There
+ * is no shadow anywhere in this file, by design.
  */
 
 .prose {
@@ -17,15 +22,15 @@
 /* ---- Flow -------------------------------------------------------------- */
 
 .prose > * + * {
-  margin-block-start: var(--space-s);
+  margin-block-start: 1.15em;
 }
 
 .prose > * + :is(h2, h3, h4, h5, h6) {
-  margin-block-start: var(--space-xl);
+  margin-block-start: 2em;
 }
 
 .prose :is(h2, h3, h4, h5, h6) + * {
-  margin-block-start: var(--space-2xs);
+  margin-block-start: 0.65em;
 }
 
 /* ---- Headings ---------------------------------------------------------- */
@@ -33,7 +38,7 @@
 .prose :is(h1, h2, h3, h4, h5, h6) {
   color: var(--ink-strong);
   font-weight: var(--weight-semibold);
-  letter-spacing: var(--tracking-title);
+  letter-spacing: var(--tracking-tight);
   line-height: var(--leading-section);
   text-wrap: balance;
   scroll-margin-block-start: calc(var(--header-height) + var(--space-m));
@@ -42,6 +47,7 @@
 .prose h1 {
   font-size: var(--step-title);
   line-height: var(--leading-title);
+  letter-spacing: var(--tracking-title);
 }
 
 .prose h2 {
@@ -61,8 +67,8 @@
   opacity: 0;
   margin-inline-start: var(--space-3xs);
   color: var(--ink-faint);
-  text-decoration: none;
   font-weight: var(--weight-normal);
+  border-block-end: 0;
 }
 
 .prose :is(h2, h3, h4):hover > .heading-anchor,
@@ -72,23 +78,13 @@
 
 /* ---- Inline ------------------------------------------------------------ */
 
-.prose a {
-  color: var(--accent);
-  text-decoration-line: underline;
-  text-decoration-color: color-mix(in oklab, var(--accent) 35%, transparent);
-}
-
-.prose a:hover {
-  text-decoration-color: currentColor;
-}
-
 /**
  * A dead link: muted and dotted, with no pointer and no focus stop. It is a
  * `<span>`, so it is already unfocusable and unclickable; this only makes that
  * legible.
  */
 .prose .dead-link {
-  color: var(--ink-faint);
+  color: var(--ink-muted);
   border-block-end: 1px dotted currentColor;
   cursor: default;
 }
@@ -118,12 +114,12 @@
 /* ---- Lists ------------------------------------------------------------- */
 
 .prose :is(ul, ol) {
-  padding-inline-start: var(--space-m);
+  padding-inline-start: 21px;
   list-style: revert;
 }
 
 .prose li + li {
-  margin-block-start: var(--space-3xs);
+  margin-block-start: 0.45em;
 }
 
 .prose li::marker {
@@ -131,14 +127,14 @@
 }
 
 .prose li > :is(ul, ol) {
-  margin-block-start: var(--space-3xs);
+  margin-block-start: 0.45em;
 }
 
 /* Task lists lose their marker and keep their alignment. */
 .prose li:has(> input[type='checkbox']) {
   list-style: none;
-  margin-inline-start: calc(var(--space-m) * -1);
-  padding-inline-start: var(--space-m);
+  margin-inline-start: -21px;
+  padding-inline-start: 21px;
 }
 
 .prose input[type='checkbox'] {
@@ -163,33 +159,40 @@
 
 /* ---- Quotes ------------------------------------------------------------ */
 
+/**
+ * The accent, not a grey rule. A quote is the one place in a note where
+ * somebody else is speaking, and it should be as visible as a link is.
+ */
 .prose blockquote {
-  padding-inline-start: var(--space-s);
-  border-inline-start: 2px solid var(--rule-strong);
+  margin-block: 1.6em;
+  padding-inline-start: 20px;
+  border-inline-start: 2px solid var(--accent);
+  font-size: var(--step-quote);
   color: var(--ink-muted);
   font-style: italic;
 }
 
 /* ---- Code -------------------------------------------------------------- */
 
+/* A tint, not a box. A bordered span inside a line of prose fights the line. */
 .prose :not(pre) > code {
   font-family: var(--font-code);
-  font-size: 0.88em;
-  padding: 0.1em 0.32em;
-  background: var(--surface-sunken);
-  border: var(--hairline) solid var(--rule);
-  border-radius: var(--radius-s);
+  font-size: 0.87em;
+  padding: 0.1em 0.35em;
+  background: var(--soft);
+  border-radius: var(--radius-xs);
   white-space: break-spaces;
 }
 
 .prose pre {
+  margin-block: 1.7em;
   font-family: var(--font-code);
-  font-size: var(--step-small);
-  line-height: 1.6;
-  padding: var(--space-s);
-  background: var(--surface-sunken);
+  font-size: var(--step-code);
+  line-height: 1.65;
+  padding: 15px 17px;
+  background: var(--surface);
   border: var(--hairline) solid var(--rule);
-  border-radius: var(--radius-m);
+  border-radius: var(--radius-l);
   /* Wide code scrolls inside its own box; the page never scrolls sideways. */
   overflow-x: auto;
 }
@@ -201,11 +204,19 @@
   padding: 0;
 }
 
+/**
+ * Shiki writes its theme's own background onto the `<pre>` as an inline style,
+ * which would win over anything here. The block belongs to the page, so it is
+ * overridden back to `--surface`; only the tokens inside it are Shiki's.
+ */
+.prose pre.astro-code {
+  background-color: var(--surface) !important;
+}
+
 /* Shiki emits both themes; the unused one is inert until the theme flips. */
 :root[data-theme='dark'] .prose .astro-code,
 :root[data-theme='dark'] .prose .astro-code span {
   color: var(--shiki-dark) !important;
-  background-color: var(--shiki-dark-bg) !important;
   font-style: var(--shiki-dark-font-style) !important;
   font-weight: var(--shiki-dark-font-weight) !important;
 }
@@ -214,7 +225,6 @@
   :root:not([data-theme='light']) .prose .astro-code,
   :root:not([data-theme='light']) .prose .astro-code span {
     color: var(--shiki-dark) !important;
-    background-color: var(--shiki-dark-bg) !important;
     font-style: var(--shiki-dark-font-style) !important;
     font-weight: var(--shiki-dark-font-weight) !important;
   }
@@ -247,17 +257,23 @@
 /* ---- Media ------------------------------------------------------------- */
 
 .prose :is(img, video) {
-  border-radius: var(--radius-m);
   display: block;
+  border: var(--hairline) solid var(--rule);
+  border-radius: var(--radius-l);
 }
 
 .prose .embed-figure {
-  margin-block: var(--space-m);
+  margin-block: 2em;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
 }
 
+/* Mono, so a caption reads as apparatus rather than as another paragraph. */
 .prose figcaption {
-  margin-block-start: var(--space-2xs);
-  font-size: var(--step-small);
+  font-family: var(--font-code);
+  font-size: var(--step-code);
+  line-height: 1.5;
   color: var(--ink-muted);
   text-align: start;
 }
@@ -283,40 +299,54 @@
 /**
  * One rule set, one hue variable. A callout type is a hue and nothing else,
  * which is why adding one is a line in tokens.css rather than a new block here.
+ *
+ * The card is the same raised surface as a code block — hairline border, 7px
+ * radius — with a 3px edge and a 10px uppercase label carrying the type's hue.
+ * Colour is confined to those two marks rather than washed over the body, so a
+ * callout stays as readable as the prose around it.
  */
 .prose .callout {
   --callout-hue: var(--hue-note);
-  margin-block: var(--space-m);
-  padding: var(--space-xs) var(--space-s);
-  border-radius: var(--radius-m);
-  border-inline-start: 3px solid oklch(60% var(--callout-chroma) var(--callout-hue));
-  background: color-mix(
-    in oklab,
-    oklch(60% var(--callout-chroma) var(--callout-hue)) 7%,
-    var(--surface-raised)
-  );
+  --callout-edge: oklch(58% var(--callout-chroma) var(--callout-hue));
+  --callout-label: oklch(45% var(--callout-chroma) var(--callout-hue));
+  margin-block: 1.7em;
+  padding: 15px 18px;
+  border: var(--hairline) solid var(--rule);
+  border-inline-start: 3px solid var(--callout-edge);
+  border-radius: var(--radius-l);
+  background: var(--surface);
   color: var(--ink);
+  font-size: var(--step-small);
+  line-height: 1.6;
   font-style: normal;
 }
 
 .prose .callout > * + * {
-  margin-block-start: var(--space-2xs);
+  margin-block-start: 0.7em;
 }
 
 .prose .callout-title {
-  font-weight: var(--weight-semibold);
-  font-size: var(--step-small);
-  color: oklch(38% var(--callout-chroma) var(--callout-hue));
-  letter-spacing: var(--tracking-title);
+  display: block;
+  margin-block-end: 7px;
+  font-family: var(--font-code);
+  font-size: var(--step-label);
+  font-weight: var(--weight-normal);
+  line-height: 1.4;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--callout-label);
 }
 
-:root[data-theme='dark'] .prose .callout-title {
-  color: oklch(84% calc(var(--callout-chroma) * 0.8) var(--callout-hue));
+/* The label needs to lift off a dark surface rather than sink into it. */
+:root[data-theme='dark'] .prose .callout {
+  --callout-edge: oklch(70% calc(var(--callout-chroma) * 0.85) var(--callout-hue));
+  --callout-label: oklch(80% calc(var(--callout-chroma) * 0.8) var(--callout-hue));
 }
 
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) .prose .callout-title {
-    color: oklch(84% calc(var(--callout-chroma) * 0.8) var(--callout-hue));
+  :root:not([data-theme='light']) .prose .callout {
+    --callout-edge: oklch(70% calc(var(--callout-chroma) * 0.85) var(--callout-hue));
+    --callout-label: oklch(80% calc(var(--callout-chroma) * 0.8) var(--callout-hue));
   }
 }
 
@@ -333,13 +363,8 @@ details.callout > summary::-webkit-details-marker {
 }
 
 details.callout > summary.callout-title::after {
-  content: '';
+  content: '▾';
   margin-inline-start: auto;
-  inline-size: 0;
-  block-size: 0;
-  border-inline-start: 4px solid transparent;
-  border-inline-end: 4px solid transparent;
-  border-block-start: 5px solid currentColor;
   transition: transform var(--duration-fast) var(--ease);
 }
 
@@ -398,28 +423,29 @@ details.callout[open] > summary.callout-title::after {
  * are.
  */
 .prose .transclusion {
-  margin-block: var(--space-m);
-  padding: var(--space-s) var(--space-m);
-  background: var(--surface-sunken);
+  margin-block: 1.7em;
+  padding: 15px 18px;
+  background: var(--surface);
   border: var(--hairline) solid var(--rule);
   border-inline-start: 3px solid var(--rule-strong);
-  border-radius: var(--radius-m);
+  border-radius: var(--radius-l);
   font-size: var(--step-small);
+  line-height: 1.6;
 }
 
 .prose .transclusion > * + * {
-  margin-block-start: var(--space-2xs);
+  margin-block-start: 0.7em;
 }
 
 .prose .transclusion-source {
   display: inline-block;
   margin-block-start: var(--space-2xs);
   font-family: var(--font-code);
-  font-size: var(--step-meta);
-  letter-spacing: var(--tracking-meta);
+  font-size: var(--step-label);
+  letter-spacing: var(--tracking-label);
   text-transform: uppercase;
   color: var(--ink-muted);
-  text-decoration: none;
+  border-block-end: 0;
 }
 
 .prose .transclusion-source::before {
@@ -427,7 +453,7 @@ details.callout[open] > summary.callout-title::after {
 }
 
 .prose .transclusion-source:hover {
-  color: var(--accent);
+  color: var(--accent-hover);
 }
 
 .prose .transclusion-stopped {

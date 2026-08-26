@@ -3,7 +3,8 @@
  * The two ways jotter lists notes: a grid of cards, or dense rows.
  *
  * Rows are the default for long lists — 200 cards is a wall, 200 rows is an
- * index you can scan.
+ * index you can scan. A row carries an excerpt when there is room for one to
+ * help; without excerpts it tightens into a pure index.
  */
 import type { VaultNote } from '../lib/vault.js'
 import { noteHref } from '../lib/href.js'
@@ -26,13 +27,14 @@ const { notes, variant = 'rows', showExcerpt = true } = Astro.props
       ))}
     </div>
   ) : (
-    <div class="note-rows">
+    <div class:list={['note-rows', { 'is-compact': !showExcerpt }]}>
       {notes.map((note) => (
         <a class="note-row" href={noteHref(note.slug)}>
           <span class="note-row-title">{note.title}</span>
           <time class="meta note-row-date" datetime={isoDate(note.dates.updated)}>
             {formatDate(note.dates.updated)}
           </time>
+          {showExcerpt && note.excerpt && <span class="note-row-excerpt">{note.excerpt}</span>}
         </a>
       ))}
     </div>

@@ -11,7 +11,7 @@ import NoteList from '../components/NoteList.astro'
 <Base title={t('notFound.title')}>
   <div class="stack-l not-found">
     <header>
-      <h1 class="note-title">{t('notFound.title')}</h1>
+      <h1 class="index-title">{t('notFound.title')}</h1>
       <p class="landing-intro">{t('notFound.body')}</p>
       <p class="actions">
         <a href="/">{t('notFound.home')}</a>
@@ -20,8 +20,8 @@ import NoteList from '../components/NoteList.astro'
     </header>
 
     <section class="stack">
-      <h2 class="section-heading">{t('index.recentlyUpdated')}</h2>
-      <NoteList notes={byUpdated.slice(0, 5)} variant="rows" />
+      <h2 class="label">{t('index.recentlyUpdated')}</h2>
+      <NoteList notes={byUpdated.slice(0, 5)} variant="rows" showExcerpt={false} />
     </section>
   </div>
 </Base>

@@ -227,17 +227,29 @@ of those and take upstream's for everything else.
 
 ## Design
 
-`src/styles/tokens.css` is the whole visual system: OKLCH colours, the type
-scale from the mockup (33 / 19 / 17 at a 66ch measure, 11.5 mono metadata),
-space, radii, durations. Light on `:root`, dark under both `[data-theme="dark"]`
-and `prefers-color-scheme`.
+`src/styles/tokens.css` is the whole visual system: OKLCH colours, two type
+scales, space, radii, durations. Light on `:root`, dark under both
+`[data-theme="dark"]` and `prefers-color-scheme`.
+
+The palette is warm throughout — neutrals on hue 60, an ochre accent on hue 70
+— and the surface model is *raised*: `--surface` is lighter than `--paper`, and
+anything lifted off the page carries a hairline `--rule` rather than a shadow.
+There is no shadow token. `--soft`, the accent at 11% alpha, does the tinting:
+nav hover, inline code, tag chips, `::selection`, link underlines.
+
+Type runs at two scales, not one. App chrome — header, nav, labels, lists — is
+`--step-ui` (16/1.65); note prose alone is `--step-body` (17/1.72). Titles are
+38 (site) / 33 (note) / 29 (index) / 19 (section), with mono at 11.5 for data
+(`.meta`) and 10 uppercase for section labels (`.label`).
 
 The fastest way to re-skin jotter is to override tokens in
 `src/styles/custom.css` rather than write rules:
 
 ```css
 :root {
-  --accent: oklch(56% 0.16 25);
+  --accent: oklch(50% 0.13 255);
+  --accent-hover: oklch(40% 0.14 255);
+  --soft: oklch(50% 0.13 255 / 0.11);
   --font-body: 'Your Face', serif;
   --measure: 72ch;
 }

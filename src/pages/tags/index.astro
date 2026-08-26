@@ -15,7 +15,7 @@ const all = flatten(tags).sort((a, b) => b.count - a.count || a.tag.localeCompar
 <Base title={t('tags.title')} current="tags">
   <div class="stack-l tags-page">
     <header>
-      <h1 class="note-title">{t('tags.title')}</h1>
+      <h1 class="index-title">{t('tags.title')}</h1>
       <p class="landing-intro">{t('tags.intro')}</p>
     </header>
 
@@ -49,13 +49,12 @@ const all = flatten(tags).sort((a, b) => b.count - a.count || a.tag.localeCompar
   }
 
   .tag-cloud .tag-chip {
-    font-size: var(--step-small);
+    font-size: var(--step-nav);
     padding: var(--space-3xs) var(--space-2xs);
-    letter-spacing: 0;
   }
 
   .tag-count {
     margin-inline-start: var(--space-3xs);
-    color: var(--ink-faint);
+    color: var(--ink-muted);
   }
 </style>

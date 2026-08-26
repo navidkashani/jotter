@@ -36,14 +36,14 @@ const node = find(tags)
 <Base title={`#${tag}`} current={`tags/${tag}`}>
   <div class="stack-l tag-page">
     <header>
-      <h1 class="note-title">#{tag}</h1>
+      <h1 class="index-title">#{tag}</h1>
       <p class="meta">{t('tags.count', { count: tagged.length })}</p>
     </header>
 
     {
       node && node.children.length > 0 && (
         <section class="stack">
-          <h2 class="meta">{t('tags.childTags')}</h2>
+          <h2 class="label">{t('tags.childTags')}</h2>
           <ul class="tag-list" role="list">
             {node.children.map((child) => (
               <li>
@@ -63,7 +63,7 @@ const node = find(tags)
 
 <style>
   .tag-page {
-    max-inline-size: calc(var(--column-width) + var(--rail-width) + var(--space-xl));
+    max-inline-size: var(--column-width);
     margin-inline: auto;
   }
 </style>

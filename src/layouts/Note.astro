@@ -1,12 +1,18 @@
 ---
 /**
- * A note, with its rail.
+ * A note, with — or without — its rail.
  *
- * The DOM order is head, outline, body, rail — not head, body, rail — because
- * that is the order it must collapse into below 1100px: the outline above the
- * prose, the graph and backlinks after it. At full width, grid places the
- * outline and the rail into the second column. Nothing is duplicated and
- * nothing is hidden; the same markup is simply placed differently.
+ * The DOM order is head, outline, body, rail, and that is the reading order at
+ * every width and in both layouts. `column` stacks it: the outline is a
+ * collapsible `<details>` above the prose and backlinks are cards below it.
+ * `panels` places the outline and the rail into a second column with grid, and
+ * folds back to the stack below 1100px. Nothing is duplicated, nothing is
+ * hidden; the same markup is simply placed differently.
+ *
+ * The rail is genuinely absent in `column` rather than merely narrow: a 660px
+ * reading column with nothing beside it is the point of that layout, and
+ * backlinks read better as cards under the prose than as a list off to one
+ * side. Which form the backlinks take is the only thing the layout tells them.
  */
 import type { VaultNote } from '../lib/vault.js'
 import type { GraphLink, Neighbourhood } from '../lib/graph.js'
@@ -15,10 +21,12 @@ import Base from './Base.astro'
 import Toc from '../components/Toc.astro'
 import type { Heading } from '../lib/headings.js'
 import Backlinks from '../components/Backlinks.astro'
+import Breadcrumb from '../components/Breadcrumb.astro'
+import Frontmatter from '../components/Frontmatter.astro'
 import LocalGraph from '../components/LocalGraph.astro'
 import TagList from '../components/TagList.astro'
-import NoteMeta from '../components/NoteMeta.astro'
 import PrevNext from '../components/PrevNext.astro'
+import { t } from '../i18n/index.js'
 
 interface Props {
   note: VaultNote
@@ -38,11 +46,10 @@ const description =
 <Base title={note.title} description={description} current={note.slug}>
   <article class="note-layout" data-layout={config.layout}>
     <header class="note-head">
+      <Breadcrumb note={note} />
       <h1 class="note-title">{note.title}</h1>
-      <div class="note-meta">
-        <NoteMeta dates={note.dates} />
-        {config.features.tags && <TagList tags={note.tags} />}
-      </div>
+      <Frontmatter note={note} />
+      {config.features.tags && <TagList tags={note.tags} />}
     </header>
 
     {config.features.toc && <Toc headings={headings} />}
@@ -54,7 +61,7 @@ const description =
 
     {
       (config.features.backlinks || config.features.graph) && (
-        <aside class="note-rail" aria-label="Note context">
+        <aside class="note-rail" aria-label={t('note.context')}>
           {config.features.graph && (
             <LocalGraph neighbourhood={neighbourhood} current={note.slug} />
           )}

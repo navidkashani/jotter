@@ -8,7 +8,15 @@
  *
  * Colours are OKLCH: perceptually uniform, so a lightness step means the same
  * amount of visible change at every hue, and a palette can be shifted by
- * editing one hue angle without re-tuning every swatch.
+ * editing one hue angle without re-tuning every swatch. The whole palette,
+ * light and dark, sits on hue 60 (neutrals) and hue 70 (accent) — a warm
+ * grey-and-ochre set. Cool neutrals under a warm accent were the single
+ * loudest wrong note in the first cut.
+ *
+ * The surface model is *raised*: `--surface` is lighter than `--paper` in the
+ * light theme and lighter again in the dark one, and raised things carry a
+ * hairline `--rule` rather than a shadow. There is deliberately no shadow token
+ * — every edge in jotter is a 1px line or a `--soft` tint.
  *
  * Dark mode is defined twice on purpose — under `[data-theme="dark"]` for an
  * explicit choice, and under `prefers-color-scheme` for the system default —
@@ -18,66 +26,98 @@
 
 :root {
   /* ---- Colour: surfaces ------------------------------------------------ */
-  --paper: oklch(98.8% 0.004 85);
-  --surface: oklch(100% 0 0);
-  --surface-sunken: oklch(96.6% 0.005 85);
-  --surface-raised: oklch(99.6% 0.003 85);
+  --paper: oklch(97.5% 0.006 60);
+  --surface: oklch(99.4% 0.004 60);
 
   /* ---- Colour: ink ----------------------------------------------------- */
-  --ink: oklch(27% 0.012 65);
-  --ink-strong: oklch(18% 0.014 65);
-  --ink-muted: oklch(46% 0.011 68);
-  --ink-faint: oklch(60% 0.009 70);
+  --ink: oklch(24.5% 0.012 60);
+  --ink-strong: oklch(17% 0.014 60);
+  --ink-muted: oklch(55% 0.012 60);
+  --ink-faint: oklch(63% 0.01 60);
 
   /* ---- Colour: lines --------------------------------------------------- */
-  --rule: oklch(91.5% 0.005 80);
-  --rule-strong: oklch(85% 0.007 80);
+  --rule: oklch(90.5% 0.007 60);
+  --rule-strong: oklch(84% 0.009 60);
 
   /* ---- Colour: accent -------------------------------------------------- */
-  --accent: oklch(48% 0.135 252);
-  --accent-hover: oklch(38% 0.145 252);
-  --accent-soft: oklch(95% 0.028 252);
+  /**
+   * `--accent-hover` is not only a hover state: it is the accent that stays
+   * legible *on* `--soft`. Accent-on-soft measures 4.02:1, just under AA, so
+   * anywhere accent-coloured text sits on an accent tint — tag chips, the
+   * current nav row — it uses this one instead.
+   */
+  --accent: oklch(55% 0.11 70);
+  --accent-hover: oklch(45% 0.115 70);
   --accent-ink: oklch(100% 0 0);
+
+  /**
+   * The tint that does most of the work: nav hover, the current nav row,
+   * inline-code background, tag chips, `::selection`, link underlines, the
+   * hover on a "Start here" cell. It is the accent at 11% alpha, so it shifts
+   * with the accent and needs no second colour to maintain.
+   */
+  --soft: oklch(55% 0.11 70 / 0.11);
 
   /* ---- Colour: semantics ----------------------------------------------- */
   --mark: oklch(91% 0.145 96);
   --mark-ink: oklch(28% 0.06 80);
-  --focus: oklch(55% 0.19 252);
-  --selection: oklch(90% 0.05 252);
-  --scrim: oklch(20% 0.02 265 / 0.35);
+  --focus: oklch(52% 0.14 70);
+  --scrim: oklch(20% 0.02 60 / 0.35);
 
-  /* Callout hues. One token each; the callout itself mixes them with paper. */
-  --hue-note: 252;
-  --hue-tip: 162;
-  --hue-success: 148;
+  /**
+   * Callout hues. One token each; the callout itself derives its edge and its
+   * label from them. `note` *is* the accent, so an untyped callout belongs to
+   * the palette rather than introducing a ninth colour.
+   */
+  --hue-note: 70;
+  --hue-tip: 165;
+  --hue-success: 145;
   --hue-question: 300;
-  --hue-warning: 74;
-  --hue-danger: 25;
+  --hue-warning: 55;
+  --hue-danger: 22;
   --hue-example: 288;
-  --hue-quote: 80;
-  --callout-chroma: 0.11;
+  --hue-quote: 250;
+  --callout-chroma: 0.12;
 
   /* ---- Type ------------------------------------------------------------ */
   --font-body: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
   --font-code: var(--font-mono), ui-monospace, SFMono-Regular, monospace;
 
+  /**
+   * Two scales in one list. App chrome runs at `--step-ui` (16/1.65); note
+   * prose runs at `--step-body` (17/1.72). Setting prose type on the whole
+   * document is what made every label and nav row read two steps too large.
+   */
+  --step-display: 2.375rem; /* 38px — the site's own title */
   --step-title: 2.0625rem; /* 33px — note title */
+  --step-index: 1.8125rem; /* 29px — index and tag titles */
   --step-section: 1.1875rem; /* 19px — section heading */
+  --step-lead: 1.15625rem; /* 18.5px — the standfirst under a title */
   --step-body: 1.0625rem; /* 17px — prose */
-  --step-small: 0.9375rem; /* 15px — secondary prose */
+  --step-quote: 1.03125rem; /* 16.5px — blockquote */
+  --step-ui: 1rem; /* 16px — chrome, list rows, card titles */
+  --step-small: 0.96875rem; /* 15.5px — secondary prose, callout body */
+  --step-excerpt: 0.90625rem; /* 14.5px — list excerpts */
+  --step-nav: 0.84375rem; /* 13.5px — nav rows, outline, card excerpts */
+  --step-code: 0.8125rem; /* 13px — code blocks, figcaptions */
   --step-meta: 0.71875rem; /* 11.5px — mono metadata */
+  --step-label: 0.625rem; /* 10px — uppercase mono section labels */
 
+  --leading-display: 1.15;
   --leading-title: 1.2;
   --leading-section: 1.3;
   --leading-body: 1.72;
+  --leading-ui: 1.65;
   --leading-meta: 1.7;
 
   --weight-normal: 400;
   --weight-medium: 500;
   --weight-semibold: 600;
 
+  --tracking-label: 0.1em;
   --tracking-meta: 0.06em;
-  --tracking-title: -0.011em;
+  --tracking-title: -0.025em;
+  --tracking-tight: -0.01em;
 
   /* The measure. Everything else in the reading column defers to it. */
   --measure: 66ch;
@@ -90,95 +130,87 @@
   --space-m: 1.5rem;
   --space-l: 2rem;
   --space-xl: 3rem;
-  --space-2xl: 4.5rem;
+  --space-2xl: 3.5rem;
+  --space-3xl: 8.75rem;
 
   /* ---- Layout ---------------------------------------------------------- */
   --sidebar-width: 250px;
   --column-width: 660px;
   --rail-width: 218px;
-  --header-height: 57px;
+  --rail-gap: 3.25rem;
+  --header-height: 52px;
 
   /* ---- Shape and motion ------------------------------------------------ */
-  --radius-s: 3px;
-  --radius-m: 6px;
-  --radius-l: 10px;
+  --radius-xs: 3px; /* inline code */
+  --radius-s: 4px; /* chips */
+  --radius-m: 5px; /* nav rows, icon buttons */
+  --radius-l: 7px; /* cards, code blocks, callouts */
+  --radius-xl: 8px; /* the hairline grid frame */
   --hairline: 1px;
 
   --duration-fast: 90ms;
   --duration-base: 170ms;
   --ease: cubic-bezier(0.2, 0, 0.13, 1);
-
-  --shadow-card: 0 1px 2px oklch(20% 0.02 70 / 0.05), 0 4px 14px oklch(20% 0.02 70 / 0.05);
-  --shadow-pop: 0 2px 6px oklch(20% 0.02 70 / 0.07), 0 12px 32px oklch(20% 0.02 70 / 0.11);
 }
 
 /* Dark: an explicit choice. */
 :root[data-theme='dark'] {
-  --paper: oklch(19.5% 0.008 265);
-  --surface: oklch(23% 0.009 265);
-  --surface-sunken: oklch(16.5% 0.008 265);
-  --surface-raised: oklch(26% 0.01 265);
+  --paper: oklch(19% 0.008 60);
+  --surface: oklch(23.2% 0.008 60);
 
-  --ink: oklch(90% 0.006 85);
-  --ink-strong: oklch(97% 0.004 85);
-  --ink-muted: oklch(72% 0.009 80);
-  --ink-faint: oklch(58% 0.01 80);
+  --ink: oklch(92% 0.008 60);
+  --ink-strong: oklch(97% 0.005 60);
+  --ink-muted: oklch(63.5% 0.012 60);
+  --ink-faint: oklch(54% 0.011 60);
 
-  --rule: oklch(30% 0.01 265);
-  --rule-strong: oklch(38% 0.012 265);
+  --rule: oklch(30.5% 0.008 60);
+  --rule-strong: oklch(38% 0.01 60);
 
-  --accent: oklch(79% 0.12 252);
-  --accent-hover: oklch(88% 0.1 252);
-  --accent-soft: oklch(30% 0.05 252);
-  --accent-ink: oklch(17% 0.02 265);
+  --accent: oklch(79% 0.1 70);
+  --accent-hover: oklch(88% 0.085 70);
+  --accent-ink: oklch(17% 0.02 60);
+  --soft: oklch(79% 0.1 70 / 0.15);
 
   --mark: oklch(52% 0.12 96);
   --mark-ink: oklch(97% 0.02 96);
-  --focus: oklch(80% 0.15 252);
-  --selection: oklch(36% 0.07 252);
-  --scrim: oklch(8% 0.01 265 / 0.55);
-
-  --shadow-card: 0 1px 2px oklch(0% 0 0 / 0.3), 0 4px 14px oklch(0% 0 0 / 0.28);
-  --shadow-pop: 0 2px 6px oklch(0% 0 0 / 0.36), 0 12px 32px oklch(0% 0 0 / 0.42);
+  --focus: oklch(80% 0.12 70);
+  --scrim: oklch(8% 0.01 60 / 0.55);
 }
 
 /* Dark: the system default, unless light was explicitly chosen. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --paper: oklch(19.5% 0.008 265);
-    --surface: oklch(23% 0.009 265);
-    --surface-sunken: oklch(16.5% 0.008 265);
-    --surface-raised: oklch(26% 0.01 265);
+    --paper: oklch(19% 0.008 60);
+    --surface: oklch(23.2% 0.008 60);
 
-    --ink: oklch(90% 0.006 85);
-    --ink-strong: oklch(97% 0.004 85);
-    --ink-muted: oklch(72% 0.009 80);
-    --ink-faint: oklch(58% 0.01 80);
+    --ink: oklch(92% 0.008 60);
+    --ink-strong: oklch(97% 0.005 60);
+    --ink-muted: oklch(63.5% 0.012 60);
+    --ink-faint: oklch(54% 0.011 60);
 
-    --rule: oklch(30% 0.01 265);
-    --rule-strong: oklch(38% 0.012 265);
+    --rule: oklch(30.5% 0.008 60);
+    --rule-strong: oklch(38% 0.01 60);
 
-    --accent: oklch(79% 0.12 252);
-    --accent-hover: oklch(88% 0.1 252);
-    --accent-soft: oklch(30% 0.05 252);
-    --accent-ink: oklch(17% 0.02 265);
+    --accent: oklch(79% 0.1 70);
+    --accent-hover: oklch(88% 0.085 70);
+    --accent-ink: oklch(17% 0.02 60);
+    --soft: oklch(79% 0.1 70 / 0.15);
 
     --mark: oklch(52% 0.12 96);
     --mark-ink: oklch(97% 0.02 96);
-    --focus: oklch(80% 0.15 252);
-    --selection: oklch(36% 0.07 252);
-    --scrim: oklch(8% 0.01 265 / 0.55);
-
-    --shadow-card: 0 1px 2px oklch(0% 0 0 / 0.3), 0 4px 14px oklch(0% 0 0 / 0.28);
-    --shadow-pop: 0 2px 6px oklch(0% 0 0 / 0.36), 0 12px 32px oklch(0% 0 0 / 0.42);
+    --focus: oklch(80% 0.12 70);
+    --scrim: oklch(8% 0.01 60 / 0.55);
   }
 }
 
 /* The type scale steps down one notch on small screens; the measure holds. */
 @media (max-width: 640px) {
   :root {
+    --step-display: 2rem;
     --step-title: 1.75rem;
+    --step-index: 1.625rem;
     --step-section: 1.125rem;
+    --step-lead: 1.0625rem;
     --step-body: 1rem;
   }
 }

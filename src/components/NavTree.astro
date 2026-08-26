@@ -54,13 +54,17 @@ const { entries, current = '', depth = 0 } = Astro.props
 <style>
   /* The folder name inside a summary is the link; the row is the toggle. */
   .nav-tree summary > a {
-    padding: 0;
-    color: inherit;
+    display: inline;
     flex: 1;
+    min-inline-size: 0;
+    padding: 0;
+    border-radius: 0;
+    color: inherit;
+    font: inherit;
   }
 
   .nav-tree summary > a:hover {
     background: none;
-    text-decoration: underline;
+    color: var(--accent-hover);
   }
 </style>

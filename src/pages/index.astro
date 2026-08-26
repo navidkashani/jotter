@@ -55,7 +55,7 @@ const recent = byUpdated.slice(0, 10)
     <Base description={config.description}>
       <div class="stack-l landing">
         <header>
-          <h1 class="note-title">{config.title}</h1>
+          <h1 class="home-title">{config.title}</h1>
           {config.description && <p class="landing-intro">{config.description}</p>}
         </header>
 
@@ -68,14 +68,14 @@ const recent = byUpdated.slice(0, 10)
           <>
             {hubs.length > 0 && (
               <section class="stack">
-                <h2 class="section-heading">{t('index.startHere')}</h2>
+                <h2 class="label">{t('index.startHere')}</h2>
                 <NoteList notes={hubs} variant="grid" />
               </section>
             )}
 
             <section class="stack">
-              <h2 class="section-heading">{t('index.recentlyUpdated')}</h2>
-              <NoteList notes={recent} variant="rows" />
+              <h2 class="label">{t('index.recentlyUpdated')}</h2>
+              <NoteList notes={recent} variant="rows" showExcerpt={false} />
             </section>
           </>
         )}
@@ -86,7 +86,7 @@ const recent = byUpdated.slice(0, 10)
 
 <style>
   .landing {
-    max-inline-size: calc(var(--column-width) + var(--rail-width) + var(--space-xl));
+    max-inline-size: var(--column-width);
     margin-inline: auto;
   }
 </style>

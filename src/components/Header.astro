@@ -14,26 +14,25 @@ import ThemeToggle from './ThemeToggle.astro'
   <span class="header-spacer"></span>
 
   <nav class="header-actions" aria-label={t('nav.navigation')}>
-    <a class="meta" href="/notes">{t('nav.allNotes')}</a>
-    {config.features.tags && <a class="meta" href="/tags">{t('nav.tags')}</a>}
+    <a class="label" href="/notes">{t('nav.allNotes')}</a>
+    {config.features.tags && <a class="label" href="/tags">{t('nav.tags')}</a>}
     {config.features.themeToggle && <ThemeToggle />}
   </nav>
 </header>
 
 <style>
-  .header-actions .meta {
-    text-decoration: none;
-    padding-inline: var(--space-2xs);
+  .header-actions .label {
+    color: var(--ink-muted);
   }
 
-  .header-actions .meta:hover {
-    color: var(--ink-strong);
+  .header-actions .label:hover {
+    color: var(--accent-hover);
   }
 
   /* Space the fixed drawer toggle sits in, at the widths where it is shown. */
   .drawer-gap {
     display: none;
-    inline-size: 32px;
+    inline-size: 30px;
     flex: none;
   }
 

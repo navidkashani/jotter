@@ -77,7 +77,12 @@ export default defineConfig({
       provider: fontProviders.google(),
       name: 'Public Sans',
       cssVariable: '--font-sans',
-      weights: [400, 500, 600, 700],
+      /**
+       * One variable axis rather than four static cuts: fewer files, and the
+       * 300 end of the range exists at all — the static set started at 400, so
+       * anything asking for light silently got regular.
+       */
+      weights: ['300 700'],
       styles: ['normal', 'italic'],
       subsets: ['latin', 'latin-ext'],
       fallbacks: ['ui-sans-serif', 'system-ui', 'sans-serif'],

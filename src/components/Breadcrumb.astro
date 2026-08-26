@@ -1,0 +1,39 @@
+---
+/**
+ * Where the note lives in the vault.
+ *
+ * Not a navigation aid so much as an orientation one: it says "this page is a
+ * file, in a folder, in somebody's vault", which is the whole premise of a
+ * published garden. The folder segments are links because every folder has a
+ * real page; the file name is not, because you are already on it.
+ *
+ * Derived from `note.path` against the folder tree that `src/lib/tree.ts`
+ * already computed for the sidebar, so it costs one array lookup per note.
+ */
+import type { VaultNote } from '../lib/vault.js'
+import { allFolders } from '../lib/site.js'
+import { noteHref } from '../lib/href.js'
+
+interface Props {
+  note: VaultNote
+}
+
+const { note } = Astro.props
+
+const segments = note.path.split('/').slice(0, -1)
+const crumbs = segments
+  .map((_, i) => allFolders.find((folder) => folder.path === segments.slice(0, i + 1).join('/')))
+  .filter((folder) => folder !== undefined)
+---
+
+<p class="label note-crumb">
+  {
+    crumbs.map((folder) => (
+      <>
+        <a href={noteHref(folder.slug)}>{folder.name}</a>
+        <span aria-hidden="true">/</span>
+      </>
+    ))
+  }
+  <span>{note.filename}.md</span>
+</p>

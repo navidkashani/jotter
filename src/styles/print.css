@@ -9,8 +9,7 @@
   :root {
     --paper: #fff;
     --surface: #fff;
-    --surface-sunken: #fff;
-    --surface-raised: #fff;
+    --soft: #f2f2f2;
     --ink: #111;
     --ink-strong: #000;
     --ink-muted: #444;
@@ -31,6 +30,12 @@
   .drawer-backdrop,
   .header-actions {
     display: none !important;
+  }
+
+  /* The frontmatter panel is the note's own header block; it prints flat. */
+  .note-frontmatter {
+    border: 0;
+    padding: 0;
   }
 
   .page {
