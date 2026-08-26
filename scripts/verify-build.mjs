@@ -310,9 +310,15 @@ section('JavaScript payload')
   )
 
   /**
-   * Budget per *page*, not across the site. The same two inline islands appear
-   * on every page, so summing them measures how many notes the demo has rather
-   * than what a reader downloads.
+   * Budget per *page*, not across the site: the inline blocks are counted one
+   * page at a time rather than summed, so this measures what a reader
+   * downloads instead of how many notes the demo has.
+   *
+   * `sharedBytes` is the honest caveat. It totals *every* `.js` in `dist/` and
+   * charges that total to every page, so the graph chunk only note pages load
+   * is billed to the tag index too. Deliberately left alone: attributing it
+   * properly means walking each page's module graph, and over-charging is the
+   * safe direction for a budget to be wrong in.
    */
   const perPage = pages.map(({ file, html }) => ({
     file,
@@ -328,10 +334,20 @@ section('JavaScript payload')
     'JavaScript per page',
     `${worst.bytes} bytes at worst (${worst.file}); ${jsFiles.length} shared file(s), ${scripts.length} inline block(s) site-wide`,
   )
-  check(worst.bytes < 4 * 1024, 'v1 ships under 4 KB of JavaScript per page', `${worst.bytes} bytes on ${worst.file}`)
+  check(worst.bytes < 24 * 1024, 'a page ships under 24 KB of JavaScript', `${worst.bytes} bytes on ${worst.file}`)
 
-  // Nothing in v1 should be reaching the network at runtime.
-  const fetches = scripts.filter((s) => /\bfetch\(|XMLHttpRequest|new WebSocket/.test(s.body))
+  /**
+   * Nothing here should be reaching the network at runtime — and that has to
+   * be asserted over the bundled files as well as the inline blocks. Until the
+   * graph there were no `.js` files at all in `dist/`, so grepping inline
+   * bodies covered everything; the moment client code moves into
+   * `dist/_astro/*.js` an inline-only grep would police nothing and still pass.
+   */
+  const bundled = await Promise.all(
+    jsFiles.map(async (f) => ({ file: relative(DIST, f), body: await readFile(f, 'utf8') })),
+  )
+  const NETWORK = /\bfetch\(|XMLHttpRequest|new WebSocket|navigator\.sendBeacon|EventSource\(/
+  const fetches = [...scripts, ...bundled].filter((s) => NETWORK.test(s.body))
   check(fetches.length === 0, 'no runtime network requests', fetches.map((s) => s.file).join(', '))
 }
 

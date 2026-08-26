@@ -123,6 +123,22 @@ export default defineConfig({
   vite: {
     define: {
       'import.meta.env.JOTTER_VAULT_ROOT': JSON.stringify(vaultRoot),
+
+      /**
+       * The graph is the first island heavy enough to become a real file in
+       * `dist/` rather than a tag Astro inlines, and that exposes a rule the
+       * small ones never did: a component's script is bundled because the
+       * component is *imported*, whether or not it ever renders. Left as a
+       * plain `config.features.graph` test, `features.graph: false` would ship
+       * an 18 KB chunk no page loads.
+       *
+       * A literal here is what Rollup needs to drop the import of
+       * `LocalGraph.astro` entirely, which takes the component — and so its
+       * script — out of the module graph.
+       */
+      'import.meta.env.JOTTER_GRAPH': JSON.stringify(
+        jotter.features.graph && jotter.layout === 'panels',
+      ),
     },
   },
 

@@ -79,7 +79,7 @@ export default defineConfig({
     backlinks: true,
     tags: true,
     themeToggle: true,
-    graph: false,               // v2
+    graph: false,               // the local graph — `layout: 'panels'` only
     search: false,              // v2
     hoverPreview: false,        // v2
     rss: false,                 // v2
@@ -264,8 +264,10 @@ sneaks in.
 WCAG AA contrast on every token pair, in both themes, asserted at build.
 Visible focus everywhere, a skip link, landmarks, `prefers-reduced-motion`,
 and a print stylesheet. The navigation tree, the outline, the drawer and every
-callout work with JavaScript disabled — the only scripts in a v1 build are the
-theme island and the drawer enhancement, about 1.1 KB together.
+callout work with JavaScript disabled — the only scripts in a default build
+are the theme island and the drawer enhancement, about 1.1 KB together. Turn
+`features.graph` on and a note page adds an 18 KB `d3-force` chunk, about
+19 KB in all; the graph's own accessible list stays underneath it either way.
 
 ---
 
@@ -278,8 +280,12 @@ outline, `<details>` navigation, tags, dark and light, RTL-ready i18n strings,
 images, redirects, sitemap, the accessibility baseline, print CSS, the Quartz
 migration guide, the demo garden, and the tests.
 
-**v2:** search (Pagefind), the force-directed graph, hover previews, OG images,
-RSS, analytics, and the Open Publish `scripts/` layer.
+**Since v1:** the local graph — a `d3-force` layout on a canvas in the
+`panels` rail, off by default, with the readable list of neighbours kept
+underneath it for keyboards, screen readers and scripting-off.
+
+**Still to come:** search (Pagefind), hover previews, OG images, RSS,
+analytics, and the Open Publish `scripts/` layer.
 
 ## License
 

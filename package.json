@@ -22,10 +22,12 @@
     "@astrojs/markdown-satteri": "^0.3.8",
     "@astrojs/sitemap": "^3.7.3",
     "astro": "^7.2.7",
+    "d3-force": "^3.0.0",
     "yaml": "^2.9.0"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
+    "@types/d3-force": "^3.0.10",
     "typescript": "^5.9.0",
     "vitest": "^4.1.11"
   }

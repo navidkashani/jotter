@@ -23,7 +23,6 @@ import type { Heading } from '../lib/headings.js'
 import Backlinks from '../components/Backlinks.astro'
 import Breadcrumb from '../components/Breadcrumb.astro'
 import Frontmatter from '../components/Frontmatter.astro'
-import LocalGraph from '../components/LocalGraph.astro'
 import TagList from '../components/TagList.astro'
 import PrevNext from '../components/PrevNext.astro'
 import { t } from '../i18n/index.js'
@@ -41,6 +40,21 @@ const { note, headings, backlinks, neighbourhood, previous, next } = Astro.props
 
 const description =
   typeof note.frontmatter.description === 'string' ? note.frontmatter.description : note.excerpt
+
+/**
+ * `panels` only. The graph is a picture of where you are, and it needs a
+ * column beside the prose to be one; dropped into the `column` stack it
+ * becomes a square of dots between the article and its backlinks, which is
+ * where the mockup never put it. `features.graph` is honoured, not overridden
+ * — it simply has nowhere to render in the layout that has no rail.
+ *
+ * The flag arrives as a literal from `astro.config.ts` rather than off
+ * `config`, and the import is dynamic, so that with the graph off Rollup can
+ * drop `LocalGraph.astro` and its 18 KB of `d3-force` out of the build
+ * entirely. See the note beside `JOTTER_GRAPH` there.
+ */
+const showGraph: boolean = import.meta.env.JOTTER_GRAPH
+const LocalGraph = showGraph ? (await import('../components/LocalGraph.astro')).default : null
 ---
 
 <Base title={note.title} description={description} current={note.slug}>
@@ -60,11 +74,9 @@ const description =
     </div>
 
     {
-      (config.features.backlinks || config.features.graph) && (
+      (config.features.backlinks || showGraph) && (
         <aside class="note-rail" aria-label={t('note.context')}>
-          {config.features.graph && (
-            <LocalGraph neighbourhood={neighbourhood} current={note.slug} />
-          )}
+          {LocalGraph && <LocalGraph neighbourhood={neighbourhood} current={note.slug} />}
           {config.features.backlinks && <Backlinks links={backlinks} />}
         </aside>
       )

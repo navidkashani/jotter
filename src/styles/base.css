@@ -552,6 +552,44 @@ body {
   color: var(--ink-faint);
 }
 
+/* ---- The local graph --------------------------------------------------- */
+
+/**
+ * The mount is empty until `src/scripts/local-graph.ts` puts a canvas in it,
+ * and `:empty` is doing real work here: with scripting off it collapses
+ * completely rather than leaving a bordered blank above the list that is the
+ * actual fallback. The aspect ratio is the mockup's own viewBox.
+ *
+ * The type is set on the mount rather than in the script because the canvas
+ * reads its own computed style for the labels — one more thing that stays a
+ * token instead of becoming a literal in JavaScript.
+ */
+.graph-canvas {
+  aspect-ratio: 200 / 170;
+  /* Where `panels` has folded the rail into the column the card is as wide as
+     the prose, and the ratio alone would make that a 560px square. */
+  max-block-size: 240px;
+  overflow: hidden;
+  font-family: var(--font-code);
+  font-size: var(--step-label);
+  background: var(--surface);
+  border: var(--hairline) solid var(--rule);
+  border-radius: var(--radius-l);
+}
+
+.graph-canvas:empty {
+  display: none;
+}
+
+.graph-canvas canvas {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+  cursor: grab;
+  /* Vertical scrolling stays the browser's. See `local-graph.ts`. */
+  touch-action: pan-y;
+}
+
 /* ---- Table of contents ------------------------------------------------- */
 
 .note-toc > summary {

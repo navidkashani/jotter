@@ -2,13 +2,24 @@
 /**
  * The local graph.
  *
- * v1 renders the neighbourhood as a static, readable list of relationships —
- * outgoing above, incoming below — and ships no JavaScript. The force-directed
- * canvas is v2; this is not a placeholder for a missing feature so much as the
- * accessible fallback the canvas version will keep underneath it.
+ * Two renderings of one neighbourhood, in DOM order: an empty mount carrying
+ * the data, and the readable list of relationships underneath it — outgoing
+ * above, incoming below.
+ *
+ * `src/scripts/local-graph.ts` inserts a canvas into the mount and makes the
+ * list `.visually-hidden`. Not `display: none`: the list stays in the
+ * accessibility tree, because a force-directed canvas is a picture and the
+ * list is the only version of it a screen reader or a keyboard can use. With
+ * scripting off nothing happens, no canvas appears, and the list is simply
+ * visible. It is the fallback rather than a placeholder.
+ *
+ * The neighbourhood travels in a `data-` attribute rather than through
+ * `define:vars`, which forces the script inline — and an inline script is
+ * neither bundled nor shared between pages, which is most of the point of
+ * spending 17 KB on `d3-force` once.
  *
  * When `features.graph` is false this component is never rendered at all, so
- * the markup and its styles are absent rather than hidden.
+ * the markup, its styles and the script are absent rather than hidden.
  */
 import type { Neighbourhood } from '../lib/graph.js'
 import { noteHref } from '../lib/href.js'
@@ -20,7 +31,43 @@ interface Props {
 }
 
 const { neighbourhood, current } = Astro.props
-const neighbours = neighbourhood.nodes.filter((n) => n.slug !== current)
+
+/**
+ * Outgoing first. `neighbourhood()` happens to return them in that order
+ * today, as a side effect of walking outgoing links before backlinks, but that
+ * is a property of its traversal rather than a promise it makes — so the order
+ * is taken from the edges here, where the claim is made.
+ */
+const linkedTo = new Set(
+  neighbourhood.edges.filter((e) => e.source === current).map((e) => e.target),
+)
+const neighbours = neighbourhood.nodes
+  .filter((n) => n.slug !== current)
+  .sort((a, b) => Number(linkedTo.has(b.slug)) - Number(linkedTo.has(a.slug)))
+
+/**
+ * A mutual pair is two directed edges, and drawing both would put two lines on
+ * the same pixels. Collapsing them here rather than in the browser keeps the
+ * payload smaller and the client dumber.
+ */
+const seen = new Set<string>()
+const links = neighbourhood.edges.filter(({ source, target }) => {
+  const pair = [source, target].sort().join(' ')
+  if (seen.has(pair)) return false
+  seen.add(pair)
+  return true
+})
+
+const data = {
+  current,
+  nodes: neighbourhood.nodes.map((n) => ({
+    slug: n.slug,
+    title: n.title,
+    // Built here, so the client never has to know how a jotter URL is spelled.
+    href: noteHref(n.slug),
+  })),
+  links,
+}
 ---
 
 {
@@ -29,6 +76,7 @@ const neighbours = neighbourhood.nodes.filter((n) => n.slug !== current)
       <h2 class="label rail-heading" id="graph-heading">
         {t('note.graph')}
       </h2>
+      <div class="graph-canvas" data-graph={JSON.stringify(data)} />
       <div class="rail-links graph-list">
         {neighbours.map((node) => (
           <a href={noteHref(node.slug)}>{node.title}</a>
@@ -37,6 +85,10 @@ const neighbours = neighbourhood.nodes.filter((n) => n.slug !== current)
     </section>
   )
 }
+
+<script>
+  import '../scripts/local-graph.js'
+</script>
 
 <style>
   .graph-list a::before {

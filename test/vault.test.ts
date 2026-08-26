@@ -9,7 +9,7 @@ import {
   isPublished,
   resolveTitle,
 } from '../src/lib/vault.js'
-import { buildGraph, neighbourhood } from '../src/lib/graph.js'
+import { buildGraph, neighbourhood, type Graph, type GraphLink } from '../src/lib/graph.js'
 
 const VAULT = fileURLToPath(new URL('./fixtures/vault', import.meta.url))
 const scan = (opts: Partial<Parameters<typeof scanVault>[0]> = {}) => {
@@ -217,5 +217,76 @@ describe('buildGraph', () => {
     expect(hood.nodes.find((n) => n.slug === 'notes/luhmann')?.depth).toBe(0)
     expect(hood.nodes.map((n) => n.slug)).toContain('zettelkasten')
     expect(hood.nodes.find((n) => n.slug === 'zettelkasten')?.title).toBe('Zettelkasten')
+  })
+})
+
+describe('neighbourhood edges', () => {
+  /**
+   * A graph straight from a list of `source -> target` pairs. The fixture vault
+   * has no triangle in it, and a triangle is the whole point of the
+   * ring-closing pass — so these build exactly the shape under test rather than
+   * hunting for one in the demo content.
+   */
+  const graphOf = (pairs: [string, string][]): Graph => {
+    const slugs = [...new Set(pairs.flat())]
+    const outgoing = new Map(slugs.map((s) => [s, [] as GraphLink[]]))
+    const backlinks = new Map(slugs.map((s) => [s, [] as GraphLink[]]))
+
+    for (const [source, target] of pairs) {
+      outgoing.get(source)?.push({ slug: target, title: target, anchor: '', label: target })
+      backlinks.get(target)?.push({ slug: source, title: source, anchor: '', label: source })
+    }
+
+    return {
+      outgoing,
+      backlinks,
+      titles: new Map(slugs.map((s) => [s, s])),
+      orphans: [],
+      warnings: [],
+    }
+  }
+
+  const keys = (hood: ReturnType<typeof neighbourhood>) =>
+    hood.edges.map((e) => `${e.source} ${e.target}`).sort()
+
+  it('closes the ring between two neighbours that link to each other', () => {
+    // a -> b, a -> c, b -> c. Without the closing pass, b -> c is invisible and
+    // the neighbourhood is a star rather than a triangle.
+    const hood = neighbourhood(graphOf([['a', 'b'], ['a', 'c'], ['b', 'c']]), 'a', 1)
+    expect(hood.nodes.map((n) => n.slug).sort()).toEqual(['a', 'b', 'c'])
+    expect(keys(hood)).toEqual(['a b', 'a c', 'b c'])
+  })
+
+  it('closes a ring between two neighbours reached from opposite directions', () => {
+    // b links in, c links out, and b -> c joins them behind the focused note.
+    const hood = neighbourhood(graphOf([['b', 'a'], ['a', 'c'], ['b', 'c']]), 'a', 1)
+    expect(keys(hood)).toEqual(['a c', 'b a', 'b c'])
+  })
+
+  it('admits no node the ring-closing pass has not already seen', () => {
+    // c -> d leaves the neighbourhood, so neither the edge nor d comes back.
+    const hood = neighbourhood(graphOf([['a', 'c'], ['c', 'd']]), 'a', 1)
+    expect(hood.nodes.map((n) => n.slug).sort()).toEqual(['a', 'c'])
+    expect(keys(hood)).toEqual(['a c'])
+  })
+
+  it('keeps direction, so an incoming link reads source -> focus', () => {
+    const hood = neighbourhood(graphOf([['b', 'a']]), 'a', 1)
+    expect(hood.edges).toEqual([{ source: 'b', target: 'a' }])
+  })
+
+  it('keeps a mutual pair as two directed edges, and only two', () => {
+    // The pair is enumerated four times over — outgoing, backlink, and once
+    // more by the closing pass from each end. Deduplication leaves both
+    // directions exactly once; collapsing them into one line is the renderer's
+    // job, not this function's.
+    const hood = neighbourhood(graphOf([['a', 'b'], ['b', 'a']]), 'a', 1)
+    expect(keys(hood)).toEqual(['a b', 'b a'])
+  })
+
+  it('returns no edges at depth 0', () => {
+    const hood = neighbourhood(graphOf([['a', 'b'], ['b', 'a']]), 'a', 0)
+    expect(hood.nodes.map((n) => n.slug)).toEqual(['a'])
+    expect(hood.edges).toEqual([])
   })
 })

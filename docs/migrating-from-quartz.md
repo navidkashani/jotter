@@ -62,8 +62,10 @@ export default defineConfig({ linkResolution: 'absolute' })
   filename you typed.
 - **A design system you can actually change.** Forty tokens, one file, WCAG AA
   asserted at build in both themes.
-- **Almost no JavaScript.** v1 ships about 1.1 KB per page. Quartz's client
-  bundle is a documented complaint.
+- **Almost no JavaScript.** A default build ships about 1.1 KB per page, and
+  about 19 KB on a note page with the local graph turned on. Quartz's client
+  bundle — `d3` entire, `pixi.js` and `@tweenjs/tween.js`, 107 KB before its
+  graph draws anything — is a documented complaint.
 - **Images optimized by default.** AVIF/WebP with intrinsic dimensions; SVG and
   GIF passed through untouched.
 - **Obsidian's embed pipe rule.** `![[img.png|300]]` is a size,
@@ -72,8 +74,10 @@ export default defineConfig({ linkResolution: 'absolute' })
 ## What you lose
 
 - **Search**, until v2 (Pagefind).
-- **The graph**, until v2. v1 renders the local neighbourhood as a readable
-  list instead, which is the accessible fallback the canvas version will keep.
+- **The global graph.** jotter has the *local* graph — `features.graph`, in
+  the `panels` rail — but there is no whole-site graph page. The local one is
+  `d3-force` on a 2D canvas rather than Pixi, and it keeps the readable list of
+  neighbours underneath the picture rather than instead of it.
 - **Mermaid, KaTeX rendering, Dataview, `.canvas`, Excalidraw.** Out of scope,
   documented rather than silently missing.
 - **The plugin ecosystem.** jotter has six small markdown plugins over pure

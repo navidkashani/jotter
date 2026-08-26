@@ -142,6 +142,27 @@ export function neighbourhood(graph: Graph, slug: string, depth = 1): Neighbourh
     frontier = next
   }
 
+  /**
+   * The BFS above only collects edges *from* the frontier, so a link between
+   * two outermost neighbours is never enumerated and depth 1 comes out a pure
+   * star. A force layout over a star is just a circle; the triangles among the
+   * neighbours are what make the picture worth drawing.
+   *
+   * So walk the outgoing set once more and keep every edge whose ends are
+   * *both* already in the neighbourhood. Nothing new is admitted — this closes
+   * rings between nodes BFS has already accepted, and at depth 0 there is
+   * nothing to close because self-links are not edges.
+   */
+  for (const node of seen.keys()) {
+    for (const link of graph.outgoing.get(node) ?? []) {
+      if (!seen.has(link.slug)) continue
+      const key = `${node} ${link.slug}`
+      if (edgeKeys.has(key)) continue
+      edgeKeys.add(key)
+      edges.push({ source: node, target: link.slug })
+    }
+  }
+
   const nodes: GraphNode[] = [...seen.entries()].map(([s, d]) => ({
     slug: s,
     title: graph.titles.get(s) ?? s,
