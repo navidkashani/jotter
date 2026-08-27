@@ -85,7 +85,11 @@ export default defineConfig({
     rss: false,                 // v2
   },
 
-  analytics: { provider: 'none' },
+  analytics: {
+    provider: 'none',        // 'plausible' | 'umami' | 'goatcounter' | 'fathom' | 'cloudflare' | 'google'
+    // id: 'example.com',    // site id, domain or token, depending on the provider — required unless 'none'
+    // host: '…',            // self-hosted Plausible, Umami or GoatCounter only
+  },
   redirects: {},
 })
 ```
@@ -195,8 +199,8 @@ have falls back rather than emitting a link to a page that will not exist.
 npm run dev          # http://localhost:4321
 npm run build        # astro build, then the build assertions
 npm run verify       # the assertions alone, against the current dist/
-npm run verify:full  # also rebuilds with features off, and at 1,000 notes
-npm test             # 251 unit tests
+npm run verify:full  # also rebuilds with features off, with analytics on, and at 1,000 notes
+npm test             # 274 unit tests
 npm run check        # astro check
 npm run clean        # see the note below
 ```
@@ -277,9 +281,13 @@ the modal is keyboard-first, focus is trapped and returned, results are real
 links, and the count is announced. With scripting off there is no search button
 at all, because one that did nothing would be worse than none.
 
-The per-page budget is asserted at 32 KB. It was 24 KB until search shipped;
-graph and search together measure 29,334 bytes on a note page, so the ceiling
-moved once, deliberately, and `scripts/verify-build.mjs` says why.
+The per-page budget is asserted at 32 KB of jotter's own JavaScript. It was
+24 KB until search shipped; graph and search together measure 29,334 bytes on a
+note page, so the ceiling moved once, deliberately, and
+`scripts/verify-build.mjs` says why. A configured analytics provider's script is
+not counted against it — it is not a file in `dist/`, and its weight is the
+vendor's rather than jotter's — but the build reports the tag and its origin
+next to the number, so the exclusion is visible rather than silent.
 
 ---
 
@@ -314,25 +322,63 @@ rather than on page load, so a reader who never searches downloads none of it.
 Results carry the matching section's anchor, so a hit inside a long note jumps
 to the heading rather than the top.
 
+And **analytics**, off by default, and the only switch in jotter that adds a
+request to somebody else's server. `analytics.provider` takes `plausible`,
+`umami`, `goatcounter`, `fathom`, `cloudflare` or `google`, and jotter emits
+that vendor's own documented tag and nothing else — no wrapper, no consent
+banner, no Do-Not-Track branch. Quartz builds the same six from JavaScript and
+rewires each into manual pageview mode because it is an SPA and the document
+never reloads; jotter is not, so a real navigation fires the vendor's own
+automatic pageview, correctly, for free. There is nothing to port.
+
+Nothing ships during `astro dev`, which is deliberate: without that gate every
+local reload would be a real pageview against real production stats. Use
+`astro preview` to check your own setup.
+
+There is deliberately no `custom` provider. A field taking an arbitrary script
+URL is one the origin assertion below cannot check, and an assertion with a hole
+shaped like "anything the user typed" is not an assertion. Six providers, six
+known origins — or none, which is the default. If you need something else, paste
+its snippet into `src/layouts/Base.astro`.
+
 ### What "no network" means now
 
-It used to mean *nothing jotter ships reaches the network*, and search ends
-that — Pagefind loads index chunks over plain GETs as you type, which is the
+It used to mean *nothing jotter ships reaches the network*. Search ended that
+first — Pagefind loads index chunks over plain GETs as you type, which is the
 entire reason a thousand-note vault is searchable without shipping one enormous
-file. The claim is narrower now, and worth stating exactly:
+file — and analytics ends it a second time, on purpose and only if you ask.
+Each bullet below is true on its own; none of them is retracted by the next.
 
-- **No third-party requests.** No CDN, no analytics unless you configure one,
-  no fonts from someone else's server — they are self-hosted and subset.
-- **No server, and no tracking.** Every page is a static file. Search runs in
-  the reader's browser against files on your own origin; no query leaves it.
-- **jotter's own code makes no requests at all.** `scripts/verify-build.mjs`
-  still fails the build on `fetch(`, `XMLHttpRequest`, `WebSocket`,
-  `sendBeacon` or `EventSource` in any inline block or bundled chunk. The
-  exemption is `dist/pagefind/**`, by path, and nothing else — which is what
-  keeps hover previews embedded rather than fetched.
+- **No tracking unless you configure it.** `analytics.provider` defaults to
+  `'none'`, and a default build emits no analytics tag at all — not a disabled
+  one, not an empty one, none. Set it and the vendor's code is on your site from
+  that moment, and the bullet below stops describing it.
+- **No third-party origin you did not ask for.** No CDN, no fonts from someone
+  else's server — those are self-hosted and subset. `scripts/verify-build.mjs`
+  collects every external `src` and `href` in `dist/` and fails unless each one
+  is a tag jotter itself emitted and marked, and unless the whole site talks to
+  at most one origin that is not its own. An origin nobody asked for fails the
+  build; so does a second tracker riding along beside the first.
+- **No server.** Every page is a static file. Search runs in the reader's
+  browser against files on your own origin, so a query never leaves it, and
+  turning search off leaves nothing behind: no index directory, and no markup
+  marked up for one.
+- **The code jotter wrote makes no requests at all.** The build still fails on
+  `fetch(`, `XMLHttpRequest`, `WebSocket`, `sendBeacon` or `EventSource` in any
+  inline block or bundled chunk. The exemption is `dist/pagefind/**`, by path,
+  and nothing else — which is what keeps hover previews embedded rather than
+  fetched. It does not read a configured vendor's script, because that script is
+  not jotter's and is not in `dist/`. What jotter asserts about analytics is
+  which origin the tag points at, not what the vendor does once it is running.
+  Nobody can assert the second; saying so is better than implying otherwise.
 
-**Still to come:** OG images, RSS, analytics, and the Open Publish `scripts/`
-layer.
+Two things jotter cannot detect, and does not pretend to. A site proxied through
+Cloudflare with Web Analytics enabled at the dashboard already has the beacon
+injected, so configuring `cloudflare` here counts twice. And a Netlify or Vercel
+preview deploy is a production build, so the tag ships there too — Plausible and
+Fathom simply will not count a domain you have not registered, and GA4 will.
+
+**Still to come:** OG images, RSS, and the Open Publish `scripts/` layer.
 
 ## License
 

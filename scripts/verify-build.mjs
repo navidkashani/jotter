@@ -514,14 +514,216 @@ section('JavaScript payload')
    * the filter and this check fails; that is the test that it is doing
    * anything.
    */
-  const authored = (s) => !s.file.startsWith(`pagefind${sep}`)
-  const fetches = [...scripts, ...chunks.values()].filter((s) => authored(s) && NETWORK.test(s.body))
+  const authoredCode = (s) => !s.file.startsWith(`pagefind${sep}`)
+  const fetches = [...scripts, ...chunks.values()].filter((s) => authoredCode(s) && NETWORK.test(s.body))
   check(
     fetches.length === 0,
-    'no runtime network requests from jotter’s own code',
+    'no runtime network requests from code jotter wrote',
     fetches.map((s) => s.file).join(', '),
   )
+
+  /**
+   * What this check does *not* cover, now that it is not the only one standing
+   * behind the README's privacy claims: a `<script src>` pointing somewhere
+   * else. An external tag has no body for `NETWORK` to read and is not a file
+   * in `dist/` for the chunk walk to find, so it is invisible here — and it was
+   * invisible here for as long as this was the only network assertion jotter
+   * had. That ground now belongs to `section('Third-party origins')` below,
+   * which asserts the *set* of origins a page talks to.
+   *
+   * This check keeps the narrower half, which is also the half nobody else can
+   * keep: no code jotter wrote opens a connection. It says nothing about what a
+   * vendor's script does once it is running, and it should not pretend to.
+   */
 }
+
+/* -------------------------------------------------- third-party origins */
+
+/**
+ * The assertion the analytics feature owes.
+ *
+ * `analytics.provider` is the only switch in jotter that puts somebody else's
+ * origin in the page, and until it existed there was nothing here to check: a
+ * build contains **zero** absolute external URLs of any kind, so this starts
+ * from a provably clean floor rather than from a guess.
+ *
+ * How it knows what to expect without reading `jotter.config.ts`: it doesn't
+ * have to. `Analytics.astro` marks its own tag with `data-jotter-analytics`,
+ * the same idiom as `data-search` and `data-preview`, and the marker names the
+ * provider. So the built HTML says what jotter meant to emit, and anything
+ * external *without* a marker got there some other way — which is exactly what
+ * this is for. Parsing the config as text would be brittle in a way this is
+ * not, and would break on a computed config besides.
+ *
+ * A fixed allowlist of the six vendor origins was the obvious alternative and
+ * it is wrong: `host` exists precisely so a self-hosted Plausible, Umami or
+ * GoatCounter can live on the reader's own domain, which no list can predict.
+ * Hardcoding one would fail the build for the users jotter should most want.
+ */
+/**
+ * Written as a function rather than inline, because `--full` re-runs every one
+ * of these against a second build with analytics forced on. On the committed
+ * config the set of origins is empty and every check below is vacuously true —
+ * so without that second pass, deleting this whole section would change
+ * nothing, and an assertion that cannot fail is not an assertion.
+ */
+function thirdPartyOrigins(pages) {
+  const REMOTE = /^(?:https?:)?\/\//i
+  const originOf = (url) => new URL(url.startsWith('//') ? `https:${url}` : url).origin
+
+  const tagsOf = (html, name) => [...html.matchAll(new RegExp(`<${name}\\b[^>]*>`, 'g'))].map((m) => m[0])
+  const attr = (tag, name) => tag.match(new RegExp(`\\b${name}="([^"]*)"`))?.[1] ?? ''
+  const has = (tag, name) => new RegExp(`\\b${name}(?=[\\s>=])`).test(tag)
+
+  /**
+   * `src/integrations/vault.ts` copies every non-markdown file in the vault to
+   * `dist/_vault/`, with no extension allowlist — so an `.html` attachment a
+   * note links to is in `pages` and is *not* jotter's markup. Failing over a
+   * `<script src>` in a file the user put in their own vault would be this
+   * check inventing a bug.
+   *
+   * Named separately from the Pagefind exemption above rather than shared with
+   * it. They exempt different things for different reasons — that one exempts a
+   * directory of code from *fetching*, this one exempts a directory of user
+   * files from being read as *jotter's markup* — and one shared predicate would
+   * let a single future edit widen both at once.
+   */
+  const authoredPage = ({ file }) => !file.startsWith(`_vault${sep}`)
+  const authored = pages.filter(authoredPage)
+
+  /**
+   * Only the attributes that actually *fetch*. `<a href>` is deliberately not
+   * here — a link to another site is not a request, and the demo garden is full
+   * of them — and neither is `<link rel="canonical">` or `<meta og:url>`, which
+   * carry `config.url` as a declaration rather than a subresource. That is why
+   * the `<link>` sweep is gated on `rel` instead of on `href`.
+   */
+  const FETCHING_REL = /^(stylesheet|preload|modulepreload|preconnect|dns-prefetch|prefetch|prerender)$/
+  const srcsetUrls = (value) =>
+    value.split(',').map((part) => part.trim().split(/\s+/)[0]).filter(Boolean)
+
+  const subresources = (html) => {
+    const urls = []
+    for (const name of ['script', 'img', 'iframe', 'source']) {
+      for (const tag of tagsOf(html, name)) {
+        urls.push(attr(tag, 'src'), ...srcsetUrls(attr(tag, 'srcset')))
+      }
+    }
+    for (const tag of tagsOf(html, 'link')) {
+      if (FETCHING_REL.test(attr(tag, 'rel'))) urls.push(attr(tag, 'href'))
+    }
+    return urls.filter((url) => url && REMOTE.test(url))
+  }
+
+  const external = authored.flatMap(({ file, html }) =>
+    subresources(html).map((url) => ({ file, url, origin: originOf(url) })),
+  )
+
+  /** Every external `<script>`, marked or not — the set the marker rule polices. */
+  const externalScripts = authored.flatMap(({ file, html }) =>
+    tagsOf(html, 'script')
+      .filter((tag) => REMOTE.test(attr(tag, 'src')))
+      .map((tag) => ({ file, tag, provider: attr(tag, 'data-jotter-analytics') })),
+  )
+
+  const unmarked = externalScripts.filter((s) => !s.provider)
+  check(
+    unmarked.length === 0,
+    'every external script in dist/ is one jotter emitted',
+    unmarked.map((s) => `${s.file}: ${attr(s.tag, 'src')}`).join(', '),
+  )
+
+  /**
+   * Cardinality, which set membership alone would not give: two providers, or a
+   * tracker riding along beside the configured one, both collapse to "an
+   * external origin appeared" without this.
+   */
+  const origins = [...new Set(external.map((e) => e.origin))]
+  check(
+    origins.length <= 1,
+    'a page talks to at most one origin that is not its own',
+    origins.join(', '),
+  )
+
+  const providers = [...new Set(externalScripts.map((s) => s.provider))]
+
+  if (providers.length === 0) {
+    pass('no third-party origin in dist/', 'analytics.provider is none')
+    /**
+     * The markup half, and the reason it is asserted separately: `provider:
+     * 'none'` must emit *nothing at all* — not an empty tag, not a disabled
+     * one. This is the analytics counterpart of `search off writes no
+     * dist/pagefind/`.
+     */
+    const stray = authored.filter(({ html }) => html.includes('data-jotter-analytics'))
+    check(stray.length === 0, 'no analytics markup at all when no provider is set', stray.map((p) => p.file).join(', '))
+  } else {
+    check(providers.length === 1, 'one analytics provider, not several', providers.join(', '))
+
+    const [provider] = providers
+    /**
+     * Which attribute carries the configured id, per provider. `includes` is
+     * not used and `=== id` is not possible — the verifier never reads the id —
+     * so what is asserted is that the attribute the vendor requires is present
+     * and non-empty. A Plausible tag with no `data-domain` records nothing,
+     * forever, silently; that is the failure this catches.
+     */
+    const identifier = {
+      plausible: (tag) => attr(tag, 'data-domain'),
+      umami: (tag) => attr(tag, 'data-website-id'),
+      goatcounter: (tag) => attr(tag, 'data-goatcounter'),
+      fathom: (tag) => attr(tag, 'data-site'),
+      cloudflare: (tag) => attr(tag, 'data-cf-beacon'),
+      google: (tag) => new URLSearchParams(attr(tag, 'src').split('?')[1] ?? '').get('id') ?? '',
+    }[provider]
+
+    check(identifier !== undefined, `data-jotter-analytics names a provider jotter has`, provider)
+
+    /**
+     * On *every* page, exactly once. Fewer means a page template that bypasses
+     * `Base.astro`; more is a double-mount, which double-counts every hit.
+     */
+    const perPage = authored.map(({ file, html }) => ({
+      file,
+      n: tagsOf(html, 'script').filter((tag) => attr(tag, 'data-jotter-analytics')).length,
+    }))
+    const missing = perPage.filter((p) => p.n === 0)
+    const doubled = perPage.filter((p) => p.n > 1)
+    check(missing.length === 0, 'the analytics tag is on every page', missing.map((p) => p.file).join(', '))
+    check(doubled.length === 0, 'the analytics tag is on each page only once', doubled.map((p) => p.file).join(', '))
+
+    if (identifier) {
+      const anonymous = externalScripts.filter((s) => !identifier(s.tag))
+      check(
+        anonymous.length === 0,
+        'the configured id reaches the tag',
+        anonymous.map((s) => s.file).join(', '),
+      )
+    }
+
+    /**
+     * A render-blocking third-party script is the one way this feature hurts a
+     * reader who did not ask for it. All six documented snippets carry `defer`
+     * or `async`; this stops a future edit from losing one.
+     */
+    const blocking = externalScripts.filter((s) => !has(s.tag, 'defer') && !has(s.tag, 'async'))
+    check(blocking.length === 0, 'the analytics script never blocks paint', blocking.map((s) => s.file).join(', '))
+
+    /**
+     * Reported, not asserted, and it names the gap deliberately: the vendor's
+     * script is not a file in `dist/`, so the 32 KB budget above cannot see it
+     * and does not try to guess. A page loading gtag.js is not a 29 KB page in
+     * any sense a reader experiences, and saying so beats a silent exclusion.
+     */
+    pass(
+      'third-party scripts',
+      `${provider} on ${perPage.filter((p) => p.n > 0).length}/${authored.length} page(s) from ${origins.join(', ')}; not counted against the JavaScript budget`,
+    )
+  }
+}
+
+section('Third-party origins')
+thirdPartyOrigins(pages)
 
 /* ------------------------------------------------------------------ search */
 
@@ -648,6 +850,38 @@ if (FULL) {
         `features: { toc: true, backlinks: true, tags: false, themeToggle: false, graph: false, search: false, hoverPreview: false, rss: false }`,
       )
       .replace(/\bnav:\s*'(?:tree|tags|none)'/, `nav: 'none'`)
+      /**
+       * `analytics` is a *sibling* of `features`, so the rewrite above could
+       * never reach it: a forker with a provider configured would fail the "no
+       * JavaScript at all" check below through no fault of their own, and the
+       * detail line would send them hunting for an inline script that does not
+       * exist. A no-op on the committed config, which has no analytics key.
+       *
+       * The `provider:` token rather than an `analytics:\s*\{[^}]*\}` block:
+       * the block form stops at the first `}`, so a comment or a nested value
+       * inside the object would produce a syntax error — and a syntax error
+       * here surfaces as `fail('build succeeds with features off')`, a failure
+       * whose real cause is this rewrite. `features` gets away with the block
+       * form only because its schema forbids nesting.
+       */
+      .replace(/\bprovider:\s*'[a-z]+'/, `provider: 'none'`)
+
+    /**
+     * Every rewrite above is a regex against a file the forker owns and may
+     * have formatted any way they like. Unchecked, a miss is silent: the
+     * assertions then run against a build with the feature still *on*, and pass
+     * or fail for reasons that have nothing to do with what they claim to test.
+     */
+    const unrewritten = [
+      [/\bthemeToggle:\s*false/, 'features.themeToggle'],
+      [/\bsearch:\s*false/, 'features.search'],
+      [/\bnav:\s*'none'/, 'nav'],
+      ...(/\bprovider:/.test(original) ? [[/\bprovider:\s*'none'/, 'analytics.provider']] : []),
+    ]
+      .filter(([re]) => !re.test(off))
+      .map(([, name]) => name)
+    check(unrewritten.length === 0, 'the config rewrite reached every key it needed to', unrewritten.join(', '))
+
     await writeFile(configPath, off)
     await clearContentStores(ROOT)
 
@@ -683,15 +917,82 @@ if (FULL) {
        */
       check(searchIndex === null, 'search off writes no dist/pagefind/')
       check(searchAttrs.length === 0, 'search off emits no data-pagefind-body attribute')
+      /**
+       * The only place `provider: 'none'` emitting nothing is asserted against
+       * a real build — the main pass above cannot check it for a forker who
+       * does have a provider configured. The analytics counterpart of `search
+       * off writes no dist/pagefind/`.
+       */
+      const offExternal = offPages.filter((html) => /<script\b[^>]*\bsrc="(?:https?:)?\/\//.test(html))
+      check(offExternal.length === 0, 'analytics off loads no third-party script', `${offExternal.length} page(s)`)
+
+      /**
+       * Counted apart, because an external tag has an empty body and would
+       * otherwise be reported as an "inline block" — which is a true statement
+       * about the regex and a misleading one about the page.
+       */
+      const externalTags = inline.filter((m) => /\bsrc=/.test(m[0]))
       check(
         inline.length === 0 && offJs.length === 0,
         'no JavaScript at all when every scripted feature and the nav are off',
-        `${inline.length} inline block(s), ${offJs.length} file(s)`,
+        `${inline.length - externalTags.length} inline block(s), ${externalTags.length} external tag(s), ${offJs.length} file(s)`,
       )
     }
 
     await writeFile(configPath, original)
     await clearContentStores(ROOT)
+  }
+
+  /**
+   * The second config rewrite, and the one that gives `section('Third-party
+   * origins')` something to bite.
+   *
+   * On the committed config no provider is set, so every origin check up there
+   * is vacuously true and deleting the section outright would change nothing.
+   * The alternative — turning analytics *on* in the committed
+   * `jotter.config.ts` the way `graph` and `search` are on — is the wrong way
+   * to fix that: it is the one flag whose on state has an effect outside this
+   * repo, and it would send real hits to a real vendor from anyone who runs
+   * `npm run build`, which would make the README's "no tracking" false of the
+   * very build it describes. A throwaway rebuild costs one `astro build` and
+   * touches nobody.
+   */
+  section('Analytics on emits exactly one vendor tag')
+  {
+    const configPath = join(ROOT, 'jotter.config.ts')
+    const original = await readFile(configPath, 'utf8')
+
+    const ANALYTICS_ON = `analytics: { provider: 'plausible', id: 'example.com' }`
+    /**
+     * `[^{}]*` rather than a lazy `[\s\S]*?`: the analytics object has no
+     * nested object in its schema, so this cannot run past its own closing
+     * brace, and a config it fails to match is caught by the guard below rather
+     * than rewritten into a syntax error.
+     */
+    const on = /\banalytics:\s*\{/.test(original)
+      ? original.replace(/\banalytics:\s*\{[^{}]*\}/, ANALYTICS_ON)
+      : original.replace(/\n\}\)\s*;?\s*$/, `\n  ${ANALYTICS_ON},\n})\n`)
+
+    if (!/provider:\s*'plausible'/.test(on)) {
+      fail('the analytics-on rewrite reached jotter.config.ts', 'no analytics key was written; the checks below would be vacuous')
+    } else {
+      await writeFile(configPath, on)
+      await clearContentStores(ROOT)
+
+      const { code, out } = await run(['astro', 'build'])
+      if (code !== 0) {
+        fail('build succeeds with analytics on', out.slice(-800))
+      } else {
+        const files = await walk(DIST, (n) => n.endsWith('.html'))
+        const onPages = await Promise.all(
+          files.map(async (file) => ({ file: relative(DIST, file), html: await readFile(file, 'utf8') })),
+        )
+        thirdPartyOrigins(onPages)
+      }
+
+      await writeFile(configPath, original)
+      await clearContentStores(ROOT)
+    }
   }
 
   /**

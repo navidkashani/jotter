@@ -38,9 +38,13 @@ export default defineConfig({ linkResolution: 'absolute' })
 | `pageTitle` | `title` |
 | `baseUrl` | `url` (with the scheme: `https://…`) |
 | `locale` | `locale`, plus `dir` for RTL |
-| `enableSPA` | Not applicable: every page is a real document, so there is no router to enable |
+| `enableSPA` | Not applicable: every page is a real document, so there is no router to enable. This is also why none of Quartz's analytics machinery ports across — it fires pageviews *manually*, on a custom `nav` event, because in an SPA the document never reloads and the vendor's automatic pageview fires once and never again. jotter emits each vendor's plain documented tag and a real navigation does the rest. Nothing to port, and nothing missing |
 | `enablePopovers` | `features.hoverPreview`, with one visible difference — jotter embeds the excerpt at build time rather than fetching the page, so a card opens instantly and offline, and shows the first paragraph rather than the whole note |
-| `analytics: { provider }` | `analytics: { provider, id }` — same providers |
+| `analytics: { provider: 'google', tagId }` | `analytics: { provider: 'google', id: tagId }` |
+| `analytics: { provider: 'plausible', host? }` | `analytics: { provider: 'plausible', id: '<your domain>', host? }` — jotter needs the domain named. Quartz reads it from `location.hostname` at runtime, which cannot mismatch but also means the tag no longer says what it tracks; jotter's build asserts the id reached the markup instead |
+| `analytics: { provider: 'umami', host, websiteId }` | `analytics: { provider: 'umami', id: websiteId, host? }` — and note jotter's default host is `cloud.umami.is`, the current one. Quartz still ships `analytics.umami.is` |
+| `analytics: { provider: 'goatcounter', websiteId, host?, scriptSrc? }` | `analytics: { provider: 'goatcounter', id: websiteId, host? }` — jotter's `host` is the whole endpoint (`https://stats.example.com`), where Quartz's is the domain suffix it interpolates the site code into. There is no `scriptSrc` equivalent |
+| `posthog`, `tinylytics`, `cabin`, `clarity`, `matomo`, `vercel`, `rybbit` | **No equivalent.** jotter supports six providers; `fathom` and `cloudflare` are additions Quartz does not have |
 | `ignorePatterns` | A note opts out with `publish: false`, or set `publishGate: 'opt-in'` |
 | `defaultDateType` | `created` / `updated` are both shown; lists sort by `updated` |
 | `theme.colors` | `src/styles/tokens.css`, in OKLCH |

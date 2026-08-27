@@ -244,6 +244,73 @@ describe('config', () => {
   })
 })
 
+describe('config — analytics', () => {
+  it('leaves analytics off with nothing configured', () => {
+    expect(defineConfig({}).analytics).toEqual({ provider: 'none' })
+  })
+
+  it('accepts each provider with an id', () => {
+    expect(defineConfig({ analytics: { provider: 'plausible', id: 'example.com' } }).analytics.id).toBe('example.com')
+    expect(defineConfig({ analytics: { provider: 'google', id: 'G-ABC' } }).analytics.provider).toBe('google')
+  })
+
+  /**
+   * A provider with no id is a site that collects nothing, forever, and says so
+   * nowhere. Degrade loudly.
+   */
+  it('refuses a provider without an id, naming the key', () => {
+    expect(() => defineConfig({ analytics: { provider: 'plausible' } })).toThrow(/analytics\.id/)
+  })
+
+  it('still allows a leftover id once the provider is off', () => {
+    // Turning analytics off should be a one-word edit, not a three-line delete.
+    expect(defineConfig({ analytics: { provider: 'none', id: 'example.com' } }).analytics.provider).toBe('none')
+  })
+
+  it('takes a self-hosted host for the three providers that have one', () => {
+    for (const provider of ['plausible', 'umami', 'goatcounter'] as const) {
+      const config = defineConfig({ analytics: { provider, id: 'X', host: 'https://stats.example.com' } })
+      expect(config.analytics.host).toBe('https://stats.example.com')
+    }
+  })
+
+  /**
+   * Fathom, Cloudflare and Google have no self-hosted mode at all, so a `host`
+   * there is a misunderstanding rather than a preference. Ignoring it silently
+   * is how someone spends an afternoon wondering why self-hosting did not take.
+   */
+  it('refuses a host on a provider that is vendor-hosted only', () => {
+    for (const provider of ['fathom', 'cloudflare', 'google'] as const) {
+      expect(() =>
+        defineConfig({ analytics: { provider, id: 'X', host: 'https://stats.example.com' } }),
+      ).toThrow(/analytics\.host/)
+    }
+  })
+
+  it('rejects a host that is not a URL', () => {
+    expect(() => defineConfig({ analytics: { provider: 'plausible', id: 'X', host: 'stats' } })).toThrow(
+      /analytics\.host/,
+    )
+  })
+
+  /**
+   * `custom` and its `src` are gone. Neither ever rendered anything, so no
+   * site's behaviour changes — but a config that used to parse now refuses to,
+   * and it should say which key to delete.
+   */
+  it('rejects the removed custom provider, naming the key', () => {
+    expect(() => defineConfig({ analytics: { provider: 'custom' } } as never)).toThrow(/analytics\.provider/)
+  })
+
+  it('rejects the removed src field rather than stripping it', () => {
+    // The root `.strict()` does not cascade into a nested object, so this only
+    // throws because the analytics object is strict in its own right.
+    expect(() =>
+      defineConfig({ analytics: { provider: 'plausible', id: 'X', src: '<script>' } } as never),
+    ).toThrow(/src/)
+  })
+})
+
 describe('redirects', () => {
   const notes = [
     { slug: 'zettelkasten', aliases: ['Slipbox Method', 'Zettel'] },

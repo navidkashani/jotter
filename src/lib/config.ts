@@ -11,7 +11,12 @@
  */
 import { z } from 'astro/zod'
 
-const analyticsProviders = [
+/**
+ * Exported so a test can assert that every member has a tag in
+ * `src/lib/analytics.ts`. Adding a provider here without a mapping there would
+ * otherwise be a silent `undefined` — a configured site emitting nothing.
+ */
+export const analyticsProviders = [
   'none',
   'plausible',
   'umami',
@@ -19,8 +24,15 @@ const analyticsProviders = [
   'fathom',
   'cloudflare',
   'google',
-  'custom',
 ] as const
+
+/**
+ * The three with a self-hosted mode. `host` on any of the other four is not a
+ * preference jotter declines to honour, it is a misunderstanding — Fathom,
+ * Cloudflare and Google have no self-hosted endpoint to point at — so it is
+ * rejected below rather than ignored.
+ */
+const selfHostable: readonly string[] = ['plausible', 'umami', 'goatcounter']
 
 export const jotterConfigSchema = z
   .object({
@@ -84,15 +96,39 @@ export const jotterConfigSchema = z
     /** Transclusion depth before jotter stops and says so. */
     transcludeDepth: z.number().int().min(0).max(6).default(3),
 
+    /**
+     * Off by default, and the only switch in jotter that adds a request to
+     * somebody else's server. Both refinements exist so that a misconfiguration
+     * is a build error naming the key rather than a site that silently collects
+     * nothing — degrade loudly, the way the vault integration already does.
+     *
+     * There is deliberately no `custom` provider and no `src`. A field taking
+     * an arbitrary script URL is one the origin assertion in
+     * `scripts/verify-build.mjs` cannot check, and an assertion with a hole
+     * shaped like "anything the user typed" is not an assertion. Paste your own
+     * snippet into `src/layouts/Base.astro` instead.
+     */
     analytics: z
       .object({
         provider: z.enum(analyticsProviders).default('none'),
         /** Site id, domain, or token, depending on the provider. */
         id: z.string().optional(),
-        /** Self-hosted endpoint for Plausible/Umami. */
+        /** Self-hosted endpoint for Plausible, Umami or GoatCounter. */
         host: z.url().optional(),
-        /** Full script tag source, for `provider: 'custom'`. */
-        src: z.string().optional(),
+      })
+      /**
+       * Strict here as well as at the root, because the root's `.strict()` does
+       * *not* cascade into a nested object: without this, `src:` left behind
+       * from a pre-1.0 config would be stripped in silence rather than named.
+       */
+      .strict()
+      .refine((a) => a.provider === 'none' || !!a.id, {
+        path: ['id'],
+        message: 'is required unless `provider` is \'none\'',
+      })
+      .refine((a) => !a.host || selfHostable.includes(a.provider), {
+        path: ['host'],
+        message: 'applies to plausible, umami and goatcounter only; the rest are vendor-hosted',
       })
       .prefault({}),
 

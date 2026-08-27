@@ -9,6 +9,8 @@ import { sectionOf, sectionById } from '../src/lib/transclude.js'
 import { previewFor } from '../src/lib/preview.js'
 import type { VaultNote } from '../src/lib/vault.js'
 import { parseCallout } from '../src/lib/callout.js'
+import { analyticsTag } from '../src/lib/analytics.js'
+import { analyticsProviders } from '../src/lib/config.js'
 import { parseEmbedPipe, isMediaTarget } from '../src/lib/embed.js'
 import {
   excerptParts,
@@ -555,5 +557,125 @@ describe('isTypingTarget — when Cmd+K should stand down', () => {
   it('is not fooled by a tag name that merely contains one', () => {
     expect(isTypingTarget({ tagName: 'INPUT-GROUP', isContentEditable: false })).toBe(false)
     expect(isTypingTarget({ tagName: 'MY-INPUT', isContentEditable: false })).toBe(false)
+  })
+})
+
+describe('analyticsTag — the snippet each vendor documents', () => {
+  const tag = (analytics: Parameters<typeof analyticsTag>[0]) => analyticsTag(analytics)!
+
+  it('emits nothing when analytics is off', () => {
+    expect(analyticsTag({ provider: 'none' })).toBeUndefined()
+  })
+
+  /**
+   * The one that fails when someone adds a provider to the tuple and forgets to
+   * give it a tag. Every other test here knows the answer it is checking; this
+   * one only knows that there must *be* one.
+   */
+  it('has a tag for every provider the config accepts', () => {
+    for (const provider of analyticsProviders) {
+      if (provider === 'none') continue
+      expect(analyticsTag({ provider, id: 'X' }), provider).toBeDefined()
+    }
+  })
+
+  it('builds Plausible’s tag', () => {
+    expect(tag({ provider: 'plausible', id: 'example.com' })).toEqual({
+      src: 'https://plausible.io/js/script.js',
+      attrs: { 'data-domain': 'example.com' },
+      async: false,
+    })
+  })
+
+  it('builds Umami’s tag, from the current cloud host', () => {
+    // `analytics.umami.is`, which Quartz still ships, is stale.
+    expect(tag({ provider: 'umami', id: 'abc-123' })).toEqual({
+      src: 'https://cloud.umami.is/script.js',
+      attrs: { 'data-website-id': 'abc-123', 'data-auto-track': 'true' },
+      async: false,
+    })
+  })
+
+  it('builds GoatCounter’s tag, async and over https', () => {
+    // The documented snippet is protocol-relative `//gc.zgo.at/count.js`.
+    expect(tag({ provider: 'goatcounter', id: 'mycode' })).toEqual({
+      src: 'https://gc.zgo.at/count.js',
+      attrs: { 'data-goatcounter': 'https://mycode.goatcounter.com/count' },
+      async: true,
+    })
+  })
+
+  it('builds Fathom’s tag', () => {
+    expect(tag({ provider: 'fathom', id: 'ABCDEFG' })).toEqual({
+      src: 'https://cdn.usefathom.com/script.js',
+      attrs: { 'data-site': 'ABCDEFG' },
+      async: false,
+    })
+  })
+
+  it('builds Cloudflare’s tag with a real JSON token', () => {
+    const attrs = tag({ provider: 'cloudflare', id: 'tok123' }).attrs
+    expect(JSON.parse(attrs['data-cf-beacon'])).toEqual({ token: 'tok123' })
+  })
+
+  it('builds GA4’s two-tag snippet', () => {
+    const out = tag({ provider: 'google', id: 'G-ABC1234567' })
+    expect(out.src).toBe('https://www.googletagmanager.com/gtag/js?id=G-ABC1234567')
+    expect(out.async).toBe(true)
+    // The init block needs the id a second time; `Analytics.astro` passes it
+    // through `define:vars` rather than interpolating it into a script body.
+    expect(out.measurementId).toBe('G-ABC1234567')
+  })
+
+  it('never blocks paint, whichever provider is chosen', () => {
+    for (const provider of analyticsProviders) {
+      if (provider === 'none') continue
+      const out = tag({ provider, id: 'X' })
+      expect(out.src.startsWith('https://'), provider).toBe(true)
+    }
+  })
+
+  it('sends the script to a self-hosted origin for the three that have one', () => {
+    expect(tag({ provider: 'plausible', id: 'example.com', host: 'https://stats.example.com' }).src).toBe(
+      'https://stats.example.com/js/script.js',
+    )
+    expect(tag({ provider: 'umami', id: 'abc-123', host: 'https://stats.example.com' }).src).toBe(
+      'https://stats.example.com/script.js',
+    )
+    // GoatCounter self-hosts the *endpoint*, not the counting script.
+    expect(tag({ provider: 'goatcounter', id: 'mycode', host: 'https://stats.example.com' }).attrs).toEqual({
+      'data-goatcounter': 'https://stats.example.com/count',
+    })
+  })
+
+  it('keeps the site’s own domain in data-domain when Plausible is self-hosted', () => {
+    // The trap: `host` moves the script, never the identifier.
+    const attrs = tag({ provider: 'plausible', id: 'example.com', host: 'https://stats.example.com' }).attrs
+    expect(attrs['data-domain']).toBe('example.com')
+  })
+
+  it('joins a host rather than resolving against it', () => {
+    // A reverse-proxied Plausible may live under a path prefix; `new URL()`
+    // would throw the prefix away.
+    expect(tag({ provider: 'plausible', id: 'a.com', host: 'https://example.com/proxy' }).src).toBe(
+      'https://example.com/proxy/js/script.js',
+    )
+    expect(tag({ provider: 'plausible', id: 'a.com', host: 'https://example.com/' }).src).toBe(
+      'https://example.com/js/script.js',
+    )
+  })
+
+  it('ignores a host on the providers that have no self-hosted mode', () => {
+    // The schema rejects this outright; the function stays total anyway.
+    expect(tag({ provider: 'fathom', id: 'X', host: 'https://stats.example.com' }).src).toBe(
+      'https://cdn.usefathom.com/script.js',
+    )
+  })
+
+  it('emits nothing rather than half a tag when the id is missing', () => {
+    // A gtag.js loader with no measurement id still pulls ~100 KB and records
+    // nothing, so a partial tag is not inert.
+    expect(analyticsTag({ provider: 'plausible' })).toBeUndefined()
+    expect(analyticsTag({ provider: 'google' })).toBeUndefined()
   })
 })
