@@ -23,8 +23,17 @@ const asDate = (value: unknown): Date | undefined => {
   return undefined
 }
 
-const FRONTMATTER_CREATED = ['created', 'date', 'created_at', 'createdAt', 'published']
-const FRONTMATTER_UPDATED = ['updated', 'modified', 'updated_at', 'updatedAt', 'lastmod']
+/**
+ * Five spellings each, because five is what real vaults contain.
+ *
+ * Exported so a test can assert that every one of them is declared in
+ * `src/lib/frontmatter.ts` — the same reason `analyticsProviders` is exported
+ * from `src/lib/config.ts`. A spelling read here but undeclared there worked
+ * only by accident of `.passthrough()`, which is not the same thing as working
+ * on purpose.
+ */
+export const FRONTMATTER_CREATED = ['created', 'date', 'created_at', 'createdAt', 'published']
+export const FRONTMATTER_UPDATED = ['updated', 'modified', 'updated_at', 'updatedAt', 'lastmod']
 
 export function frontmatterDate(
   frontmatter: Record<string, unknown>,

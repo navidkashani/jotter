@@ -17,6 +17,7 @@
  */
 import type { VaultNote } from '../lib/vault.js'
 import { config } from '../lib/site.js'
+import { DISPLAYED_FIELDS } from '../lib/frontmatter.js'
 import { formatDate, isoDate, t } from '../i18n/index.js'
 
 interface Props {
@@ -24,8 +25,6 @@ interface Props {
 }
 
 const { note } = Astro.props
-
-const SHOWN = ['aliases', 'status', 'source', 'author', 'series'] as const
 
 const scalar = (value: unknown): string | undefined => {
   if (value instanceof Date) return Number.isNaN(value.getTime()) ? undefined : formatDate(value)
@@ -60,7 +59,7 @@ const rows: { key: string; label: string; value: string; datetime?: string }[] =
           datetime: isoDate(note.dates.updated),
         },
       ]),
-  ...SHOWN.flatMap((key) => {
+  ...DISPLAYED_FIELDS.flatMap((key) => {
     const value = format(note.frontmatter[key])
     return value ? [{ key, label: t(`note.field.${key}`), value }] : []
   }),

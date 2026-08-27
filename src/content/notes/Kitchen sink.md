@@ -3,12 +3,24 @@ title: Kitchen sink
 description: Every piece of syntax jotter renders, on one page.
 tags: [meta, reference]
 image: attachments/slipbox.png
+status: evergreen
+source: The jotter README
+author: The gardener
+series: Reference
 created: 2026-03-02
 updated: 2026-08-26
 ---
 
 Everything below is rendered by the real pipeline. If a thing works here, it
 works in your vault.
+
+## The header block
+
+The boxed list above is this note's own frontmatter. `created` and `updated` are
+always shown; `aliases`, `status`, `source`, `author` and `series` appear when
+you set them. Every other key you keep up there stays off the page on purpose —
+the list is an allow-list, so a private URL or a note-to-self in frontmatter is
+never published by accident.
 
 ## Links
 

@@ -318,6 +318,46 @@ section('Markup')
     }
   }
   check(altless.length === 0, 'every <img> has an alt attribute', altless.join('\n        '))
+
+  /**
+   * No page shows a reader an i18n *key*.
+   *
+   * `t()` returns the key itself when it cannot find a string — deliberately,
+   * so a missing translation is loud rather than a blank label — which means a
+   * component naming a key that `en.json` does not have renders a literal
+   * `note.field.series` into the markup. That is the failure mode
+   * `DISPLAYED_FIELDS` walked into: the list of rendered frontmatter fields and
+   * the list of labels were two lists nothing compared.
+   *
+   * `test/vault.test.ts` compares those two directly. This is the wider net —
+   * every key, every component, every page, against the built HTML — and it
+   * covers the labels a unit test cannot see because they are chosen inside an
+   * `.astro` file.
+   */
+  const keys = Object.keys(JSON.parse(await readFile(join(ROOT, 'src/i18n/en.json'), 'utf8')))
+  const leakedKeys = []
+  for (const { file, html } of pages) {
+    for (const key of keys) if (html.includes(key)) leakedKeys.push(`${file}: ${key}`)
+  }
+  check(
+    leakedKeys.length === 0,
+    'no page renders an i18n key instead of its string',
+    leakedKeys.slice(0, 8).join('\n        '),
+  )
+
+  /**
+   * And the frontmatter header block is actually exercised by the demo, so the
+   * check above is not passing because nothing renders one. `Kitchen sink.md`
+   * sets all four optional fields; the `<dt>` labels come from `en.json`.
+   */
+  const fieldRows = pages.filter(({ html }) =>
+    /<dt>Status<\/dt>/.test(html) && /<dt>Source<\/dt>/.test(html) && /<dt>Series<\/dt>/.test(html),
+  )
+  check(
+    fieldRows.length > 0,
+    'the demo renders a frontmatter field block',
+    'no page sets status, source and series, so the label checks are vacuous',
+  )
 }
 
 /* ------------------------------------------------------------------- CSS */

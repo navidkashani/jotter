@@ -13,6 +13,10 @@ import {
   resolveTitle,
 } from '../src/lib/vault.js'
 import { noteHref } from '../src/lib/href.js'
+import { noteFrontmatterSchema, DISPLAYED_FIELDS } from '../src/lib/frontmatter.js'
+import { frontmatterTags } from '../src/lib/tags.js'
+import { frontmatterDate, FRONTMATTER_CREATED, FRONTMATTER_UPDATED } from '../src/lib/dates.js'
+import strings from '../src/i18n/en.json'
 import { buildGraph, neighbourhood, type Graph, type GraphLink } from '../src/lib/graph.js'
 
 const VAULT = fileURLToPath(new URL('./fixtures/vault', import.meta.url))
@@ -461,5 +465,108 @@ describe('declared card images', () => {
     for (const image of ['/og.png', 'https://cdn.example.com/og.png']) {
       expect(scan({ image }).warnings.some((w) => w.includes('og.png'))).toBe(false)
     }
+  })
+})
+
+/**
+ * The contract between two answers to the same question.
+ *
+ * `src/lib/frontmatter.ts` says what a note may contain and `src/lib/vault.ts`
+ * says what jotter does with it, and for a long time they disagreed in the one
+ * direction that is not survivable: the schema was *narrower*. `title: 2026` on
+ * a yearly review note, `tags: [2026, reading]`, `aliases: [2026, Review]` and
+ * `created: true` each failed the build outright — on a vault Obsidian opens
+ * without comment, and against three pieces of coercion the scan had been
+ * carrying, untested and unreachable, the whole time.
+ *
+ * Each case below asserts both halves at once, so the two files cannot drift
+ * apart again without a red test naming the key.
+ */
+describe('the frontmatter schema and the scan agree', () => {
+  const accepts = (frontmatter: Record<string, unknown>) =>
+    noteFrontmatterSchema.safeParse(frontmatter).success
+
+  it('takes a number where resolveTitle coerces one', () => {
+    expect(resolveTitle({ title: 2026 }, 'no heading', 'File')).toBe('2026')
+    expect(accepts({ title: 2026 })).toBe(true)
+    // A non-string description is declined by the layout, not by the build.
+    expect(accepts({ description: 42 })).toBe(true)
+  })
+
+  it('takes numeric tags and aliases, which the scan stringifies', () => {
+    expect(frontmatterTags([2026, 'reading'])).toEqual(['2026', 'reading'])
+    expect(accepts({ tags: [2026, 'reading'] })).toBe(true)
+
+    const v = vaultWith({ 'Year.md': NOTE('title: Year\naliases: [2026, Review]') })
+    expect(v.byAlias.get('2026')?.[0].path).toBe('Year.md')
+    expect(accepts({ aliases: [2026, 'Review'], alias: 2026 })).toBe(true)
+  })
+
+  /**
+   * `published: true` is a publish flag in a vault that used it as one, and a
+   * *date* key to `dates.ts`. `asDate` declines it and the note takes its git
+   * date instead — a graceful fallback the schema must not turn into an error.
+   */
+  it('takes a date key the scan will decline and fall back from', () => {
+    expect(frontmatterDate({ published: true }, ['published'])).toBeUndefined()
+    expect(accepts({ published: true, created: true })).toBe(true)
+  })
+
+  /**
+   * Declared, not merely *accepted*: `.passthrough()` takes any key at all, so
+   * `safeParse` succeeding proves nothing about a key being known. The schema's
+   * own shape is the only thing that does, which is why both lists below are
+   * exported from the modules that own them rather than retyped here.
+   */
+  const declared = Object.keys(noteFrontmatterSchema.shape)
+
+  it('declares every date spelling the scan looks for', () => {
+    for (const key of [...FRONTMATTER_CREATED, ...FRONTMATTER_UPDATED]) {
+      expect(declared).toContain(key)
+      expect(accepts({ [key]: '2026-01-02' })).toBe(true)
+    }
+  })
+
+  /**
+   * The keys `Frontmatter.astro` prints in the note header. They rendered on
+   * every note page for as long as the component has existed while being
+   * declared nowhere, documented nowhere and set by no note in either vault.
+   */
+  it('declares every key the note header renders', () => {
+    for (const key of DISPLAYED_FIELDS) expect(declared).toContain(key)
+    expect(accepts({ status: 'seedling', source: 'Ahrens 2017', author: 'A', series: 'S' })).toBe(true)
+    // `format()` joins a list, so a list is as legal as a scalar.
+    expect(accepts({ author: ['Ada', 'Grace'], status: 3 })).toBe(true)
+  })
+
+  /**
+   * `t()` returns the key itself when it cannot find a string, so a displayed
+   * field with no label puts a literal `note.field.series` in a `<dt>` on every
+   * note page that sets it. Nothing else in the build would catch that.
+   */
+  it('has a label for every key the note header renders', () => {
+    for (const key of DISPLAYED_FIELDS) {
+      expect(Object.keys(strings)).toContain(`note.field.${key}`)
+    }
+  })
+
+  /**
+   * The deliberate exception. `publish: 'false'` coerced generously is a note
+   * the author meant to hide, published, in silence — the exact failure the
+   * publish gate exists to prevent. Loud is right here in a way it is not for
+   * a title, so these three keep refusing anything but a boolean.
+   */
+  it('still refuses a non-boolean gate, so a typo cannot silently publish', () => {
+    expect(accepts({ publish: 'false' })).toBe(false)
+    expect(accepts({ draft: 'yes' })).toBe(false)
+    expect(accepts({ homepage: 'yes' })).toBe(false)
+    expect(accepts({ publish: false, draft: true, homepage: true })).toBe(true)
+  })
+
+  it('still lets somebody’s Dataview field through untouched', () => {
+    const parsed = noteFrontmatterSchema.parse({
+      'dataview-field': { nested: true },
+    }) as Record<string, unknown>
+    expect(parsed['dataview-field']).toEqual({ nested: true })
   })
 })

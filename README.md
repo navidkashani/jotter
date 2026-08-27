@@ -113,6 +113,10 @@ aliases: [Other Name]          # resolve links, and generate redirects
 tags: [method/zettelkasten]    # merged with inline #tags
 created: 2026-01-02            # else git, else file mtime
 updated: 2026-03-04
+status: evergreen              # these four show in the note's header block
+source: Ahrens 2017
+author: A. Writer
+series: Reading notes
 image: attachments/og.png      # the link-preview card — see “Link previews” below
 publish: false                 # exclude this note
 draft: true                    # also excludes it
@@ -121,6 +125,41 @@ homepage: true                 # this note claims '/' — see “The note at /�
 ```
 
 Unknown keys are left alone. Your Dataview fields will not break the build.
+
+### What the header block shows
+
+The boxed list at the top of a note is `created`, `updated` when it differs, and
+whichever of `aliases`, `status`, `source`, `author` and `series` you set.
+
+That list is an **allow-list**, not a deny-list. Frontmatter is whatever its
+owner typed — a private URL, a note to self, a `publish: false` you forgot to
+remove — so anything unrecognised stays off the page rather than leaking by
+default.
+
+`author` is display only. The name on the feed is `author` in
+`jotter.config.ts`, which is a claim about who publishes the site rather than
+who wrote one note.
+
+### Spellings, and the three keys that are strict
+
+Dates are read under five names each, so a vault written for another tool
+usually needs no edits:
+
+| jotter reads | from any of |
+| --- | --- |
+| created | `created`, `date`, `created_at`, `createdAt`, `published` |
+| updated | `updated`, `modified`, `updated_at`, `updatedAt`, `lastmod` |
+
+Values are taken leniently. `title: 2026` on a yearly review note is a title,
+`tags: [2026, reading]` are tags, `aliases: [2026]` is an alias, and a date
+jotter cannot parse falls back to git and then to the file's mtime. Nothing
+there stops a build.
+
+**`publish`, `draft` and `homepage` are the exception.** Those must be real
+booleans — unquoted `true` or `false` — and anything else fails the build naming
+the key. It is the one place jotter is deliberately strict, because a quoted
+`publish: "false"` coerced generously is a note you meant to hide, published, in
+silence. A misrouted `/` is the same mistake one key over.
 
 ### What the publish gate does
 
