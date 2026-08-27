@@ -18,6 +18,7 @@ import { tmpdir } from 'node:os'
 
 import { readTokens, contrastOklch } from './lib/color.mjs'
 import { runningDevServers, devServerWarning } from './lib/dev-server.mjs'
+import { clearContentStores } from './lib/astro-cache.mjs'
 
 const ROOT = join(import.meta.dirname, '..')
 const DIST = join(ROOT, 'dist')
@@ -371,10 +372,14 @@ const run = (args, options = {}) =>
   })
 
 /**
- * `--full` rebuilds twice, and both rebuilds clear `node_modules/.astro`. It
- * also rewrites `jotter.config.ts` for the duration of the feature-flag pass.
- * Neither is survivable by a dev server reading the same files, so it refuses
- * for the same reason `npm run clean` does.
+ * `--full` rebuilds twice, and both rebuilds clear the content-collection
+ * stores — the rewritten `jotter.config.ts` below changes the markdown pipeline
+ * without changing a single source digest, which is the one thing the content
+ * layer does not notice. See `lib/astro-cache.mjs`.
+ *
+ * Neither the config rewrite nor the clearing is survivable by a dev server
+ * reading the same files, so it refuses for the same reason `npm run clean`
+ * does.
  */
 if (FULL) {
   const servers = runningDevServers(ROOT)
@@ -400,7 +405,7 @@ if (FULL) {
       )
       .replace(/\bnav:\s*'(?:tree|tags|none)'/, `nav: 'none'`)
     await writeFile(configPath, off)
-    await rm(join(ROOT, 'node_modules', '.astro'), { recursive: true, force: true })
+    await clearContentStores(ROOT)
 
     const { code, out } = await run(['astro', 'build'])
     if (code !== 0) {
@@ -432,7 +437,7 @@ if (FULL) {
     }
 
     await writeFile(configPath, original)
-    await rm(join(ROOT, 'node_modules', '.astro'), { recursive: true, force: true })
+    await clearContentStores(ROOT)
   }
 
   section('Scale')
@@ -466,7 +471,7 @@ if (FULL) {
       fail(`${N}-note vault builds in under 60s`, `took ${seconds.toFixed(1)}s`)
     }
     await rm(SCALE, { recursive: true, force: true })
-    await rm(join(ROOT, 'node_modules', '.astro'), { recursive: true, force: true })
+    await clearContentStores(ROOT)
   }
 }
 

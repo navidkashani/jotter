@@ -1,13 +1,17 @@
 /**
  * Is a dev server running against *this* checkout?
  *
- * Asked before anything deletes `node_modules/.astro`. That directory holds
- * `data-store.json`, which is not a cache a running server rebuilds lazily —
- * it *is* the content-collection store `getCollection()` reads. Remove it
- * underneath a live `astro dev` and the next request for a note throws
- * `[jotter] No collection entry for …` from `src/pages/[...slug].astro`. That
- * throw is working as designed; the data really is gone. It is just that
- * nothing in the message points at the command that caused it.
+ * Asked before anything deletes the content-collection stores. The one a live
+ * server is reading is `.astro/data-store.json` — *not* `node_modules/.astro`,
+ * which is the build store and which a dev server never opens. Astro picks
+ * between them on `isDev`; `lib/astro-cache.mjs` has the citation.
+ *
+ * `data-store.json` is not a cache a running server rebuilds lazily — it *is*
+ * what `getCollection()` reads. Remove it underneath a live `astro dev` and the
+ * next request for a note throws `[jotter] No collection entry for …` from
+ * `src/pages/[...slug].astro`. That throw is working as designed; the data
+ * really is gone. It is just that nothing in the message points at the command
+ * that caused it.
  *
  * Detection is a process scan rather than `astro dev status` for two reasons:
  * it costs a few milliseconds instead of spawning npx, and it sees a
@@ -15,8 +19,8 @@
  * Astro version daemonises by default.
  *
  * The match is scoped to this project's own `astro.mjs`, so a dev server for a
- * different repository is correctly ignored — it reads its own
- * `node_modules/.astro`, which nothing here touches.
+ * different repository is correctly ignored — it reads its own `.astro`, which
+ * nothing here touches.
  */
 import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
@@ -59,10 +63,10 @@ export function devServerWarning(servers, what, escape) {
   return [
     `A dev server for this project is running (${pids}).`,
     '',
-    `${what} removes node_modules/.astro, which holds the content-collection`,
-    'store that server is reading. Deleting it now would make the next request',
-    'for a note fail with "[jotter] No collection entry for …" until the server',
-    'is restarted.',
+    `${what} removes .astro, which holds the content-collection store that`,
+    'server is reading. Deleting it now would make the next request for a note',
+    'fail with "[jotter] No collection entry for …" until the server is',
+    'restarted.',
     '',
     ...[
       ['npx astro dev stop', 'stop it, then run this again'],
