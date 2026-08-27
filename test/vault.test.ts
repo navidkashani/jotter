@@ -398,3 +398,68 @@ describe('the note that claims /', () => {
     expect(warning).toContain('Home.md')
   })
 })
+
+/**
+ * The bug this closes is silence. `image:` was declared in the collection
+ * schema and read by nothing, so a path that had gone stale — or one pointing
+ * at an SVG, which no unfurler draws — built clean and shipped a text card.
+ * Every warning names the note *and* the value, because "an image did not
+ * resolve" sends you reading the whole vault.
+ */
+describe('declared card images', () => {
+  it('warns, naming the note and the value, when the file is not in the vault', () => {
+    // `test/fixtures/vault/Previews.md` sets `image: attachments/gone.png`.
+    const warning = scan().warnings.find((w) => w.includes('attachments/gone.png'))
+    expect(warning).toContain('Previews.md')
+    expect(warning).toMatch(/no such file/i)
+  })
+
+  it('says nothing about a note whose image resolves', () => {
+    const v = vaultWith({ 'Card.md': NOTE('title: Card\nimage: diagram.png') })
+    expect(v.warnings.some((w) => w.includes('diagram.png'))).toBe(false)
+  })
+
+  it('warns about a format no link preview draws, naming the formats that work', () => {
+    const v = vaultWith({
+      'attachments/logo.svg': '<svg width="64" height="64"></svg>',
+      'Card.md': NOTE('title: Card\nimage: logo.svg'),
+    })
+    const warning = v.warnings.find((w) => w.includes('logo.svg'))
+    expect(warning).toContain('Card.md')
+    expect(warning).toContain('PNG, JPEG, GIF or WebP')
+  })
+
+  /**
+   * Quartz's own two spellings, so a migrated vault keeps the cards it had —
+   * and the warning quotes the key the author actually typed, because a message
+   * naming `image:` sends them looking for a line that is not in the file.
+   */
+  it('reads socialImage and cover as well as image, and quotes the key it read', () => {
+    for (const key of ['socialImage', 'cover']) {
+      const v = vaultWith({ 'Card.md': NOTE(`title: Card\n${key}: missing-card.png`) })
+      const warning = v.warnings.find((w) => w.includes('missing-card.png'))
+      expect(warning).toContain('Card.md')
+      expect(warning).toContain(`${key}: missing-card.png`)
+    }
+  })
+
+  /** No page, nothing to unfurl, nothing to say. */
+  it('leaves an unpublished note alone', () => {
+    const v = vaultWith({ 'Card.md': NOTE('title: Card\npublish: false\nimage: missing-card.png') })
+    expect(v.warnings.some((w) => w.includes('missing-card.png'))).toBe(false)
+  })
+
+  it('validates config.image the same way, once, naming the key rather than a note', () => {
+    const warning = scan({ image: 'attachments/nowhere.png' }).warnings.find((w) =>
+      w.includes('attachments/nowhere.png'),
+    )
+    expect(warning).toContain('jotter.config.ts')
+  })
+
+  /** Neither form is the vault's to find, so neither can be missing from it. */
+  it('never warns about a rooted path or an absolute URL', () => {
+    for (const image of ['/og.png', 'https://cdn.example.com/og.png']) {
+      expect(scan({ image }).warnings.some((w) => w.includes('og.png'))).toBe(false)
+    }
+  })
+})

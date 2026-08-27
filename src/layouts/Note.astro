@@ -30,7 +30,7 @@
  */
 import type { VaultNote } from '../lib/vault.js'
 import type { GraphLink, Neighbourhood } from '../lib/graph.js'
-import { config } from '../lib/site.js'
+import { config, vault } from '../lib/site.js'
 import Base from './Base.astro'
 import Toc from '../components/Toc.astro'
 import type { Heading } from '../lib/headings.js'
@@ -39,6 +39,7 @@ import Breadcrumb from '../components/Breadcrumb.astro'
 import Frontmatter from '../components/Frontmatter.astro'
 import TagList from '../components/TagList.astro'
 import PrevNext from '../components/PrevNext.astro'
+import { frontmatterImage, resolveSocialImage, socialImageUrl } from '../lib/social.js'
 import { t } from '../i18n/index.js'
 
 interface Props {
@@ -54,6 +55,22 @@ const { note, headings, backlinks, neighbourhood, previous, next } = Astro.props
 
 const description =
   typeof note.frontmatter.description === 'string' ? note.frontmatter.description : note.excerpt
+
+/**
+ * The note's own card image, beside the description it already reads off
+ * frontmatter — this is the layout that can see frontmatter at all, and the
+ * existing precedent for a declared key reaching `<head>` through a prop.
+ *
+ * Resolved against the vault the way an embed is, so `attachments/x.png`, a
+ * bare `x.png` and `./x.png` all find the same file. A value that resolves to
+ * nothing — or to a format no unfurler draws — is `undefined` here and the page
+ * falls back to the site-wide default; the scan has already warned about it by
+ * name, which is where a build warning can actually be read.
+ */
+const image = socialImageUrl(
+  resolveSocialImage(frontmatterImage(note.frontmatter)?.value, note.path, vault),
+  config.url,
+)
 
 /**
  * `panels` only. The graph is a picture of where you are, and it needs a
@@ -110,7 +127,7 @@ const hasToc = config.features.toc
 const hasRail = config.features.backlinks || showGraph
 ---
 
-<Base title={note.title} description={description} current={note.slug}>
+<Base title={note.title} description={description} image={image} current={note.slug}>
   <article class="note-layout" data-layout={config.layout} data-pagefind-body={indexed}>
     <header class="note-head">
       <Breadcrumb note={note} />

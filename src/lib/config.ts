@@ -43,6 +43,14 @@ export const jotterConfigSchema = z
     url: z.url().optional(),
     author: z.string().default(''),
 
+    /**
+     * The card image for every page that does not name its own.
+     *
+     * A vault path (`attachments/og.png`), a `/`-rooted path for a file in
+     * `public/`, or an absolute URL. Requires `url` — see the root refine.
+     */
+    image: z.string().optional(),
+
     /** BCP-47 tag, e.g. `en`, `de`, `ar`. Sets `<html lang>`. */
     locale: z.string().default('en'),
     dir: z.enum(['ltr', 'rtl']).default('ltr'),
@@ -138,7 +146,7 @@ export const jotterConfigSchema = z
   })
   .strict()
   /**
-   * The one constraint spanning two top-level keys, which is why it is here
+   * The constraints spanning two top-level keys, which is why they are here
    * rather than beside either of them.
    *
    * Every link in a feed has to be absolute — a reader resolves them against
@@ -149,6 +157,17 @@ export const jotterConfigSchema = z
   .refine((c) => !c.features.rss || !!c.url, {
     path: ['url'],
     message: 'is required when `features.rss` is on: a feed’s links must be absolute',
+  })
+  /**
+   * The same rule, for the same reason, one key over. `og:image` must be
+   * absolute — an unfurler has no document to resolve a relative URL against —
+   * so a site-wide `image` with no `url` to make it absolute is a card nobody
+   * ever draws, silently. A note's own `image:` is frontmatter and cannot fail
+   * a build; this one is config, and config says so.
+   */
+  .refine((c) => !c.image || !!c.url, {
+    path: ['url'],
+    message: 'is required when `image` is set: an og:image URL must be absolute',
   })
 
 export type JotterConfig = z.infer<typeof jotterConfigSchema>

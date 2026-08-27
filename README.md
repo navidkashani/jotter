@@ -57,6 +57,7 @@ export default defineConfig({
   title: 'Slipbox',
   description: '',
   url: 'https://example.com',   // needed for sitemap, canonical links and RSS
+  image: undefined,             // the link-preview card image — see “Link previews”
   author: '',
 
   locale: 'en',
@@ -112,6 +113,7 @@ aliases: [Other Name]          # resolve links, and generate redirects
 tags: [method/zettelkasten]    # merged with inline #tags
 created: 2026-01-02            # else git, else file mtime
 updated: 2026-03-04
+image: attachments/og.png      # the link-preview card — see “Link previews” below
 publish: false                 # exclude this note
 draft: true                    # also excludes it
 homepage: true                 # this note claims '/' — see “The note at /” below
@@ -132,6 +134,37 @@ inert `<span class="dead-link">` labelled with the filename the author typed —
 file in `dist/`, not only the pages: the feed and the sitemap carry titles too,
 and a check that read only HTML would have said "anywhere in `dist/`" while
 reading none of them.
+
+### Link previews
+
+A link to a note, pasted into Slack, iMessage, WhatsApp or a tweet, unfurls as a
+card. `image:` is the picture on it.
+
+```yaml
+---
+image: attachments/slipbox.png       # a vault path, resolved the way an embed is
+image: /og.png                       # a file in public/
+image: https://cdn.example.com/x.png # somebody else's host, on purpose
+---
+```
+
+It needs `url`. An unfurler has no document to resolve a relative URL against,
+so without one there is no card image at all — and `image` in
+`jotter.config.ts` without a `url` fails the build naming the key, the way
+`features.rss` does.
+
+Set `image` in `jotter.config.ts` for a site-wide default and every page gets a
+card, including `/notes`, the tag pages and the 404. A note's own `image:` beats
+it. Quartz's `socialImage:` and `cover:` are read as well, so a vault that came
+from there keeps the cards it had.
+
+PNG, JPEG, GIF or WebP. **Not SVG** — Facebook does not render it, and a card
+that cannot draw is indistinguishable from no card while still costing a fetch.
+A path naming no file in the vault, or a file in a format no preview draws, is a
+build warning naming the note and the value; it is never silence.
+
+Declare nothing and the card is text only — title, description, site name —
+which is what every link to a jotter site was until you set one.
 
 ---
 
@@ -461,7 +494,9 @@ injected, so configuring `cloudflare` here counts twice. And a Netlify or Vercel
 preview deploy is a production build, so the tag ships there too — Plausible and
 Fathom simply will not count a domain you have not registered, and GA4 will.
 
-**Still to come:** OG images and the Open Publish `scripts/` layer.
+**Still to come:** *generated* OG images — a card drawn from the note's own
+title and description for the notes that declare no `image:` — and the Open
+Publish `scripts/` layer. Declared ones work today; see “Link previews”.
 
 ## License
 

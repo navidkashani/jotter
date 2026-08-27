@@ -58,6 +58,8 @@ export default defineConfig({ linkResolution: 'absolute' })
 | `rssFullHtml` | **No equivalent.** The excerpt only, which is Quartz's own default. Full HTML would mean rewriting every wikilink, image and transclusion to an absolute URL, and that is the layer Open Publish exists to be |
 | `rssLimit` | **No equivalent.** Fixed at 50. Quartz's default of 10 is too few once you notice that a *revision* re-enters the window, so a weekend of tidying can evict a new note before a subscriber polls — and readers dedupe on `guid`, so they never see it |
 | `rssSlug` | **No equivalent.** Fixed at `rss.xml` |
+| `socialImage`, `image` or `cover` in frontmatter | `image:` — all three spellings are read, `image` wins, and the file is resolved against the vault the way an embed is. Plus `image` in `jotter.config.ts` for a site-wide default a note can override. Needs `url`, and PNG/JPEG/GIF/WebP: an SVG card is one Facebook will not draw, so it is a build warning rather than a tag |
+| `Plugin.CustomOgImages` | **Not yet.** Quartz's emitter *generates* a card from each page's title and description; jotter emits the one you declare and nothing where you declare none. Generated images are the half still to come |
 | `quartz.layout.ts` | `layout: 'column' \| 'panels'` and `nav: 'tree' \| 'tags' \| 'none'` |
 | `quartz/styles/custom.scss` | `src/styles/custom.css` (plain CSS) |
 

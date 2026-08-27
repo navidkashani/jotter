@@ -1,5 +1,6 @@
 ---
 title: Previews
+image: attachments/gone.png
 ---
 
 # Previews

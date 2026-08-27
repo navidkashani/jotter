@@ -50,7 +50,12 @@ const notes = defineCollection({
       publish: z.boolean().optional(),
       draft: z.boolean().optional(),
       homepage: z.boolean().optional(),
+      // The card a link to this note unfurls as. `socialImage` and `cover` are
+      // Quartz's own two spellings of the same key, accepted the way `alias`
+      // is accepted beside `aliases`; `image` wins. See `src/lib/social.ts`.
       image: z.string().optional(),
+      socialImage: z.string().optional(),
+      cover: z.string().optional(),
     })
     // An unknown key is somebody's Dataview field or plugin metadata. It is
     // not an error, and it must not stop the build.

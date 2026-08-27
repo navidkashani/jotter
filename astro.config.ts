@@ -33,6 +33,7 @@ const vault = scanVault({
   root: vaultRoot,
   publishGate: jotter.publishGate,
   homepage: jotter.homepage,
+  image: jotter.image,
 })
 const graph = buildGraph(vault, jotter.linkResolution)
 

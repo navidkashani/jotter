@@ -14,6 +14,7 @@ import { buildGraph } from './graph.js'
 import { buildTree, folders } from './tree.js'
 import { tagTree, expandTag } from './tags.js'
 import { buildRedirects } from './redirects.js'
+import { resolveSocialImage, socialImageUrl } from './social.js'
 
 export const config = jotter
 
@@ -29,7 +30,22 @@ export const vault = scanVault({
   root: vaultRoot,
   publishGate: jotter.publishGate,
   homepage: jotter.homepage,
+  image: jotter.image,
 })
+
+/**
+ * The card image for every page that names none of its own, resolved once.
+ *
+ * Once, here, rather than per page in `Base.astro`: the answer cannot differ
+ * between pages, and the module every page already imports is where the build
+ * keeps things that are true of the whole site. `undefined` without
+ * `config.url` — an `og:image` an unfurler cannot resolve is not a smaller
+ * card, it is no card — and `undefined` when nothing is configured.
+ */
+export const socialImage: string | undefined = socialImageUrl(
+  resolveSocialImage(jotter.image, '', vault),
+  jotter.url,
+)
 
 export const graph = buildGraph(vault, jotter.linkResolution)
 

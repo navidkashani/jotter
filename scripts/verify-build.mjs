@@ -1218,6 +1218,168 @@ async function feedSection(pages) {
 section('Feed')
 await feedSection(pages)
 
+/* ---------------------------------------------------------- social cards */
+
+/**
+ * The `<head>` assertion this file has never had.
+ *
+ * `section('Markup')` checks landmarks, `lang`, a non-empty `<title>` and `alt`
+ * on every `<img>` — page *structure*. Until this, the only `<head>` assertion
+ * in the file lived inside `feedSection` and was about `rel="alternate"`, so
+ * the canonical link, every `og:*` tag and `twitter:card` were emitted by a
+ * layout nothing checked. That is the same shape of hole the Links section had
+ * before `internalLinks()`, and it is closed the same way: the feature brings
+ * the assertion its own surface owes.
+ *
+ * Written as a function, like `thirdPartyOrigins()` and `internalLinks()`,
+ * because two passes call it. On the committed config `url` is unset, so no
+ * card image can be absolute and none is emitted — the negative half below,
+ * which is the half that bites here. `--full` re-runs it against the rss-on
+ * rebuild, which already sets `url` and additionally sets `config.image`.
+ */
+async function socialCards(pages) {
+  const attr = (tag, name) => tag.match(new RegExp(`\\b${name}="([^"]*)"`))?.[1] ?? ''
+  const metas = (html) => [...html.matchAll(/<meta\b[^>]*>/g)].map((m) => m[0])
+  /** `og:*` is spelled `property`, `twitter:*` `name`. Both are asserted. */
+  const content = (html, kind, key) =>
+    metas(html).filter((tag) => attr(tag, kind) === key).map((tag) => attr(tag, 'content'))
+
+  /**
+   * The same exemption `thirdPartyOrigins` and `internalLinks` name: an `.html`
+   * file a reader put in their own vault is copied to `dist/_vault/` verbatim
+   * and is not jotter's markup.
+   */
+  const authored = pages.filter(({ file }) => !file.startsWith(`_vault${sep}`))
+  const cards = authored.map(({ file, html }) => ({
+    file,
+    og: content(html, 'property', 'og:image'),
+    twitter: content(html, 'name', 'twitter:image'),
+    card: content(html, 'name', 'twitter:card')[0] ?? '',
+  }))
+
+  const withImage = cards.filter((c) => c.og.length > 0 || c.twitter.length > 0)
+
+  if (withImage.length === 0) {
+    /**
+     * Off means absent in *both* halves, the pairing `rss off leaves no
+     * rel="alternate"` already uses. `summary_large_image` with no image is a
+     * card that unfurls as a blank slab, so the card type has to move with it.
+     */
+    pass('no og:image in dist/', 'config.url is unset, or nothing declares an image')
+    const large = cards.filter((c) => c.card !== 'summary')
+    check(
+      large.length === 0,
+      'a site with no card image leaves twitter:card at summary',
+      large.map((c) => `${c.file}: ${c.card || '(none)'}`).join(', '),
+    )
+    return
+  }
+
+  /**
+   * Exactly one of each, on every page. None means a page template that
+   * bypasses `Base.astro`; two means an unfurler picking whichever it read
+   * first, which is a card nobody chose.
+   */
+  const miscounted = cards.filter((c) => c.og.length !== 1 || c.twitter.length !== 1)
+  check(
+    miscounted.length === 0,
+    'every page carries exactly one og:image and one twitter:image',
+    miscounted.map((c) => `${c.file}: ${c.og.length} og, ${c.twitter.length} twitter`).join(', '),
+  )
+
+  const disagree = cards.filter((c) => (c.og[0] ?? '') !== (c.twitter[0] ?? ''))
+  check(
+    disagree.length === 0,
+    'og:image and twitter:image name the same picture',
+    disagree.map((c) => c.file).join(', '),
+  )
+
+  /**
+   * Absolute, always. A relative `og:image` is not a degraded card — an
+   * unfurler has no document to resolve it against — it is one nobody draws,
+   * which is why the whole feature is gated on `config.url`.
+   */
+  const relative = cards.filter((c) => !/^https?:\/\//i.test(c.og[0] ?? ''))
+  check(
+    relative.length === 0,
+    'every og:image is an absolute URL',
+    relative.map((c) => `${c.file}: ${c.og[0] || '(none)'}`).join(', '),
+  )
+
+  /**
+   * The site's own origin, read off the canonical link rather than guessed from
+   * the images: that is `config.url` itself, so an image on it is one this
+   * build was supposed to have written.
+   */
+  const canonical = authored
+    .map(({ html }) => html.match(/<link\b[^>]*rel="canonical"[^>]*>/)?.[0] ?? '')
+    .find(Boolean)
+  let siteOrigin = ''
+  try {
+    siteOrigin = new URL(attr(canonical ?? '', 'href')).origin
+  } catch {
+    fail('the canonical link carries an absolute URL', 'og:image cannot be checked against dist/')
+  }
+
+  const sameOrigin = (url) => {
+    try {
+      return new URL(url).origin === siteOrigin
+    } catch {
+      return false
+    }
+  }
+
+  /**
+   * The sibling of "every `rel="alternate"` resolves to the feed that was
+   * written": a card pointing at a path `dist/` does not serve is a preview
+   * that renders blank, and nothing else in the build would notice.
+   */
+  const ours = [...new Set(cards.map((c) => c.og[0]).filter((url) => url && sameOrigin(url)))]
+  const unserved = []
+  for (const url of ours) {
+    const path = decodeURIComponent(new URL(url).pathname).split('/').join(sep)
+    if (!(await stat(join(DIST, path)).catch(() => null))) unserved.push(url)
+  }
+  check(
+    unserved.length === 0,
+    'every card image on the site’s own origin is a file dist/ actually serves',
+    unserved.join('\n        '),
+  )
+  // Without this the check above passes loudest on a build whose every card
+  // image points at somebody else's host.
+  check(ours.length > 0, 'at least one card image is served from dist/ itself')
+
+  const wrongCard = cards.filter((c) => c.card !== (c.og.length > 0 ? 'summary_large_image' : 'summary'))
+  check(
+    wrongCard.length === 0,
+    'twitter:card is summary_large_image exactly when there is an image',
+    wrongCard.map((c) => `${c.file}: ${c.card || '(none)'}`).join(', '),
+  )
+
+  /**
+   * The precedence assertion, and what stops the rest of this being vacuous: a
+   * note that declares its own `image:` must carry *that*, resolved through the
+   * vault, rather than the site-wide default every other page carries. Drop the
+   * prop out of `Note.astro` and every check above still passes.
+   */
+  const OWN = '/_vault/attachments/slipbox.png'
+  const sink = cards.find((c) => c.file.includes('kitchen-sink'))
+  if (!sink) {
+    fail('the note that sets image: in frontmatter has a page', 'kitchen-sink not found in dist/')
+  } else {
+    check(
+      decodeURIComponent(sink.og[0] ?? '').endsWith(OWN),
+      'a note’s own image: beats the site-wide default',
+      `${sink.file}: ${sink.og[0] || '(none)'}, wanted one ending ${OWN}`,
+    )
+  }
+
+  pass('social cards', `${withImage.length}/${cards.length} page(s), ${ours.length} from dist/`)
+}
+
+section('Social cards')
+await socialCards(pages)
+
 /* ------------------------------------------------------------ full mode */
 
 const run = (args, options = {}) =>
@@ -1479,20 +1641,41 @@ if (FULL) {
   /** The origin `withFeedOn` writes, and so what the feed's own links carry. */
   const FEED_ORIGIN = 'https://example.com'
 
+  /**
+   * The site-wide card image, set on the same rebuild rather than on a fifth
+   * one: `section('Social cards')` needs exactly one condition the committed
+   * config does not have — a `url` to make an `og:image` absolute — and this
+   * section already establishes it.
+   *
+   * Somebody else's host on purpose. The demo vault has one raster attachment
+   * and `Kitchen sink.md` already claims it in frontmatter, so a site-wide
+   * default resolved from the vault would be the *same* URL and the precedence
+   * assertion would pass for no reason. A remote URL keeps the two apart, and
+   * exercises the pass-through case at the same time — an `og:image` is a
+   * declaration rather than a subresource, so no origin check is affected.
+   */
+  const SITE_IMAGE = 'https://cdn.example.com/og.png'
+  const withSocialImage = (source) =>
+    /^\s*image:\s*'/m.test(source)
+      ? source // A forker's own is better than ours, and gets checked instead.
+      : source.replace(CALL, `export default defineConfig({\n  image: '${SITE_IMAGE}',`)
+
   section('RSS on emits a feed every page advertises')
   {
     const configPath = join(ROOT, 'jotter.config.ts')
     const original = await readFile(configPath, 'utf8')
 
-    const on = withFeedOn(original)
+    const on = withSocialImage(withFeedOn(original))
 
     /**
-     * The `unrewritten` guard, extended to a third key. It exists precisely so
+     * The `unrewritten` guard, extended to a fourth key. It exists precisely so
      * a regex that misses fails loudly instead of running the feed assertions
      * against a build with no feed in it — where every one of them would pass
      * for the wrong reason.
      */
-    const unrewritten = FEED_ON_KEYS.filter(([re]) => !re.test(on)).map(([, name]) => name)
+    const unrewritten = [...FEED_ON_KEYS, [/^\s*image:\s*'/m, 'image']]
+      .filter(([re]) => !re.test(on))
+      .map(([, name]) => name)
 
     if (unrewritten.length > 0) {
       fail('the rss-on rewrite reached every key it needed to', `${unrewritten.join(', ')}; the checks below would be vacuous`)
@@ -1509,6 +1692,11 @@ if (FULL) {
           files.map(async (file) => ({ file: relative(DIST, file), html: await readFile(file, 'utf8') })),
         )
         await feedSection(onPages)
+        /**
+         * The other half of what this rebuild's `url` buys, and the only pass
+         * where `section('Social cards')` above has anything to bite.
+         */
+        await socialCards(onPages)
 
         /**
          * The publish gate again, against the build that has a feed in it. The

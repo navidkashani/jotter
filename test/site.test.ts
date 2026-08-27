@@ -10,6 +10,7 @@ import { sectionOf, preresolveLinks, expandTransclusions } from '../src/lib/tran
 import { defineConfig, jotterConfigSchema } from '../src/lib/config.js'
 import { buildRedirects, toNetlify, toVercel, robotsTxt } from '../src/lib/redirects.js'
 import { feedXml, MAX_ITEMS, FEED_PATH } from '../src/lib/feed.js'
+import { frontmatterImage, resolveSocialImage, socialImageUrl } from '../src/lib/social.js'
 import type { VaultNote } from '../src/lib/vault.js'
 
 const VAULT = fileURLToPath(new URL('./fixtures/vault', import.meta.url))
@@ -572,6 +573,133 @@ describe('config — rss', () => {
   /** Wrapping the root in a refinement must not stop `.strict()` biting. */
   it('keeps rejecting an unknown key through the refinement', () => {
     expect(() => defineConfig({ colour: 'blue' } as never)).toThrow()
+  })
+})
+
+/**
+ * The two halves of `image:`, split so the scan can validate a value without
+ * knowing the site URL. Built against the fixture vault's own `assets` index —
+ * the real one, since resolution is the whole question — with a synthetic index
+ * only where the fixture has no file of the shape being tested, the way the
+ * feed tests use a synthetic `note()`.
+ */
+describe('social images', () => {
+  const v = vault()
+  const SITE = 'https://example.com'
+  const url = (raw: string, from = 'Home.md') =>
+    socialImageUrl(resolveSocialImage(raw, from, v), SITE)
+
+  it('resolves a vault path, a bare filename and a ./ path to the same file', () => {
+    for (const raw of ['attachments/diagram.png', 'diagram.png', './diagram.png']) {
+      expect(url(raw)).toBe(`${SITE}/_vault/attachments/diagram.png`)
+    }
+  })
+
+  it('resolves relative to the note that declared it', () => {
+    expect(url('../attachments/diagram.png', 'notes/Note.md')).toBe(
+      `${SITE}/_vault/attachments/diagram.png`,
+    )
+  })
+
+  /** How a file in `public/` is named. Joined to the site URL untouched. */
+  it('keeps a rooted path rooted', () => {
+    const resolved = resolveSocialImage('/og.png', 'Home.md', v)
+    expect(resolved).toEqual({ status: 'ok', target: '/og.png', remote: false })
+    expect(url('/og.png')).toBe(`${SITE}/og.png`)
+  })
+
+  it('passes an absolute URL through as the author’s explicit choice', () => {
+    expect(resolveSocialImage('https://cdn.example.com/x.png', 'Home.md', v)).toEqual({
+      status: 'ok',
+      target: 'https://cdn.example.com/x.png',
+      remote: true,
+    })
+    expect(url('https://cdn.example.com/x.png')).toBe('https://cdn.example.com/x.png')
+  })
+
+  it('gives a protocol-relative URL the site’s own scheme', () => {
+    expect(url('//cdn.example.com/x.png')).toBe('https://cdn.example.com/x.png')
+  })
+
+  /**
+   * Silence is the bug being fixed. Both of these are reported by name at the
+   * scan; here they are simply not `ok`, so no tag is emitted.
+   */
+  it('reports a file that is not in the vault rather than inventing a URL', () => {
+    expect(resolveSocialImage('attachments/gone.png', 'Home.md', v)).toEqual({ status: 'unresolved' })
+    expect(url('attachments/gone.png')).toBeUndefined()
+  })
+
+  /**
+   * Facebook does not render SVG, so a card pointing at one is a fetch that
+   * draws nothing — indistinguishable from no card, and worse than one. A
+   * different question from `isOptimizable`, which is why it has its own list.
+   */
+  it('refuses a format no unfurler draws', () => {
+    const svgVault = { assets: new Map([['logo.svg', ['attachments/logo.svg']]]) }
+    expect(resolveSocialImage('logo.svg', 'Home.md', svgVault)).toEqual({ status: 'unsupported' })
+  })
+
+  it('treats a missing, empty or non-string value as nothing declared', () => {
+    for (const raw of [undefined, null, '', '   ', 42, true, ['a.png']]) {
+      expect(resolveSocialImage(raw, 'Home.md', v)).toEqual({ status: 'none' })
+    }
+  })
+
+  /**
+   * The gate that makes the whole feature honest: an unfurler has no document
+   * to resolve a relative URL against, so without `url` there is no card to
+   * emit — not a shorter one.
+   */
+  it('emits nothing at all without a site URL', () => {
+    const resolved = resolveSocialImage('diagram.png', 'Home.md', v)
+    expect(resolved.status).toBe('ok')
+    expect(socialImageUrl(resolved, undefined)).toBeUndefined()
+    expect(socialImageUrl(resolved, '')).toBeUndefined()
+  })
+
+  it('gives nothing back for a value that did not resolve', () => {
+    expect(socialImageUrl({ status: 'none' }, SITE)).toBeUndefined()
+    expect(socialImageUrl({ status: 'unresolved' }, SITE)).toBeUndefined()
+    expect(socialImageUrl({ status: 'unsupported' }, SITE)).toBeUndefined()
+  })
+
+  /**
+   * Quartz coalesces the same three spellings, so a migrated vault keeps its
+   * cards. The key comes back with the value so a warning can quote the line
+   * the author would go and edit, rather than one they never typed.
+   */
+  it('reads image, socialImage and cover, in that order, and says which', () => {
+    expect(frontmatterImage({ image: 'a.png', socialImage: 'b.png', cover: 'c.png' })).toEqual({
+      key: 'image',
+      value: 'a.png',
+    })
+    expect(frontmatterImage({ socialImage: 'b.png', cover: 'c.png' })?.key).toBe('socialImage')
+    expect(frontmatterImage({ cover: 'c.png' })?.key).toBe('cover')
+    expect(frontmatterImage({ image: '  a.png  ' })?.value).toBe('a.png')
+    expect(frontmatterImage({})).toBeUndefined()
+    expect(frontmatterImage({ image: 12 })).toBeUndefined()
+    expect(frontmatterImage({ image: '   ' })).toBeUndefined()
+  })
+})
+
+describe('config — image', () => {
+  it('leaves the site-wide card image unset by default', () => {
+    expect(defineConfig({}).image).toBeUndefined()
+  })
+
+  /**
+   * The `features.rss` refinement's second use, for the identical reason: an
+   * `og:image` that is not absolute is not a smaller card, it is one nobody
+   * draws. Degrade loudly, naming the key that is missing.
+   */
+  it('refuses image without a url, naming url', () => {
+    expect(() => defineConfig({ image: 'attachments/og.png' })).toThrow(/url/)
+  })
+
+  it('accepts image with a url', () => {
+    const config = defineConfig({ image: 'attachments/og.png', url: 'https://example.com' })
+    expect(config.image).toBe('attachments/og.png')
   })
 })
 

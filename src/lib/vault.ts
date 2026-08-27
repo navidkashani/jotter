@@ -21,6 +21,7 @@ import { mergeTags } from './tags.js'
 import { gitDates, resolveDates, type NoteDates } from './dates.js'
 import { excerpt } from './excerpt.js'
 import { svgIntrinsicSize } from './embed.js'
+import { frontmatterImage, resolveSocialImage } from './social.js'
 import { loadLinksIndex, type LinkOverrides } from './links-index.js'
 import type { ResolvableNote, VaultIndex } from './resolve.js'
 
@@ -73,6 +74,16 @@ export interface ScanOptions {
    * which note owns `/`.
    */
   homepage?: string
+  /**
+   * `config.image`: the card image for pages that name none of their own.
+   *
+   * Here rather than in the layout that emits it because this is the only pass
+   * that reads every note, so it is the only place an `image:` naming a file
+   * that is not there can be *reported* once, by name, instead of silently
+   * rendering nothing. Same memo-key caveat as `homepage` above: both callers
+   * must pass it.
+   */
+  image?: string
 }
 
 const DEFAULT_IGNORE = ['node_modules', '.git', '.obsidian', '.trash', '.jotter']
@@ -190,7 +201,7 @@ export function scanVault(options: ScanOptions): Vault {
   const cached = cache.get(key)
   if (cached) return cached
 
-  const { root, publishGate = 'all', ignore = DEFAULT_IGNORE, homepage } = options
+  const { root, publishGate = 'all', ignore = DEFAULT_IGNORE, homepage, image } = options
   const warnings: string[] = []
 
   if (!existsSync(root)) {
@@ -256,6 +267,9 @@ export function scanVault(options: ScanOptions): Vault {
     )
   }
 
+  const index = buildIndex(notes, assetPaths, warnings)
+  warnSocialImages(notes, image, index, warnings)
+
   const vault: Vault = {
     root,
     notes,
@@ -263,10 +277,56 @@ export function scanVault(options: ScanOptions): Vault {
     warnings,
     assetSizes: measureAssets(root, assetPaths),
     linkOverrides,
-    ...buildIndex(notes, assetPaths, warnings),
+    ...index,
   }
   cache.set(key, vault)
   return vault
+}
+
+/**
+ * Every declared card image, checked once, at the scan.
+ *
+ * The bug being fixed is silence: `image:` was declared in the collection
+ * schema and read by nothing, so a vault pointing at a file that had been
+ * renamed — or at an SVG, which no unfurler draws — built clean and shipped a
+ * text card. A layout cannot report this, because a layout only sees the note
+ * it is rendering and prints nothing anyone reads. This runs where the alias
+ * and slug collisions are already found, and prints beside them.
+ *
+ * Published notes only. An excluded note has no page for anything to unfurl.
+ */
+function warnSocialImages(
+  notes: readonly VaultNote[],
+  configImage: string | undefined,
+  index: Pick<VaultIndex, 'assets'>,
+  warnings: string[],
+): void {
+  const complain = (where: string, declared: string, status: 'unresolved' | 'unsupported') => {
+    warnings.push(
+      status === 'unresolved'
+        ? `${where} sets \`${declared}\`, and no such file is in the vault. ` +
+            `No link preview image was emitted; check the path, or move the file into the vault.`
+        : `${where} sets \`${declared}\`, which is not a format link previews draw. ` +
+            `No link preview image was emitted; use PNG, JPEG, GIF or WebP.`,
+    )
+  }
+
+  for (const note of notes) {
+    if (!note.published) continue
+    const declared = frontmatterImage(note.frontmatter)
+    if (!declared) continue
+    const { status } = resolveSocialImage(declared.value, note.path, index)
+    if (status === 'unresolved' || status === 'unsupported') {
+      complain(`"${note.path}"`, `${declared.key}: ${declared.value}`, status)
+    }
+  }
+
+  if (configImage) {
+    const { status } = resolveSocialImage(configImage, '', index)
+    if (status === 'unresolved' || status === 'unsupported') {
+      complain('`image` in jotter.config.ts', `image: ${configImage}`, status)
+    }
+  }
 }
 
 /** SVGs only: everything else Astro measures itself. */

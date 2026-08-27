@@ -2,6 +2,7 @@
 title: Kitchen sink
 description: Every piece of syntax jotter renders, on one page.
 tags: [meta, reference]
+image: attachments/slipbox.png
 created: 2026-03-02
 updated: 2026-08-26
 ---
