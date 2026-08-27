@@ -17,6 +17,8 @@ import { resolveLink, resolveAsset, displayFor, liveLabel, splitTarget } from '.
 import { parseEmbedPipe, isMediaTarget, isOptimizable } from '../lib/embed.js'
 import { noteHref, assetHref, relativeAssetPath } from '../lib/href.js'
 import { anchorFor } from '../lib/protected.js'
+import { previewFor } from '../lib/preview.js'
+import type { VaultNote } from '../lib/vault.js'
 import {
   isWikiSyntax,
   wikiPipe,
@@ -29,6 +31,8 @@ interface LinkNode extends Positioned {
   type: 'link'
   url: string
   children?: unknown[]
+  /** Set by an earlier plugin: an inline transclusion arrives wearing a class. */
+  data?: { hProperties?: Record<string, unknown> } & Record<string, unknown>
 }
 
 interface ImageNode extends Positioned {
@@ -80,6 +84,59 @@ function embedSize(embed: Embed, vault: DocumentContext['vault']) {
 
 export function wikilinks(doc: DocumentContext) {
   const { vault, config, fromPath } = doc
+  const previews = config.features.hoverPreview
+
+  /**
+   * The two attributes `src/scripts/hover-preview.ts` reads. Same route
+   * `deadLink` above uses, minus the `hName` override — the node stays an `<a>`
+   * and simply gains attributes.
+   *
+   * Emitted only with the flag on, so the bytes are absent rather than hidden,
+   * and only when there is something to show: an anchor with a blank card is
+   * worse than an anchor with none.
+   *
+   * Merged into whatever `hProperties` the node already carries. An inline
+   * transclusion reaches this visitor as a `link` that is already wearing a
+   * class, and overwriting `data` would strip it.
+   */
+  const attachPreview = (node: LinkNode, ctx: VisitorContext, note: VaultNote, subpath: string) => {
+    const preview = previewFor(note, subpath)
+    if (!preview) return
+    ctx.setProperty(node, 'data', {
+      ...node.data,
+      hProperties: {
+        ...node.data?.hProperties,
+        'data-preview-title': preview.title,
+        'data-preview': preview.text,
+      },
+    })
+  }
+
+  /**
+   * An internal absolute href, back to the note it points at.
+   *
+   * Not a nicety — without it the feature looks broken on exactly the notes it
+   * should look best on. `preresolveLinks` rewrites every wikilink inside
+   * transcluded content into `[label](/slug#anchor)` *before* the host note is
+   * parsed, so by the time this visitor sees one there is no `[[…]]` left and
+   * the `EXTERNAL` guard — whose pattern matches a leading `/` — would return
+   * without a second look. Hand-written `[x](/zettelkasten)` links get previews
+   * out of the same branch, which is right rather than incidental.
+   */
+  const noteForHref = (url: string): { note: VaultNote; subpath: string } | undefined => {
+    const hash = url.indexOf('#')
+    const path = hash === -1 ? url : url.slice(0, hash)
+    let slug: string
+    try {
+      // The mirror of `noteHref`: it encodes each segment, and spells the
+      // site root `/` rather than `/index`.
+      slug = path === '/' ? 'index' : path.slice(1).split('/').map(decodeURIComponent).join('/')
+    } catch {
+      return undefined // A malformed escape is not ours to repair.
+    }
+    const note = vault.bySlug.get(slug)
+    return note?.published ? { note, subpath: hash === -1 ? '' : url.slice(hash) } : undefined
+  }
 
   /** Shared by the `image` visitor and the lone-image `paragraph` visitor. */
   const describeEmbed = (node: ImageNode, ctx: VisitorContext) => {
@@ -103,13 +160,22 @@ export function wikilinks(doc: DocumentContext) {
 
     link(node: LinkNode, ctx: VisitorContext) {
       const wiki = isWikiSyntax(node, ctx)
-      if (!wiki && EXTERNAL.test(node.url)) return
+      if (!wiki && EXTERNAL.test(node.url)) {
+        // `EXTERNAL` lumps internal absolute hrefs in with genuinely external
+        // ones. A single leading slash is ours; `//host` is not.
+        if (previews && node.url.startsWith('/') && !node.url.startsWith('//')) {
+          const target = noteForHref(node.url)
+          if (target) attachPreview(node, ctx, target.note, target.subpath)
+        }
+        return
+      }
 
       const resolution = resolveLink(node.url, fromPath, vault, config.linkResolution)
       const alias = wiki ? wikiPipe(node, ctx) : undefined
 
       if (resolution.status === 'published') {
         ctx.setProperty(node, 'url', noteHref(resolution.note.slug, resolution.anchor))
+        if (previews) attachPreview(node, ctx, resolution.note, resolution.anchor)
         // Without a pipe, Satteri labels the link with the raw target, so
         // `[[Note#Heading]]` would read "Note#Heading". Obsidian spells that
         // separator `>`.

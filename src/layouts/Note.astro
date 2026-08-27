@@ -70,6 +70,16 @@ const description =
 const showGraph: boolean = import.meta.env.JOTTER_GRAPH
 const LocalGraph = showGraph ? (await import('../components/LocalGraph.astro')).default : null
 
+/**
+ * Hover previews, gated the same way and for the same reason. This layout is
+ * the right place for it: both `[...slug].astro` and `index.astro` wrap their
+ * prose in it, and the anchors carrying the excerpts are inside that prose.
+ */
+const showHoverPreview: boolean = import.meta.env.JOTTER_HOVER_PREVIEW
+const HoverPreview = showHoverPreview
+  ? (await import('../components/HoverPreview.astro')).default
+  : null
+
 /** Which of the two DOM shapes above to emit. Resolved at build. */
 const panels = config.layout === 'panels'
 const hasToc = config.features.toc
@@ -114,5 +124,7 @@ const hasRail = config.features.backlinks || showGraph
         </aside>
       )
     }
+
+    {HoverPreview && <HoverPreview />}
   </article>
 </Base>

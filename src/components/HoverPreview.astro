@@ -1,0 +1,22 @@
+---
+/**
+ * The hover preview island: a script, and nothing else.
+ *
+ * It renders no markup on purpose. The excerpt is already in the page, on the
+ * anchors, and the card is built in the browser and appended to `<body>` —
+ * which is also why its styles live in `src/styles/base.css` rather than in a
+ * scoped `<style>` here: Astro's scoping cannot reach an element the script
+ * invents.
+ *
+ * The component exists in order to be *conditionally imported*. A bare
+ * `<script>` in `Note.astro` behind `{config.features.hoverPreview && …}` would
+ * still ship: Astro hoists and bundles component scripts at compile time
+ * regardless of the surrounding conditional. Only dropping the import takes the
+ * script out of the module graph. See `JOTTER_HOVER_PREVIEW` in
+ * `astro.config.ts`, and the same trap documented beside `JOTTER_GRAPH`.
+ */
+---
+
+<script>
+  import '../scripts/hover-preview.js'
+</script>

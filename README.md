@@ -80,8 +80,8 @@ export default defineConfig({
     tags: true,
     themeToggle: true,
     graph: false,               // the local graph — `layout: 'panels'` only
+    hoverPreview: false,        // excerpt cards on hovering a link
     search: false,              // v2
-    hoverPreview: false,        // v2
     rss: false,                 // v2
   },
 
@@ -268,6 +268,9 @@ callout work with JavaScript disabled — the only scripts in a default build
 are the theme island and the drawer enhancement, about 1.1 KB together. Turn
 `features.graph` on and a note page adds an 18 KB `d3-force` chunk, about
 22 KB in all; the graph's own accessible list stays underneath it either way.
+`features.hoverPreview` adds about 1.2 KB and no request at all, plus the
+excerpts themselves in the markup — 1 KB raw and under 200 bytes brotli'd on
+the demo's most-linked page.
 
 ---
 
@@ -286,8 +289,17 @@ underneath it for keyboards, screen readers and scripting-off. Every node is
 named; the rail card elides long titles to its width and an expand button
 opens the same graph in a dialog where nothing is elided.
 
-**Still to come:** search (Pagefind), hover previews, OG images, RSS,
-analytics, and the Open Publish `scripts/` layer.
+And hover previews, also off by default: hold the pointer over a link and a
+small card shows the target's title and opening paragraph, so you can decide
+whether to follow it without leaving the paragraph you are in. Quartz and
+Obsidian Publish both *fetch* the target; jotter cannot, because the build
+asserts that nothing it ships reaches the network. So the excerpt travels in
+the HTML instead — instant, offline, and the first paragraph rather than the
+whole note. Pointer only, and the card is `aria-hidden`: it repeats what the
+destination already says, one click away.
+
+**Still to come:** search (Pagefind), OG images, RSS, analytics, and the Open
+Publish `scripts/` layer.
 
 ## License
 

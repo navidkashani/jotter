@@ -5,6 +5,9 @@ import { slugifyPath, slugifySegment, assignSlugs, slugifyHeading } from '../src
 import { mergeTags, inlineTags, frontmatterTags, expandTag, tagTree, normalizeTag } from '../src/lib/tags.js'
 import { resolveDates, frontmatterDate } from '../src/lib/dates.js'
 import { excerpt } from '../src/lib/excerpt.js'
+import { sectionOf, sectionById } from '../src/lib/transclude.js'
+import { previewFor } from '../src/lib/preview.js'
+import type { VaultNote } from '../src/lib/vault.js'
 import { parseCallout } from '../src/lib/callout.js'
 import { parseEmbedPipe, isMediaTarget } from '../src/lib/embed.js'
 
@@ -260,5 +263,132 @@ describe('parseEmbedPipe — Obsidian size-vs-caption rule', () => {
     expect(isMediaTarget('clip.mp4')).toBe(true)
     expect(isMediaTarget('Note#Section')).toBe(false)
     expect(isMediaTarget('Some Note')).toBe(false)
+  })
+})
+
+const SECTIONED = [
+  '# Sections',
+  '',
+  'The opening of the whole note.',
+  '',
+  '## How it works',
+  '',
+  'Each note gets an address.',
+  '',
+  '## Nothing under here',
+  '',
+  '## Deeper',
+  '',
+  '### A sub-heading',
+  '',
+  'Still inside Deeper.',
+  '',
+  '## Last',
+  '',
+  'Closing text.',
+  '',
+  '```',
+  '## Hidden',
+  '',
+  'Never a section.',
+  '```',
+].join('\n')
+
+describe('sectionById', () => {
+  it('returns the heading as written, not the slug it was found by', () => {
+    expect(sectionById(SECTIONED, 'how-it-works')?.heading).toBe('How it works')
+  })
+
+  it('stops at the next heading of the same or higher level', () => {
+    expect(sectionById(SECTIONED, 'how-it-works')?.body).toBe('Each note gets an address.')
+  })
+
+  it('keeps a deeper heading inside the section', () => {
+    expect(sectionById(SECTIONED, 'deeper')?.body).toBe('### A sub-heading\n\nStill inside Deeper.')
+  })
+
+  it('runs to the end of the note for the last heading', () => {
+    expect(sectionById(SECTIONED, 'last')?.body).toContain('Closing text.')
+  })
+
+  it('never matches a heading inside a code fence', () => {
+    expect(sectionById(SECTIONED, 'hidden')).toBeUndefined()
+  })
+
+  it('tells an empty section apart from one that does not exist', () => {
+    expect(sectionById(SECTIONED, 'nothing-under-here')).toEqual({
+      heading: 'Nothing under here',
+      body: '',
+    })
+    expect(sectionById(SECTIONED, 'nowhere')).toBeUndefined()
+  })
+})
+
+describe('sectionOf', () => {
+  it('takes a subpath as written and slugifies it', () => {
+    expect(sectionOf(SECTIONED, '#How It WORKS')).toBe('Each note gets an address.')
+  })
+
+  it('resolves a block reference to the whole note, as v1 documented', () => {
+    expect(sectionOf(SECTIONED, '#^abc123')).toBe(SECTIONED)
+    expect(sectionOf(SECTIONED, '')).toBe(SECTIONED)
+  })
+
+  it('flattens both "missing" and "empty" to an empty string, as it always did', () => {
+    expect(sectionOf(SECTIONED, '#Nowhere')).toBe('')
+    expect(sectionOf(SECTIONED, '#Nothing under here')).toBe('')
+  })
+
+  it('does not understand Obsidian’s multi-level subpath', () => {
+    expect(sectionOf(SECTIONED, '#Sections#How it works')).toBe('')
+  })
+})
+
+describe('previewFor', () => {
+  /** Only the three fields `previewFor` reads, filled the way the scan fills them. */
+  const note = (body: string, title = 'Sections') =>
+    ({ title, body, excerpt: excerpt(body) }) as VaultNote
+
+  it('shows the note’s opening paragraph for a link with no subpath', () => {
+    expect(previewFor(note(SECTIONED), '')).toEqual({
+      title: 'Sections',
+      text: 'The opening of the whole note.',
+    })
+  })
+
+  it('shows the section’s opening for a heading link, and names it in the title', () => {
+    expect(previewFor(note(SECTIONED), '#How it works')).toEqual({
+      title: 'Sections › How it works',
+      text: 'Each note gets an address.',
+    })
+  })
+
+  it('accepts an already-slugified subpath, which is what a resolved href carries', () => {
+    expect(previewFor(note(SECTIONED), '#how-it-works')?.text).toBe('Each note gets an address.')
+  })
+
+  it('previews the note’s opening for a block reference, matching sectionOf', () => {
+    expect(previewFor(note(SECTIONED), '#^abc123')).toEqual({
+      title: 'Sections',
+      text: 'The opening of the whole note.',
+    })
+  })
+
+  it('falls back to the note when the heading is missing, empty or fenced', () => {
+    const whole = { title: 'Sections', text: 'The opening of the whole note.' }
+    expect(previewFor(note(SECTIONED), '#Nowhere')).toEqual(whole)
+    expect(previewFor(note(SECTIONED), '#Nothing under here')).toEqual(whole)
+    expect(previewFor(note(SECTIONED), '#Hidden')).toEqual(whole)
+  })
+
+  it('gives up rather than offer a card with a blank body', () => {
+    expect(previewFor(note('# Title only'), '')).toBeUndefined()
+    expect(previewFor(note('# Title only'), '#Nowhere')).toBeUndefined()
+  })
+
+  it('memoizes per note and subpath', () => {
+    const one = note(SECTIONED)
+    expect(previewFor(one, '#How it works')).toBe(previewFor(one, '#How it works'))
+    expect(previewFor(one, '')).not.toBe(previewFor(note(SECTIONED), ''))
   })
 })

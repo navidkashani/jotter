@@ -39,7 +39,8 @@ export default defineConfig({ linkResolution: 'absolute' })
 | `pageTitle` | `title` |
 | `baseUrl` | `url` (with the scheme: `https://…`) |
 | `locale` | `locale`, plus `dir` for RTL |
-| `enableSPA`, `enablePopovers` | Not applicable in v1. Hover previews are v2. |
+| `enableSPA` | Not applicable: every page is a real document, so there is no router to enable |
+| `enablePopovers` | `features.hoverPreview`, with one visible difference — jotter embeds the excerpt at build time rather than fetching the page, so a card opens instantly and offline, and shows the first paragraph rather than the whole note |
 | `analytics: { provider }` | `analytics: { provider, id }` — same providers |
 | `ignorePatterns` | A note opts out with `publish: false`, or set `publishGate: 'opt-in'` |
 | `defaultDateType` | `created` / `updated` are both shown; lists sort by `updated` |

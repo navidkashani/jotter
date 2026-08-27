@@ -704,6 +704,97 @@ body {
   font-size: var(--step-nav);
 }
 
+/* ---- Hover previews ---------------------------------------------------- */
+
+/**
+ * The card `src/scripts/hover-preview.ts` builds and appends to `<body>`.
+ *
+ * Here rather than in a scoped `<style>` because Astro's scoping cannot reach
+ * an element the script invents — and because this file is the only place the
+ * "no colour literal outside tokens.css" assertion actually looks: it walks
+ * `src/styles/*.css` and skips `.astro` `<style>` blocks entirely.
+ *
+ * Everything up to `overflow` is undoing the UA popover defaults, which are
+ * real and all wrong here. Miss `border` and a UA border sits beside our
+ * hairline; miss `overflow` and `inline-size` and a 200-character excerpt grows
+ * a scrollbar *inside a hover card*.
+ *
+ * The recipe below it is the raised surface every other card uses, and no
+ * `box-shadow`: there is deliberately no shadow token, and every edge in jotter
+ * is a 1px line. This is where the card will look unlike Quartz's, which leans
+ * on `6px 6px 36px rgba(0, 0, 0, .25)`.
+ */
+.note-preview {
+  inset: auto;
+  margin: 0;
+  padding: var(--space-xs) var(--space-s);
+  overflow: visible;
+  inline-size: min(22rem, 80vw);
+  block-size: auto;
+  background: var(--surface);
+  border: var(--hairline) solid var(--rule);
+  border-radius: var(--radius-l);
+  color: var(--ink);
+  font-family: var(--font-body);
+  line-height: var(--leading-ui);
+
+  /**
+   * The whole positioning layer. `position-area` and `position-try-fallbacks`
+   * are logical, so this is correct in RTL by construction rather than by a
+   * hand-written `getBoundingClientRect().left` that only looks correct in LTR.
+   * `anchors-visible` hides the card when its link scrolls out of view, which
+   * a JavaScript version would have to observe for.
+   *
+   * The script sets `anchor-name: --jotter-preview` on the hovered link and
+   * nothing else. It refuses to run at all where this is unsupported, because
+   * without it the popover would fall back to the UA default and park itself
+   * dead-centre of the viewport.
+   */
+  position-anchor: --jotter-preview;
+  position-area: block-end span-inline-end;
+  position-try-fallbacks: flip-block, flip-inline;
+  position-visibility: anchors-visible;
+  /* Both block edges, so the gap survives the `flip-block` fallback. */
+  margin-block: var(--space-3xs);
+
+  /**
+   * `display: none` is not animatable on its own, so a fade needs all three of
+   * `overlay`, `display` and `allow-discrete`, plus `@starting-style` for the
+   * frame the card is first painted in. `--duration-fast` is already zeroed
+   * under `prefers-reduced-motion`, so there is no JavaScript check to make.
+   */
+  opacity: 0;
+  transition:
+    opacity var(--duration-fast) var(--ease),
+    overlay var(--duration-fast) var(--ease) allow-discrete,
+    display var(--duration-fast) var(--ease) allow-discrete;
+}
+
+.note-preview:popover-open {
+  opacity: 1;
+}
+
+@starting-style {
+  .note-preview:popover-open {
+    opacity: 0;
+  }
+}
+
+.note-preview-title {
+  display: block;
+  font-size: var(--step-nav);
+  font-weight: var(--weight-semibold);
+  color: var(--ink-strong);
+  letter-spacing: var(--tracking-tight);
+}
+
+.note-preview-text {
+  display: block;
+  margin-block-start: var(--space-3xs);
+  font-size: var(--step-excerpt);
+  color: var(--ink-muted);
+}
+
 /* ---- Table of contents ------------------------------------------------- */
 
 .note-toc > summary {

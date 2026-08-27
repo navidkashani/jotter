@@ -181,3 +181,82 @@ function compile(markdown: string, overrides: JotterConfigInput = {}): string {
   })
   return typeof result === 'string' ? result : (result as { html: string }).html
 }
+
+/**
+ * The build-time half is unit-tested in `lib.test.ts`; this is the half that
+ * only shows up in finished HTML — which anchors get the attributes, and which
+ * emphatically do not.
+ */
+describe('hover previews', () => {
+  const on = { features: { hoverPreview: true } }
+
+  it('ships nothing at all with the flag off', () => {
+    expect(render('Previews.md')).not.toContain('data-preview')
+  })
+
+  it('puts the target’s title and opening paragraph on a resolved wikilink', () => {
+    expect(render('Previews.md', on)).toContain(
+      '<a href="/notes/luhmann" data-preview-title="Niklas Luhmann" data-preview="A sociologist. Back to Zettelkasten.">',
+    )
+  })
+
+  it('previews the section a heading link points at, and names it', () => {
+    const html = render('Previews.md', on)
+    expect(html).toContain('data-preview-title="Sections › How it works"')
+    expect(html).toContain(
+      'data-preview="Each note gets an address, and new notes are filed behind whichever note they answer."',
+    )
+  })
+
+  it('falls back to the note for a heading that is missing, empty or fenced', () => {
+    const html = render('Previews.md', on)
+    for (const anchor of ['#nowhere', '#hidden', '#nothing-under-here']) {
+      expect(html).toContain(
+        `<a href="/sections${anchor}" data-preview-title="Sections" data-preview="The opening of the whole note,`,
+      )
+    }
+  })
+
+  it('never puts an excerpt on a dead link', () => {
+    const html = render('Previews.md', on) + render('Zettelkasten.md', on)
+    expect(html).toMatch(/class="dead-link"/)
+    expect(html).not.toMatch(/<span[^>]*data-preview/)
+  })
+
+  /**
+   * The regression test that stops the transclusion hole reopening.
+   * `preresolveLinks` rewrites a transcluded note's wikilinks to `/slug#anchor`
+   * before the host is parsed, so these arrive at the link visitor looking
+   * exactly like external ones.
+   */
+  it('reaches a link that transclusion pre-resolved into an href', () => {
+    expect(render('Previews.md', on)).toContain(
+      '<a href="/zettelkasten" data-preview-title="Zettelkasten" data-preview="Invented by Luhmann.',
+    )
+  })
+
+  it('reaches a hand-written internal markdown link out of the same branch', () => {
+    expect(render('Previews.md', on)).toContain(
+      '<a href="/sections" data-preview-title="Sections" data-preview="The opening of the whole note,',
+    )
+  })
+
+  it('leaves genuinely external links alone, including protocol-relative ones', () => {
+    const html = render('Previews.md', on)
+    expect(html).toMatch(/<a href="https:\/\/example\.com">/)
+    expect(html).toMatch(/<a href="\/\/example\.com\/notes\/luhmann">/)
+  })
+
+  /**
+   * An inline transclusion is a `link` an earlier plugin already dressed, so
+   * the attributes have to merge rather than overwrite. Its sibling, the
+   * `.transclusion-source` back-link, is raw HTML and never reaches a visitor
+   * at all — that asymmetry is a consequence of how each is built, and it is
+   * recorded here rather than discovered later.
+   */
+  it('merges into an inline transclusion without stripping its class', () => {
+    const html = render('Previews.md', on)
+    expect(html).toContain('<a class="transclusion-source" href="/notes/luhmann">')
+    expect(html).not.toMatch(/<a class="transclusion-source"[^>]*data-preview/)
+  })
+})

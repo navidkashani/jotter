@@ -36,6 +36,13 @@ export interface Transclusion {
   truncated?: 'depth' | 'cycle'
 }
 
+export interface Section {
+  /** The heading line's text, as the author wrote it. */
+  heading: string
+  /** Everything under it, up to the next heading of the same or higher level. */
+  body: string
+}
+
 /**
  * One section of a note: from the named heading until the next heading of the
  * same or higher level. A block reference (`#^id`) resolves to the whole note,
@@ -43,34 +50,54 @@ export interface Transclusion {
  */
 export function sectionOf(body: string, subpath: string): string {
   if (!subpath || subpath.startsWith('#^')) return body
+  return sectionById(body, slugifyHeading(subpath.slice(1)))?.body ?? ''
+}
 
-  const wanted = slugifyHeading(subpath.slice(1))
+/**
+ * The same lookup, addressed by the heading's *slug* rather than by the subpath
+ * as written. That is the form a resolved href carries — `preresolveLinks` has
+ * already turned `[[Note#How it works]]` into `/note#how-it-works` by the time
+ * `src/lib/preview.ts` sees it — and slugifying is idempotent, so the two
+ * callers meet here.
+ *
+ * `undefined` rather than an empty string when there is no such heading, so a
+ * section with nothing under it stays distinguishable from one that does not
+ * exist. A preview has to tell those apart; {@link sectionOf} flattens both to
+ * `''` exactly as it always did.
+ *
+ * The heading's own text comes back with it, because a slug is not a label.
+ */
+export function sectionById(body: string, id: string): Section | undefined {
   const lines = body.split('\n')
   const ranges = protectedRanges(body)
 
   let offset = 0
   let startLine = -1
   let startLevel = 0
+  let heading = ''
 
   for (let i = 0; i < lines.length; i++) {
-    const heading = /^[ \t]{0,3}(#{1,6})[ \t]+(.+?)[ \t]*#*[ \t]*$/.exec(lines[i])
+    const match = /^[ \t]{0,3}(#{1,6})[ \t]+(.+?)[ \t]*#*[ \t]*$/.exec(lines[i])
     const protectedHere = isProtected(ranges, offset)
     offset += lines[i].length + 1
 
-    if (!heading || protectedHere) continue
-    const level = heading[1].length
+    if (!match || protectedHere) continue
+    const level = match[1].length
 
     if (startLine === -1) {
-      if (slugifyHeading(heading[2]) === wanted) {
+      if (slugifyHeading(match[2]) === id) {
         startLine = i
         startLevel = level
+        heading = match[2]
       }
     } else if (level <= startLevel) {
-      return lines.slice(startLine + 1, i).join('\n').trim()
+      return { heading, body: lines.slice(startLine + 1, i).join('\n').trim() }
     }
   }
 
-  return startLine === -1 ? '' : lines.slice(startLine + 1).join('\n').trim()
+  return startLine === -1
+    ? undefined
+    : { heading, body: lines.slice(startLine + 1).join('\n').trim() }
 }
 
 /**

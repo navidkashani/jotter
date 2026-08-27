@@ -334,6 +334,14 @@ section('JavaScript payload')
     'JavaScript per page',
     `${worst.bytes} bytes at worst (${worst.file}); ${jsFiles.length} shared file(s), ${scripts.length} inline block(s) site-wide`,
   )
+  /**
+   * 24 KB, and it stays there. Worth knowing while reading a number this close
+   * to its ceiling: Astro inlines a script chunk under **4096 bytes** into the
+   * page rather than emitting a `.js` file, so a small island costs nothing in
+   * `sharedBytes` — and an island that later crosses 4 KB flips to a shared
+   * file charged to *every* page, which is a discontinuous jump rather than a
+   * gradual one.
+   */
   check(worst.bytes < 24 * 1024, 'a page ships under 24 KB of JavaScript', `${worst.bytes} bytes on ${worst.file}`)
 
   /**
@@ -406,8 +414,16 @@ if (FULL) {
       const themeCode = offPages.filter((html) => html.includes('jotter-theme'))
       const tagChips = offPages.filter((html) => html.includes('tag-chip'))
 
+      const previewAttrs = offPages.filter((html) => html.includes('data-preview'))
+
       check(themeCode.length === 0, 'themeToggle off removes its inline script entirely')
       check(tagChips.length === 0, 'tags off removes every tag chip')
+      /**
+       * The markup half of the guarantee the no-JavaScript check makes below.
+       * With `hoverPreview` off the excerpts are *absent* from the anchors, not
+       * merely unread — the flag decides whether the bytes are emitted at all.
+       */
+      check(previewAttrs.length === 0, 'hoverPreview off emits no data-preview attribute')
       check(
         inline.length === 0 && offJs.length === 0,
         'no JavaScript at all when every scripted feature and the nav are off',

@@ -139,6 +139,15 @@ export default defineConfig({
       'import.meta.env.JOTTER_GRAPH': JSON.stringify(
         jotter.features.graph && jotter.layout === 'panels',
       ),
+
+      /**
+       * The same trap, for the same reason. `HoverPreview.astro` is nothing but
+       * a `<script>`, so left as a plain `config.features.hoverPreview` test it
+       * would ship its bundle on every note page with the feature off — the
+       * markup half of the flag would honour it and the JavaScript half would
+       * not.
+       */
+      'import.meta.env.JOTTER_HOVER_PREVIEW': JSON.stringify(jotter.features.hoverPreview),
     },
   },
 
