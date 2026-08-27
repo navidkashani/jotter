@@ -380,9 +380,13 @@ section('JavaScript payload')
    * else's chunk. It also made "the worst page" useless as a diagnostic, which
    * is the part a budget is actually for.
    *
-   * Fixing the metric deliberately does *not* move the ceiling. It buys about
-   * 20 KB of apparent headroom on most pages, and that headroom is not a
-   * budget increase — it was never spent.
+   * Fixing the metric deliberately does *not* move the ceiling, and the
+   * headroom it appears to hand back is worth reading carefully. Most pages
+   * drop by around 20 KB — but the page this budget actually asserts against is
+   * whichever one loads the graph, and that page gains *nothing*: 23,205 of
+   * 24,576 bytes, so 1,371 to spare. The 20 KB accrues to pages that were never
+   * near the ceiling. Nothing was freed; something was only ever miscounted,
+   * and the binding constraint is as tight as it was.
    */
   const perPage = pages.map(({ file, html }) => {
     const inline = [...html.matchAll(INLINE)].reduce((n, m) => n + Buffer.byteLength(m[1]), 0)
@@ -420,16 +424,34 @@ section('JavaScript payload')
   const loadedBy = new Map([...chunks.keys()].map((url) => [url, 0]))
   for (const { loaded } of perPage) for (const url of loaded) loadedBy.set(url, loadedBy.get(url) + 1)
 
-  if (chunks.size > 0) {
+  const used = [...loadedBy].filter(([, n]) => n > 0)
+  if (used.length > 0) {
     pass(
       'shared chunks',
-      [...loadedBy]
+      used
         .map(([url, n]) => `${chunks.get(url).file} ${chunks.get(url).bytes}B on ${n}/${pages.length} page(s)`)
         .join('; '),
     )
   }
-  const orphans = [...loadedBy].filter(([, n]) => n === 0).map(([url]) => chunks.get(url).file)
-  check(orphans.length === 0, 'every emitted chunk is referenced by a page', orphans.join(', '))
+
+  /**
+   * Scoped to Astro's own output directory, and the scope is the whole point.
+   *
+   * `dist/` holds more `.js` than Rollup ever put there. `src/integrations/
+   * vault.ts` copies *every* non-markdown file in the vault to `dist/_vault/`
+   * with no extension allowlist, so a Templater or dataviewjs snippet living in
+   * an Obsidian vault — or a code sample a note links to — lands in the build.
+   * So does anything a user drops in `public/`. None of it is referenced by a
+   * `<script src>`, all of it is perfectly correct, and failing over it would
+   * be this check inventing a bug. Attribution still counts those files if a
+   * page does reference one: they are real bytes, they are just not chunks.
+   *
+   * `_astro` is Astro's `build.assets` default, which jotter does not override.
+   */
+  const orphans = [...loadedBy]
+    .filter(([url, n]) => n === 0 && url.startsWith('/_astro/'))
+    .map(([url]) => chunks.get(url).file)
+  check(orphans.length === 0, 'every chunk Astro emitted is referenced by a page', orphans.join(', '))
 
   /**
    * Nothing here should be reaching the network at runtime — and that has to
