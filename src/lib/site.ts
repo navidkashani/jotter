@@ -9,7 +9,7 @@
 import { resolve } from 'node:path'
 
 import jotter from '../../jotter.config'
-import { scanVault, homepageNote, type VaultNote } from './vault.js'
+import { scanVault, type VaultNote } from './vault.js'
 import { buildGraph } from './graph.js'
 import { buildTree, folders } from './tree.js'
 import { tagTree, expandTag } from './tags.js'
@@ -25,7 +25,11 @@ export const config = jotter
 const vaultRoot: string =
   import.meta.env?.JOTTER_VAULT_ROOT ?? resolve(process.cwd(), jotter.vault)
 
-export const vault = scanVault({ root: vaultRoot, publishGate: jotter.publishGate })
+export const vault = scanVault({
+  root: vaultRoot,
+  publishGate: jotter.publishGate,
+  homepage: jotter.homepage,
+})
 
 export const graph = buildGraph(vault, jotter.linkResolution)
 
@@ -58,11 +62,12 @@ export const notesByTag = (() => {
 })()
 
 /**
- * The note claiming `/`. Resolved in `src/lib/vault.ts` rather than here,
- * because `astro.config.ts` needs the same answer for the feed and there must
- * be exactly one.
+ * The note claiming `/`, which is the note the scan gave the slug `index` —
+ * there is no second resolution path to keep in step with the first. Read off
+ * the published list, so an unpublished `index.md` gets the generated landing
+ * page rather than a page it opted out of.
  */
-export const homepage: VaultNote | undefined = homepageNote(vault, config.homepage)
+export const homepage: VaultNote | undefined = notes.find((n) => n.slug === 'index')
 
 export const backlinksFor = (slug: string) => graph.backlinks.get(slug) ?? []
 export const outgoingFor = (slug: string) => graph.outgoing.get(slug) ?? []

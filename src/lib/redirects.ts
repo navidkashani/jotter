@@ -10,7 +10,7 @@
  * (which is bundled) compute the same set without importing each other.
  */
 import { noteHref } from './href.js'
-import { slugifySegment } from './slug.js'
+import { slugifyPath, slugifySegment } from './slug.js'
 import type { VaultNote } from './vault.js'
 
 export interface RedirectSources {
@@ -24,6 +24,23 @@ export interface RedirectSources {
 export function buildRedirects({ notes, taken, extra = {} }: RedirectSources): Record<string, string> {
   const owned = new Set(taken)
   const out: Record<string, string> = {}
+
+  /**
+   * The note that claims `/` was published at its own slug until it was
+   * promoted, so that URL is in bookmarks and inbound links. Recomputed from
+   * the path rather than remembered on the note: `slugifyPath` is pure, and a
+   * `previousSlug` field would be one more thing to keep in step.
+   *
+   * Before the aliases, so a URL that actually served this note outranks a name
+   * that only ever pointed at another one — and an alias that was unreachable
+   * while the page existed does not become live by inheriting its vacated URL.
+   */
+  for (const note of notes) {
+    if (note.slug !== 'index') continue
+    const from = slugifyPath(note.path)
+    if (from === 'index' || owned.has(from)) continue
+    out[`/${from}`] = '/'
+  }
 
   for (const note of notes) {
     for (const alias of note.aliases) {

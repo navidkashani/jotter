@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { fileURLToPath } from 'node:url'
+import { cpSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 
 import {
   scanVault,
@@ -9,6 +12,7 @@ import {
   isPublished,
   resolveTitle,
 } from '../src/lib/vault.js'
+import { noteHref } from '../src/lib/href.js'
 import { buildGraph, neighbourhood, type Graph, type GraphLink } from '../src/lib/graph.js'
 
 const VAULT = fileURLToPath(new URL('./fixtures/vault', import.meta.url))
@@ -197,7 +201,9 @@ describe('buildGraph', () => {
   })
 
   it('collapses repeated links between the same pair', () => {
-    const edges = (graph.outgoing.get('home') ?? []).filter((l) => l.slug === 'zettelkasten')
+    // `index`, not `home`: the fixture's `Home.md` sets `homepage: true`, so
+    // the scan gives it the slug that means "this note is at the root".
+    const edges = (graph.outgoing.get('index') ?? []).filter((l) => l.slug === 'zettelkasten')
     expect(edges.length).toBe(1)
   })
 
@@ -288,5 +294,107 @@ describe('neighbourhood edges', () => {
     const hood = neighbourhood(graphOf([['a', 'b'], ['b', 'a']]), 'a', 0)
     expect(hood.nodes.map((n) => n.slug)).toEqual(['a'])
     expect(hood.edges).toEqual([])
+  })
+})
+
+/** A throwaway copy of the fixture vault, with files of our own written over it. */
+function vaultWith(files: Record<string, string>, homepage?: string) {
+  const root = mkdtempSync(join(tmpdir(), 'jotter-homepage-'))
+  cpSync(VAULT, root, { recursive: true })
+  for (const [path, source] of Object.entries(files)) writeFileSync(join(root, path), source)
+  clearVaultCache()
+  return scanVault({ root, homepage })
+}
+
+const NOTE = (front: string) => `---\n${front}\n---\n\nA note.\n`
+
+describe('the note that claims /', () => {
+  /**
+   * The whole mechanism: the claimant is given the slug `index`, which
+   * `noteHref` has always spelled `/`. Nothing downstream needs to know a
+   * homepage exists — every link to this note is `/` for the same reason a root
+   * `index.md`'s always was.
+   */
+  it('gives the claimant the index slug, and so the / href', () => {
+    const v = scan()
+    // `test/fixtures/vault/Home.md` sets `homepage: true` and nothing else does.
+    expect(v.byPath.get('home.md')?.slug).toBe('index')
+    expect(v.bySlug.get('index')?.path).toBe('Home.md')
+    expect(noteHref(v.bySlug.get('index')!.slug)).toBe('/')
+  })
+
+  it('lets config name the note by slug, by vault path or by filename', () => {
+    for (const named of ['zettelkasten', 'Zettelkasten.md', 'Zettelkasten']) {
+      expect(scan({ homepage: named }).bySlug.get('index')?.path).toBe('Zettelkasten.md')
+    }
+  })
+
+  it('gives config the last word over homepage: true', () => {
+    const v = scan({ homepage: 'Zettelkasten' })
+    expect(v.bySlug.get('index')?.path).toBe('Zettelkasten.md')
+    // And the flagged note keeps its own slug, and so its own page.
+    expect(v.byPath.get('home.md')?.slug).toBe('home')
+  })
+
+  it('falls through when homepage names a note that is absent or unpublished', () => {
+    expect(scan({ homepage: 'No Such Note' }).bySlug.get('index')?.path).toBe('Home.md')
+    // `private/Secret Log.md` has `publish: false`.
+    expect(scan({ homepage: 'Secret Log' }).bySlug.get('index')?.path).toBe('Home.md')
+  })
+
+  it('falls back to a root index.md when nothing claims /', () => {
+    const v = vaultWith({ 'Home.md': NOTE('title: Home'), 'index.md': NOTE('title: Landing') })
+    expect(v.bySlug.get('index')?.path).toBe('index.md')
+    expect(v.warnings.some((w) => w.includes('claim "/"'))).toBe(false)
+  })
+
+  /** The committed default. It must cost nothing and rename nothing. */
+  it('leaves every slug alone when no note claims /', () => {
+    const v = vaultWith({ 'Home.md': NOTE('title: Home') })
+    expect(v.bySlug.has('index')).toBe(false)
+    expect(v.byPath.get('home.md')?.slug).toBe('home')
+  })
+
+  /**
+   * Two notes claim `/` and only one can have it. The other keeps a page rather
+   * than vanishing from a site that still lists it everywhere — and the warning
+   * naming both files is the only way the author finds out.
+   */
+  it('suffixes the displaced index.md rather than dropping it, and names both files', () => {
+    const v = vaultWith({ 'index.md': NOTE('title: Landing') }, 'Zettelkasten')
+    expect(v.bySlug.get('index')?.path).toBe('Zettelkasten.md')
+    expect(v.byPath.get('index.md')?.slug).toBe('index-2')
+    expect(v.bySlug.get('index-2')?.path).toBe('index.md')
+    const warning = v.warnings.find((w) => w.includes('claim "/"'))
+    expect(warning).toContain('index.md')
+    expect(warning).toContain('Zettelkasten.md')
+  })
+
+  /**
+   * Renamed all the same — two notes at `index` would put the collision back —
+   * but not reported: a note that opted out of publication never claimed `/`,
+   * and its slug is observable nowhere.
+   */
+  it('displaces an unpublished index.md without warning about it', () => {
+    const v = vaultWith({ 'index.md': NOTE('title: Landing\npublish: false') }, 'Zettelkasten')
+    expect(v.bySlug.get('index')?.path).toBe('Zettelkasten.md')
+    expect(v.byPath.get('index.md')?.slug).toBe('index-2')
+    expect(v.warnings.some((w) => w.includes('claim "/"'))).toBe(false)
+  })
+
+  it('puts frontmatter ahead of a root index.md, displacing it the same way', () => {
+    const v = vaultWith({ 'index.md': NOTE('title: Landing') })
+    expect(v.bySlug.get('index')?.path).toBe('Home.md')
+    expect(v.byPath.get('index.md')?.slug).toBe('index-2')
+  })
+
+  it('breaks a tie between two homepage: true notes in path order, and warns', () => {
+    const v = vaultWith({ 'Alpha.md': NOTE('title: Alpha\nhomepage: true') })
+    // Sorted path order, as `assignSlugs` already breaks its own ties: a build
+    // on Linux and a build on macOS must choose the same front door.
+    expect(v.bySlug.get('index')?.path).toBe('Alpha.md')
+    const warning = v.warnings.find((w) => w.includes('homepage: true'))
+    expect(warning).toContain('Alpha.md')
+    expect(warning).toContain('Home.md')
   })
 })

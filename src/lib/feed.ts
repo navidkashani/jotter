@@ -53,8 +53,6 @@ export interface FeedOptions {
   siteUrl: string
   locale: string
   author?: string
-  /** The note claiming `/`, so its item does not link to a slug with no page. */
-  homepageSlug?: string
 }
 
 /**
@@ -83,7 +81,6 @@ export function feedXml({
   siteUrl,
   locale,
   author,
-  homepageSlug,
 }: FeedOptions): string {
   const absolute = (path: string) => new URL(path, siteUrl).href
 
@@ -145,13 +142,14 @@ export function feedXml({
   for (const note of items) {
     /**
      * Every URL comes from `noteHref()`, so the feed cannot disagree with the
-     * site about where a note lives — it does not compute an answer of its own.
-     * The one exception is the homepage note, which `src/pages/[...slug].astro`
-     * gives no route of its own; it is mapped to `/` exactly as that file does.
-     * A dead link is worse in a feed than on a page, where a reader at least
-     * has navigation to recover through.
+     * site about where a note lives — it does not compute an answer of its own,
+     * and there is no exception. The note claiming `/` reaches here with the
+     * slug `index`, which `noteHref` has always spelled `/`; the feed used to
+     * take a `homepageSlug` to step around that, and stepping around it was the
+     * bug. A dead link is worse in a feed than on a page, where a reader at
+     * least has navigation to recover through.
      */
-    const url = absolute(homepageSlug && note.slug === homepageSlug ? '/' : noteHref(note.slug))
+    const url = absolute(noteHref(note.slug))
 
     lines.push('    <item>')
     lines.push(`      <title>${escapeXml(note.title)}</title>`)

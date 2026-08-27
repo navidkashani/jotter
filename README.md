@@ -68,7 +68,7 @@ export default defineConfig({
 
   linkResolution: 'shortest',   // 'shortest' | 'absolute' | 'relative'
   publishGate: 'all',           // 'all' | 'opt-in'
-  homepage: undefined,          // slug of the note that should claim '/'
+  homepage: undefined,          // the note that claims '/' — see “The note at /” below
   strictLineBreaks: false,      // Obsidian's own default
   images: 'optimize',           // 'optimize' | 'passthrough'
   noIndex: false,
@@ -114,6 +114,7 @@ created: 2026-01-02            # else git, else file mtime
 updated: 2026-03-04
 publish: false                 # exclude this note
 draft: true                    # also excludes it
+homepage: true                 # this note claims '/' — see “The note at /” below
 ---
 ```
 
@@ -195,6 +196,42 @@ have falls back rather than emitting a link to a page that will not exist.
 | `/pagefind/*` | The search index, with `features.search` on. Disallowed in `robots.txt` |
 | `/rss.xml` | The feed, with `features.rss` on. Linked from every page |
 
+### The note at `/`
+
+One note claims `/`, and it is served **there and only there** — it gets no
+second page at its own slug, because the same note at two URLs is the same note
+twice in the sitemap and twice in the search results.
+
+That is not a special case with links to remember. The note claiming `/` is
+given the slug `index`, which is how jotter has always spelled “this note lives
+at the root”, so every link to it — in a note, a card, the nav tree, backlinks,
+the graph and the feed — is `/`. Its previous URL keeps working: `/<old-slug>`
+301s to `/` in `_redirects` and `vercel.json`, so bookmarks and inbound links
+survive the promotion.
+
+Three ways to claim it, in this order:
+
+```yaml
+homepage: 'Zettelkasten'   # config: a slug, a vault path, or a filename
+```
+```yaml
+---
+homepage: true             # frontmatter, on the note itself
+---
+```
+```
+index.md                   # a note named index.md, in the vault root
+```
+
+Set none of them and the site gets a generated landing page — the most-linked
+notes, and what was tended lately.
+
+Set `homepage:` while a root `index.md` exists and config wins, as the more
+deliberate statement: it takes `/`, the `index.md` note keeps a page under a
+suffixed slug, and the build prints a warning naming both files. Nothing is
+dropped. A `homepage:` naming a note that is unpublished or absent falls through
+to the next way of claiming it.
+
 ---
 
 ## Commands
@@ -203,8 +240,8 @@ have falls back rather than emitting a link to a page that will not exist.
 npm run dev          # http://localhost:4321
 npm run build        # astro build, then the build assertions
 npm run verify       # the assertions alone, against the current dist/
-npm run verify:full  # also rebuilds with features off, analytics on, RSS on, and at 1,000 notes
-npm test             # 296 unit tests
+npm run verify:full  # also rebuilds with features off, analytics on, RSS on, a homepage set, and at 1,000 notes
+npm test             # 309 unit tests
 npm run check        # astro check
 npm run clean        # see the note below
 ```

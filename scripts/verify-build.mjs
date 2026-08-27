@@ -9,7 +9,8 @@
  * quietly eat the spaces between inline elements.
  *
  *   npm run verify          the checks above, over the current dist/
- *   npm run verify:full     also rebuilds with features off, and at scale
+ *   npm run verify:full     also rebuilds with features off, analytics on, RSS on,
+ *                           a homepage set, and at scale
  */
 import { readFile, readdir, stat, mkdir, writeFile, rm } from 'node:fs/promises'
 import { join, relative, extname, sep } from 'node:path'
@@ -87,6 +88,19 @@ const outputs = await Promise.all(
   textFiles.map(async (file) => ({ file: relative(DIST, file), text: await readFile(file, 'utf8') })),
 )
 
+/**
+ * The URL a built page is served at. `dist/index.html` is `/`, not `/index`,
+ * and `dist/notes/index.html` is `/notes` — `trailingSlash: 'never'`, which is
+ * also how every href in the build spells them.
+ */
+const routeOf = (file) =>
+  '/' +
+  relative(DIST, file)
+    .split(sep)
+    .join('/')
+    .replace(/\/?index\.html$/, '')
+    .replace(/\.html$/, '')
+
 /** Everything inside the rendered note body, where our markdown output lands. */
 const proseOf = (html) =>
   [...html.matchAll(/<div class="note-body prose">([\s\S]*?)<nav class="prev-next"|<div class="note-body prose">([\s\S]*?)<\/div>/g)]
@@ -96,6 +110,83 @@ const proseOf = (html) =>
 console.log(`Verifying ${pages.length} page(s) in dist/\n`)
 
 /* ------------------------------------------------------------------ links */
+
+/**
+ * Every internal `<a href>` points at something `dist/` actually serves.
+ *
+ * The section below this one was four assertions about link *markup* — empty
+ * hrefs, dead links rendered as anchors, hrefs left on spans — and not one
+ * about link *destination*. A build in which every internal link 404s passed
+ * `npm run verify` cleanly, which is the hole `config.homepage` breaking every
+ * link to the promoted note lived in for as long as it did.
+ *
+ * This is the general net rather than a homepage-shaped one: it equally catches
+ * a renamed note whose backlinks were not rebuilt, a folder index that stopped
+ * being emitted, and a redirect target that moved.
+ *
+ * Three kinds of target count as resolving, because all three are things a
+ * reader following the link would actually get: a built page, a real file in
+ * `dist/` (`/_vault/x.pdf`, `/rss.xml`, `/pagefind/*`), and a redirect source
+ * in `_redirects` — a 301 is a working link, and a note's vacated URL is
+ * exactly that.
+ *
+ * Written as a function, like `thirdPartyOrigins()` below and for the same
+ * reason: `--full` re-runs it against a build with `homepage:` set, which is
+ * the config mode that had nothing checking it.
+ */
+async function internalLinks(pages) {
+  const served = new Set([
+    ...(await walk(DIST, (n) => n.endsWith('.html'))).map(routeOf),
+    ...(await walk(DIST, () => true)).map((f) => '/' + relative(DIST, f).split(sep).join('/')),
+  ])
+
+  const netlify = await readFile(join(DIST, '_redirects'), 'utf8').catch(() => '')
+  for (const line of netlify.split('\n')) {
+    const from = line.trim().split(/\s+/)[0]
+    if (from.startsWith('/')) served.add(from)
+  }
+
+  /**
+   * The same exemption `thirdPartyOrigins` names: `dist/_vault/` holds files
+   * the user put in their own vault, and an `.html` attachment among them is
+   * not jotter's markup. Failing over a link somebody else wrote would be this
+   * check inventing a bug.
+   */
+  const authored = pages.filter(({ file }) => !file.startsWith(`_vault${sep}`))
+
+  const decode = (value) => {
+    try {
+      return decodeURIComponent(value)
+    } catch {
+      // A malformed escape is a broken link, but it is the raw form that should
+      // be reported — and the lookup below will miss it either way.
+      return value
+    }
+  }
+
+  const offenders = []
+  let checked = 0
+  for (const { file, html } of authored) {
+    for (const [, href] of html.matchAll(/<a\b[^>]*\bhref="([^"]*)"/g)) {
+      // Site-absolute only. `//host/x` is another origin, `#x` is this page,
+      // and a scheme is somebody else's problem.
+      if (!href.startsWith('/') || href.startsWith('//')) continue
+      const path = decode(href.split('#')[0].split('?')[0])
+      const target = path.length > 1 ? path.replace(/\/$/, '') : path
+      checked++
+      if (!served.has(target)) offenders.push(`${file}: ${href}`)
+    }
+  }
+
+  check(
+    offenders.length === 0,
+    'every internal link points at a page, a file or a redirect',
+    offenders.slice(0, 12).join('\n        '),
+  )
+  // Without this the check above passes loudest on a `dist/` with no links in
+  // it at all.
+  check(checked > 0, 'the demo actually has internal links to resolve')
+}
 
 section('Links')
 {
@@ -112,6 +203,8 @@ section('Links')
 
   const deadLinkPages = pages.filter(({ html }) => html.includes('class="dead-link"'))
   check(deadLinkPages.length > 0, 'the demo actually exercises dead links', 'no dead-link span found anywhere')
+
+  await internalLinks(pages)
 }
 
 /* ----------------------------------------------------------------- images */
@@ -302,8 +395,14 @@ section('Design tokens')
 
 /* ------------------------------------------------------------ redirects */
 
-section('Redirects and robots')
-{
+/**
+ * A function, and re-walking `dist/` rather than closing over `htmlFiles`, for
+ * the same reason `internalLinks()` and `thirdPartyOrigins()` are: `--full`
+ * runs it again against the homepage build, which is the only one that emits a
+ * redirect from a note's own vacated slug — precisely the kind that could
+ * dangle or shadow.
+ */
+async function redirectsAndRobots() {
   const netlify = await readFile(join(DIST, '_redirects'), 'utf8').catch(() => null)
   const vercel = await readFile(join(DIST, 'vercel.json'), 'utf8').catch(() => null)
   check(netlify !== null, '_redirects was written')
@@ -319,7 +418,7 @@ section('Redirects and robots')
     )
 
     // A redirect pointing at a page that does not exist is worse than none.
-    const routes = new Set(htmlFiles.map((f) => '/' + relative(DIST, f).replace(/\/?index\.html$/, '').replace(/\.html$/, '')))
+    const routes = new Set((await walk(DIST, (n) => n.endsWith('.html'))).map(routeOf))
     const dangling = fromVercel.filter((r) => !routes.has(r.destination) && r.destination !== '/')
     check(dangling.length === 0, 'every redirect points at a real page', dangling.map((r) => `${r.source} -> ${r.destination}`).join(', '))
 
@@ -331,6 +430,9 @@ section('Redirects and robots')
   const robots = await readFile(join(DIST, 'robots.txt'), 'utf8').catch(() => null)
   check(robots !== null, 'robots.txt was written')
 }
+
+section('Redirects and robots')
+await redirectsAndRobots()
 
 /* -------------------------------------------------------------- payload */
 
@@ -1323,34 +1425,41 @@ if (FULL) {
    * is *commented out* rather than set — so turning the feed on means
    * uncommenting a line, not replacing a value.
    */
-  section('RSS on emits a feed every page advertises')
-  {
-    const configPath = join(ROOT, 'jotter.config.ts')
-    const original = await readFile(configPath, 'utf8')
+  /**
+   * `export default defineConfig({`, not `defineConfig({`. The docstring at the
+   * top of `jotter.config.ts` contains the words *`defineConfig({})` builds a
+   * working site* — so the shorter anchor matches a **comment** first, and a
+   * non-global `replace` would insert the key there and nowhere else. Caught by
+   * the `unrewritten` guards rather than shipped, but a guard firing on a
+   * config nobody mistyped is a guard nobody trusts.
+   */
+  const CALL = /export default defineConfig\(\{/
 
-    /**
-     * `export default defineConfig({`, not `defineConfig({`. The docstring at
-     * the top of `jotter.config.ts` contains the words *`defineConfig({})`
-     * builds a working site* — so the shorter anchor matches a **comment**
-     * first, and a non-global `replace` would insert the key there and nowhere
-     * else. Caught by the guard below rather than shipped, but a guard firing
-     * on a config nobody mistyped is a guard nobody trusts.
-     */
-    const CALL = /export default defineConfig\(\{/
-    let on = original
-    if (/^\s*url:\s*'/m.test(original)) {
+  /**
+   * Turn the feed on in a config source: `url`, which the schema requires
+   * before `features.rss` is even allowed, and the flag itself.
+   *
+   * Shared by two rebuilds — the RSS section below, and the homepage one after
+   * it, which needs a feed in order to assert that the note claiming `/` is
+   * linked as `/` in the feed too. That is the exact place the removed
+   * `homepageSlug` option used to paper over.
+   *
+   * Three cases each: `url` is *commented out* in the committed config rather
+   * than set, and `features` is not a key every config has — the README
+   * documents `defineConfig({})` as a complete config, and one written that way
+   * has no `features:` block to insert `rss` into.
+   */
+  const withFeedOn = (source) => {
+    let on = source
+    if (/^\s*url:\s*'/m.test(on)) {
       // Already set — a forker's own URL is better than ours, and leaving it
       // means the origin assertions run against what they actually ship.
-    } else if (/^\s*\/\/\s*url:\s*'/m.test(original)) {
+    } else if (/^\s*\/\/\s*url:\s*'/m.test(on)) {
       on = on.replace(/^(\s*)\/\/\s*(url:\s*'[^']*',)/m, '$1$2')
     } else {
       on = on.replace(CALL, `export default defineConfig({\n  url: 'https://example.com',`)
     }
-    /**
-     * Three cases, because `features` is not a key every config has: the README
-     * documents `defineConfig({})` as a complete config, and one written that
-     * way has no `features:` block to insert `rss` into.
-     */
+
     if (/\brss:\s*(?:true|false)/.test(on)) {
       on = on.replace(/\brss:\s*(?:true|false)/, 'rss: true')
     } else if (/\bfeatures:\s*\{/.test(on)) {
@@ -1358,6 +1467,24 @@ if (FULL) {
     } else {
       on = on.replace(CALL, `export default defineConfig({\n  features: { rss: true },`)
     }
+    return on
+  }
+
+  /** What `withFeedOn` must have reached, for either section's guard. */
+  const FEED_ON_KEYS = [
+    [/^\s*url:\s*'https?:\/\//m, 'url'],
+    [/\brss:\s*true/, 'features.rss'],
+  ]
+
+  /** The origin `withFeedOn` writes, and so what the feed's own links carry. */
+  const FEED_ORIGIN = 'https://example.com'
+
+  section('RSS on emits a feed every page advertises')
+  {
+    const configPath = join(ROOT, 'jotter.config.ts')
+    const original = await readFile(configPath, 'utf8')
+
+    const on = withFeedOn(original)
 
     /**
      * The `unrewritten` guard, extended to a third key. It exists precisely so
@@ -1365,12 +1492,7 @@ if (FULL) {
      * against a build with no feed in it — where every one of them would pass
      * for the wrong reason.
      */
-    const unrewritten = [
-      [/^\s*url:\s*'https?:\/\//m, 'url'],
-      [/\brss:\s*true/, 'features.rss'],
-    ]
-      .filter(([re]) => !re.test(on))
-      .map(([, name]) => name)
+    const unrewritten = FEED_ON_KEYS.filter(([re]) => !re.test(on)).map(([, name]) => name)
 
     if (unrewritten.length > 0) {
       fail('the rss-on rewrite reached every key it needed to', `${unrewritten.join(', ')}; the checks below would be vacuous`)
@@ -1405,6 +1527,172 @@ if (FULL) {
           'no unpublished note’s title reaches the feed either',
           leaked.map((p) => p.file).join(', '),
         )
+      }
+
+      await writeFile(configPath, original)
+      await clearContentStores(ROOT)
+    }
+  }
+
+  /**
+   * The fourth config rewrite, and the one that gives `internalLinks()`
+   * something homepage-shaped to bite.
+   *
+   * On the committed config `homepage` is unset, so `/` is a root `index.md`
+   * and the entire promotion path is unexercised: a named note served at `/`
+   * and nowhere else, `[...slug].astro` skipping it, every link to it spelled
+   * `/`, the 301 from the URL it used to have, and a root `index.md` displaced
+   * rather than dropped. Setting `homepage:` in the committed config is the
+   * wrong way to fix that — `index.md` is the front door the demo garden
+   * documents and the shape a forker starts from, and this is the one config
+   * key whose whole purpose is to *change* that. A throwaway rebuild costs one
+   * `astro build`.
+   *
+   * `Zettelkasten` rather than any other note because the demo vault also has a
+   * root `index.md`, so this rebuild exercises the collision — two notes
+   * claiming `/` — rather than the easy case.
+   */
+  section('A note claiming / is served there, and only there')
+  {
+    const configPath = join(ROOT, 'jotter.config.ts')
+    const original = await readFile(configPath, 'utf8')
+
+    const CLAIMANT = 'Zettelkasten'
+    const VACATED = '/zettelkasten'
+    const named = /^\s*homepage:/m.test(original)
+      ? original.replace(/^(\s*)homepage:.*$/m, `$1homepage: '${CLAIMANT}',`)
+      : original.replace(CALL, `export default defineConfig({\n  homepage: '${CLAIMANT}',`)
+
+    /**
+     * With the feed on as well, because the feed is where the note claiming `/`
+     * used to be special-cased: `feedXml` took a `homepageSlug` to steer its
+     * item to the root, and that option is gone. Nothing but a build with both
+     * keys set can show that it is not missed.
+     */
+    const on = withFeedOn(named)
+
+    /**
+     * The `unrewritten` guard again, for a fourth key alongside the feed's two.
+     * Without it a regex that misses runs every assertion below against a build
+     * with no homepage in it, where they pass for reasons that have nothing to
+     * do with what they claim to test.
+     */
+    const unrewritten = [
+      [new RegExp(`homepage:\\s*'${CLAIMANT}'`), 'homepage'],
+      ...FEED_ON_KEYS,
+    ]
+      .filter(([re]) => !re.test(on))
+      .map(([, name]) => name)
+
+    if (unrewritten.length > 0) {
+      fail(
+        'the homepage rewrite reached every key it needed to',
+        `${unrewritten.join(', ')}; the checks below would be vacuous`,
+      )
+    } else {
+      await writeFile(configPath, on)
+      await clearContentStores(ROOT)
+
+      const { code, out } = await run(['astro', 'build'])
+      if (code !== 0) {
+        fail('build succeeds with a homepage set', out.slice(-800))
+      } else {
+        const onPages = await Promise.all(
+          (await walk(DIST, (n) => n.endsWith('.html'))).map(async (file) => ({
+            file: relative(DIST, file),
+            html: await readFile(file, 'utf8'),
+          })),
+        )
+        const home = onPages.find((p) => p.file === 'index.html')?.html ?? ''
+
+        check(
+          home.includes(`<h1 class="note-title">${CLAIMANT}</h1>`),
+          '/ renders the note homepage names',
+        )
+        check(
+          (await stat(join(DIST, CLAIMANT.toLowerCase())).catch(() => null)) === null,
+          `and gets no second page at ${VACATED}`,
+          'the same note at two URLs is two sitemap entries and two search results',
+        )
+
+        /**
+         * The bug this section exists for. Every `noteHref` call site kept
+         * emitting the old slug while nothing served it — and `internalLinks()`
+         * alone would not catch the regression coming back, because the 301
+         * below makes those links *resolve*. Working links to the wrong URL are
+         * still the wrong URL.
+         *
+         * Over every text output rather than the pages, so it reads the feed
+         * and the sitemap too: those are the two that carry a note's URL
+         * without being a page, and the feed is where the note claiming `/`
+         * used to need an option of its own. `_redirects` and `vercel.json`
+         * are the one exemption — the old slug appears there on purpose, as
+         * the redirect's *source*.
+         */
+        const REDIRECT_FILES = new Set(['_redirects', 'vercel.json'])
+        /**
+         * A whole URL, never a substring. The demo vault tags this very note
+         * `method/zettelkasten`, so `/tags/method/zettelkasten` carries these
+         * characters on every page that shows the tag and in every output that
+         * lists it. Anchored on the two ways a URL is written here — an `href`
+         * attribute and an absolute URL inside XML — and ended on the
+         * delimiters a path can actually end at.
+         */
+        const STALE = new RegExp(
+          `(?:href="|${FEED_ORIGIN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})` +
+            `${VACATED}(?=["#?<]|$)`,
+        )
+        const onOutputs = await Promise.all(
+          (await walk(DIST, (n) => TEXT_OUTPUT.test(n) || n === '_redirects')).map(async (file) => ({
+            file: relative(DIST, file),
+            text: await readFile(file, 'utf8'),
+          })),
+        )
+        const stale = onOutputs.filter(
+          ({ file, text }) =>
+            !file.startsWith(`_vault${sep}`) && !REDIRECT_FILES.has(file) && STALE.test(text),
+        )
+        check(
+          stale.length === 0,
+          'nothing in dist/ still points at the slug it used to have',
+          stale.map((p) => p.file).join(', '),
+        )
+
+        const netlify = await readFile(join(DIST, '_redirects'), 'utf8').catch(() => '')
+        check(
+          netlify.includes(`${VACATED} / 301`),
+          `${VACATED} still works, as a 301 to /`,
+          netlify.trim().split('\n').join(' | '),
+        )
+
+        /**
+         * The feed's half of it, stated positively: an item — a `<guid>` is
+         * item-only, unlike `<link>`, which the channel also carries — points
+         * at the site root. With `feedSection` below, this is the whole of what
+         * `homepageSlug` used to buy, now bought by the `index` slug instead.
+         */
+        const rss = await readFile(join(DIST, 'rss.xml'), 'utf8').catch(() => '')
+        check(
+          rss.includes(`<guid isPermaLink="true">${FEED_ORIGIN}/</guid>`),
+          'the feed links the note claiming / to the site root',
+        )
+
+        /**
+         * The collision. The demo vault has a root `index.md` as well, config
+         * wins, and the displaced note keeps a page — a note that vanished from
+         * the site while every listing, the nav tree, the graph and the feed
+         * still named it would be the worse failure.
+         */
+        const displaced = onPages.find((p) => p.file === join('index-2', 'index.html'))
+        check(displaced !== undefined, 'the displaced index.md keeps a page of its own')
+        check(
+          out.includes('claim "/"') && out.includes('index.md') && out.includes(CLAIMANT),
+          'the build warns about the collision, naming both files',
+        )
+
+        await internalLinks(onPages)
+        await redirectsAndRobots()
+        await feedSection(onPages)
       }
 
       await writeFile(configPath, original)

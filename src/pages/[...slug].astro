@@ -20,7 +20,7 @@ import NoteList from '../components/NoteList.astro'
 import { t } from '../i18n/index.js'
 
 export async function getStaticPaths() {
-  const { notes, allFolders, homepage } = await import('../lib/site.js')
+  const { notes, allFolders } = await import('../lib/site.js')
 
   const claimed = new Set<string>()
   const paths: {
@@ -30,7 +30,10 @@ export async function getStaticPaths() {
 
   for (const note of notes) {
     // `/` is rendered by index.astro; emitting it here too would collide.
-    if (note.slug === 'index' || note.slug === homepage?.slug) continue
+    // One clause, because `index` is how jotter spells "at the root" — the note
+    // `homepage:` names is given that slug by the scan, so there is nothing
+    // else to skip and nothing left linking to a slug with no page behind it.
+    if (note.slug === 'index') continue
     claimed.add(note.slug)
     paths.push({ params: { slug: note.slug }, props: { kind: 'note', path: note.path } })
   }

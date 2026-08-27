@@ -63,6 +63,16 @@ export interface ScanOptions {
   publishGate?: PublishGate
   /** Directory names skipped wholesale. */
   ignore?: readonly string[]
+  /**
+   * `config.homepage`: the note that should claim `/`, named by slug, by vault
+   * path or by filename.
+   *
+   * Part of the memo key below, which makes passing it non-optional in
+   * practice: both callers (`src/lib/site.ts` and `astro.config.ts`) must pass
+   * it or the build scans the vault twice and the two scans disagree about
+   * which note owns `/`.
+   */
+  homepage?: string
 }
 
 const DEFAULT_IGNORE = ['node_modules', '.git', '.obsidian', '.trash', '.jotter']
@@ -180,7 +190,7 @@ export function scanVault(options: ScanOptions): Vault {
   const cached = cache.get(key)
   if (cached) return cached
 
-  const { root, publishGate = 'all', ignore = DEFAULT_IGNORE } = options
+  const { root, publishGate = 'all', ignore = DEFAULT_IGNORE, homepage } = options
   const warnings: string[] = []
 
   if (!existsSync(root)) {
@@ -235,6 +245,8 @@ export function scanVault(options: ScanOptions): Vault {
     })
     edges.set(path, extractEdges(body))
   }
+
+  claimRoot(notes, homepage, warnings)
 
   const linkOverrides = loadLinksIndex(root, warnings)
   if (linkOverrides) {
@@ -349,27 +361,81 @@ function emptyVault(root: string, warnings: string[]): Vault {
 }
 
 /**
- * The note claiming `/`: whatever `homepage` names — by slug, by vault path or
- * by filename — else a note that slugified to `index`. Absent both, the site
- * gets a generated landing page.
+ * Give the note that claims `/` the slug `index`, because that is already how
+ * jotter spells "this note lives at the root".
  *
- * Pure, and here rather than only in `src/lib/site.ts`, because two callers
- * need the same answer and must not compute it twice. `src/pages/[...slug].astro`
- * gives this note *no route of its own* — it owns `/` instead — so the feed has
- * to know which note that is in order to link it to `/` rather than to a slug
- * with no page behind it. `astro.config.ts` cannot import `src/lib/site.ts` to
- * find out: that module resolves the vault root from its own bundled
- * environment, which is not the one the config is holding.
+ * `noteHref('index')` returns `/`, and it has since the first commit. So the
+ * whole of "the homepage note is linked as `/`" falls out of renaming one
+ * field: every `noteHref` call site, the graph and backlinks (keyed by slug),
+ * the redirect `taken` list, the search index and the feed are then correct for
+ * the same reason a root `index.md` already was. The alternative — teaching
+ * seventeen call sites about a homepage — means either a parameter threaded
+ * through all of them or module state in `src/lib/href.ts`, whose whole point
+ * is that there is one stateless answer to what a link looks like.
+ *
+ * Runs after the note loop and before `buildIndex()`, which is the first point
+ * where frontmatter is known and the last before `bySlug` is built from these
+ * slugs. `assignSlugs` cannot do this: it runs on paths alone, before a single
+ * file has been read.
+ *
+ * Precedence: `config.homepage` > frontmatter `homepage: true` > `index.md`.
+ * Unpublished notes never qualify, so a `homepage:` naming one falls through to
+ * the next candidate exactly as a `homepage:` naming nothing does.
  */
-export function homepageNote(vault: Vault, homepage?: string): VaultNote | undefined {
-  if (homepage) {
-    const named =
-      vault.bySlug.get(homepage) ??
-      vault.notes.find((n) => n.published && (n.path === homepage || n.filename === homepage))
-    if (named?.published) return named
+function claimRoot(notes: VaultNote[], homepage: string | undefined, warnings: string[]): void {
+  const published = notes.filter((n) => n.published)
+
+  // Three lookups rather than one predicate, so slug beats path beats filename
+  // instead of whichever note happens to sort first.
+  let claimant = homepage
+    ? (published.find((n) => n.slug === homepage) ??
+      published.find((n) => n.path === homepage) ??
+      published.find((n) => n.filename === homepage))
+    : undefined
+
+  if (!claimant) {
+    // `notes` is in sorted path order, so the winner does not depend on
+    // filesystem enumeration — the same rule `assignSlugs` breaks ties by.
+    const flagged = published.filter((n) => n.frontmatter.homepage === true)
+    if (flagged.length > 1) {
+      warnings.push(
+        `More than one note sets \`homepage: true\`: ${flagged.map((n) => n.path).join(', ')}. ` +
+          `Using "${flagged[0].path}". Remove the flag from the rest, or name one in \`homepage:\`.`,
+      )
+    }
+    claimant = flagged[0]
   }
-  const index = vault.bySlug.get('index')
-  return index?.published ? index : undefined
+
+  // No claimant, or the note already at the root: nothing to rename. This is
+  // the committed default, and it must cost nothing.
+  if (!claimant || claimant.slug === 'index') return
+
+  /**
+   * Two notes claim `/` and only one can have it. Config wins, and the other
+   * keeps a page under a suffixed slug — the same choice, for the same reason,
+   * as `src/pages/[...slug].astro` making a note beat a folder of the same
+   * name: silently dropping either would be worse than either choice.
+   */
+  const incumbent = notes.find((n) => n.slug === 'index')
+  if (incumbent) {
+    const taken = new Set(notes.map((n) => n.slug))
+    let n = 2
+    let slug = `index-${n}`
+    while (taken.has(slug)) slug = `index-${++n}`
+    incumbent.slug = slug
+    // Renamed either way, so `bySlug` cannot hold two notes at `index` — but
+    // only *reported* when the displaced note is published, because an
+    // unpublished one never claimed `/` and its slug is observable nowhere.
+    if (incumbent.published) {
+      warnings.push(
+        `Both "${incumbent.path}" and "${claimant.path}" claim "/". ` +
+          `"${claimant.path}" wins; "${incumbent.path}" is served at "/${slug}" instead. ` +
+          `Rename one, or drop \`homepage\`, to choose deliberately.`,
+      )
+    }
+  }
+
+  claimant.slug = 'index'
 }
 
 /** Testing seam: the scan is memoized for the life of the process. */

@@ -441,18 +441,16 @@ describe('feed', () => {
   })
 
   /**
-   * `src/pages/[...slug].astro` gives the homepage note no route of its own, so
-   * an item linking to its slug would be a dead end with no navigation to
-   * recover through. The `index` slug is the same question, answered by
-   * `noteHref` itself.
+   * `src/pages/[...slug].astro` gives the note claiming `/` no route of its own,
+   * so an item linking to its slug would be a dead end with no navigation to
+   * recover through. The feed used to take a `homepageSlug` to special-case
+   * that; the scan now hands it the `index` slug, so this is `noteHref`
+   * answering the question it has always answered, and the whole mechanism.
    */
-  it('sends the homepage note to the site root, not to a slug with no page', () => {
-    const notes = [note({ slug: 'home', title: 'Home page' })]
-    const withHome = feedXml({ ...options, notes, homepageSlug: 'home' })
-    expect(value(item(withHome, 'Home page'), 'link')).toBe('https://example.com/')
-
+  it('sends the note claiming / to the site root, not to a slug with no page', () => {
     const withIndex = feedXml({ ...options, notes: [note({ slug: 'index', title: 'Landing' })] })
     expect(value(item(withIndex, 'Landing'), 'link')).toBe('https://example.com/')
+    expect(value(item(withIndex, 'Landing'), 'guid')).toBe('https://example.com/')
   })
 
   it('percent-encodes a unicode slug the way every page link does', () => {
@@ -607,6 +605,32 @@ describe('redirects', () => {
   it('lets config redirects win, and normalises their slashes', () => {
     const out = buildRedirects({ notes, taken: [], extra: { 'zettel': 'somewhere-else' } })
     expect(out['/zettel']).toBe('/somewhere-else')
+  })
+
+  /**
+   * The note claiming `/` was published at its own slug until it was promoted,
+   * so that URL is in bookmarks and inbound links. Recomputed from the path,
+   * which is why no `previousSlug` field had to be invented.
+   */
+  it('keeps the promoted note’s old URL working', () => {
+    const promoted = [
+      { slug: 'index', path: 'Zettelkasten.md', aliases: [] },
+      { slug: 'index', path: 'notes/Deep Note.md', aliases: [] },
+    ] as never
+    const out = buildRedirects({ notes: promoted, taken: [] })
+    expect(out['/zettelkasten']).toBe('/')
+    expect(out['/notes/deep-note']).toBe('/')
+  })
+
+  it('emits nothing for a note that was at the root all along', () => {
+    const rooted = [{ slug: 'index', path: 'index.md', aliases: [] }] as never
+    expect(buildRedirects({ notes: rooted, taken: [] })).toEqual({})
+  })
+
+  it('gives up the old URL rather than shadow a note that has taken it', () => {
+    const promoted = [{ slug: 'index', path: 'Zettelkasten.md', aliases: [] }] as never
+    const out = buildRedirects({ notes: promoted, taken: ['zettelkasten'] })
+    expect(out['/zettelkasten']).toBeUndefined()
   })
 
   it('renders the Netlify and Vercel formats', () => {

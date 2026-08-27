@@ -12,7 +12,7 @@ import sitemap from '@astrojs/sitemap'
 import { fileURLToPath } from 'node:url'
 
 import jotter from './jotter.config'
-import { scanVault, homepageNote } from './src/lib/vault'
+import { scanVault } from './src/lib/vault'
 import { buildGraph } from './src/lib/graph'
 import { jotterPlugins, satteriFeatures } from './src/markdown'
 import { jotterVault } from './src/integrations/vault'
@@ -29,7 +29,11 @@ import { buildTree, folders } from './src/lib/tree'
 const vaultRoot =
   process.env.JOTTER_VAULT_OVERRIDE ?? fileURLToPath(new URL(jotter.vault, import.meta.url))
 
-const vault = scanVault({ root: vaultRoot, publishGate: jotter.publishGate })
+const vault = scanVault({
+  root: vaultRoot,
+  publishGate: jotter.publishGate,
+  homepage: jotter.homepage,
+})
 const graph = buildGraph(vault, jotter.linkResolution)
 
 const published = vault.notes.filter((note) => note.published)
@@ -60,7 +64,6 @@ const feed = jotter.features.rss
       siteUrl: jotter.url!,
       locale: jotter.locale,
       author: jotter.author || undefined,
-      homepageSlug: homepageNote(vault, jotter.homepage)?.slug,
     }
   : undefined
 
