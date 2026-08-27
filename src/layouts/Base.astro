@@ -16,6 +16,7 @@
 import { Font } from 'astro:assets'
 
 import { config } from '../lib/site.js'
+import { FEED_PATH } from '../lib/feed.js'
 import { t } from '../i18n/index.js'
 import Header from '../components/Header.astro'
 import Sidebar from '../components/Sidebar.astro'
@@ -51,6 +52,19 @@ const Search = showSearch ? (await import('../components/Search.astro')).default
 const pageTitle = title ? `${title} — ${config.title}` : config.title
 const pageDescription = description || config.description
 const canonical = config.url ? new URL(Astro.url.pathname, config.url).href : undefined
+
+/**
+ * How a browser and every reader *discover* a feed. Without this the file is
+ * findable only by guessing its name, and the standing advice is still to link
+ * it from every page — so it goes in the layout all of them share.
+ *
+ * On the same `config.url` condition as the canonical link above, and a plain
+ * `config.features.rss` test rather than a `JOTTER_*` literal: the `vite.define`
+ * trap that `Analytics.astro` and `Search.astro` document is about a component's
+ * *bundled* `<script>` shipping whenever the component is imported. This is one
+ * `<link>` and no script.
+ */
+const feedUrl = config.features.rss && config.url ? new URL(FEED_PATH, config.url).href : undefined
 ---
 
 <!doctype html>
@@ -62,6 +76,16 @@ const canonical = config.url ? new URL(Astro.url.pathname, config.url).href : un
 
     {pageDescription && <meta name="description" content={pageDescription} />}
     {canonical && <link rel="canonical" href={canonical} />}
+    {
+      feedUrl && (
+        <link
+          rel="alternate"
+          type="application/rss+xml"
+          title={t('site.feed', { title: config.title })}
+          href={feedUrl}
+        />
+      )
+    }
     {config.noIndex && <meta name="robots" content="noindex, nofollow" />}
 
     <meta property="og:type" content="website" />

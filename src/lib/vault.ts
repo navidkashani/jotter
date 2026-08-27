@@ -348,5 +348,29 @@ function emptyVault(root: string, warnings: string[]): Vault {
   }
 }
 
+/**
+ * The note claiming `/`: whatever `homepage` names — by slug, by vault path or
+ * by filename — else a note that slugified to `index`. Absent both, the site
+ * gets a generated landing page.
+ *
+ * Pure, and here rather than only in `src/lib/site.ts`, because two callers
+ * need the same answer and must not compute it twice. `src/pages/[...slug].astro`
+ * gives this note *no route of its own* — it owns `/` instead — so the feed has
+ * to know which note that is in order to link it to `/` rather than to a slug
+ * with no page behind it. `astro.config.ts` cannot import `src/lib/site.ts` to
+ * find out: that module resolves the vault root from its own bundled
+ * environment, which is not the one the config is holding.
+ */
+export function homepageNote(vault: Vault, homepage?: string): VaultNote | undefined {
+  if (homepage) {
+    const named =
+      vault.bySlug.get(homepage) ??
+      vault.notes.find((n) => n.published && (n.path === homepage || n.filename === homepage))
+    if (named?.published) return named
+  }
+  const index = vault.bySlug.get('index')
+  return index?.published ? index : undefined
+}
+
 /** Testing seam: the scan is memoized for the life of the process. */
 export const clearVaultCache = (): void => void cache.clear()

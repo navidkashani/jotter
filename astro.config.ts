@@ -12,7 +12,7 @@ import sitemap from '@astrojs/sitemap'
 import { fileURLToPath } from 'node:url'
 
 import jotter from './jotter.config'
-import { scanVault } from './src/lib/vault'
+import { scanVault, homepageNote } from './src/lib/vault'
 import { buildGraph } from './src/lib/graph'
 import { jotterPlugins, satteriFeatures } from './src/markdown'
 import { jotterVault } from './src/integrations/vault'
@@ -39,6 +39,30 @@ const routed = [
   ...published.map((note) => note.slug),
   ...folders(buildTree(published)).map((folder) => folder.slug),
 ]
+
+/**
+ * Feed inputs, or nothing at all.
+ *
+ * Built here and only when the flag is on, so `features.rss: false` means the
+ * integration never receives the option and never writes the file — the same
+ * shape as `search off writes no dist/pagefind/`, rather than a file emitted
+ * and then cleaned up.
+ *
+ * `jotter.url!` is asserted, not guarded. The schema refuses `features.rss`
+ * without `url` and names the key, so a build that reaches this line has one;
+ * a `&& jotter.url` here would turn that loud config error into a silently
+ * missing feed.
+ */
+const feed = jotter.features.rss
+  ? {
+      title: jotter.title,
+      description: jotter.description,
+      siteUrl: jotter.url!,
+      locale: jotter.locale,
+      author: jotter.author || undefined,
+      homepageSlug: homepageNote(vault, jotter.homepage)?.slug,
+    }
+  : undefined
 
 const redirects = buildRedirects({
   notes: published,
@@ -138,6 +162,7 @@ export default defineConfig({
       redirects,
       noIndex: jotter.noIndex,
       siteUrl: jotter.url,
+      feed,
     }),
     /**
      * After the vault integration, so `dist/` is finished before Pagefind

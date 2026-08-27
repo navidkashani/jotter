@@ -20,6 +20,7 @@ import type { AstroIntegration } from 'astro'
 
 import { VAULT_ASSET_BASE } from '../lib/href.js'
 import { toNetlify, toVercel, robotsTxt } from '../lib/redirects.js'
+import { feedXml, FEED_PATH, type FeedOptions } from '../lib/feed.js'
 import type { Vault } from '../lib/vault.js'
 import type { Graph } from '../lib/graph.js'
 
@@ -68,6 +69,15 @@ export interface VaultIntegrationOptions {
   noIndex: boolean
   /** Absolute site URL, when one is configured. */
   siteUrl?: string
+  /**
+   * Everything `feedXml` needs except the notes, which this already has.
+   *
+   * Present **only** when `features.rss` is on, and that is the whole design:
+   * off means the option is absent and nothing is written — no `existsSync`,
+   * no cleanup path, no stale `rss.xml` surviving a flag being turned back off
+   * in a `dist/` that was not cleaned.
+   */
+  feed?: Omit<FeedOptions, 'notes'>
 }
 
 export function jotterVault({
@@ -76,6 +86,7 @@ export function jotterVault({
   redirects,
   noIndex,
   siteUrl,
+  feed,
 }: VaultIntegrationOptions): AstroIntegration {
   return {
     name: 'jotter:vault',
@@ -147,6 +158,23 @@ export function jotterVault({
           await writeFile(join(out, '_redirects'), toNetlify(redirects))
           await writeFile(join(out, 'vercel.json'), toVercel(redirects))
           logger.info(`Wrote ${count} redirect(s) to _redirects and vercel.json.`)
+        }
+
+        /**
+         * Beside the redirects and `robots.txt`, because this is already where
+         * build-time files derived from config plus vault are written. A
+         * separate integration would duplicate that plumbing for one
+         * `writeFile`; `jotterSearch` earned its own because it runs Pagefind.
+         *
+         * The whole vault goes in, not the published subset: filtering is
+         * `feedXml`'s job, in one tested place, precisely because the feed's
+         * note list is the only one in the build that is not the route list.
+         */
+        if (feed) {
+          const xml = feedXml({ notes: vault.notes, ...feed })
+          await writeFile(join(out, FEED_PATH.slice(1)), xml)
+          const items = (xml.match(/<item>/g) ?? []).length
+          logger.info(`Wrote ${items} item(s) to ${FEED_PATH}.`)
         }
 
         await writeFile(

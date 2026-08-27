@@ -9,7 +9,7 @@
 import { resolve } from 'node:path'
 
 import jotter from '../../jotter.config'
-import { scanVault, type VaultNote } from './vault.js'
+import { scanVault, homepageNote, type VaultNote } from './vault.js'
 import { buildGraph } from './graph.js'
 import { buildTree, folders } from './tree.js'
 import { tagTree, expandTag } from './tags.js'
@@ -58,18 +58,11 @@ export const notesByTag = (() => {
 })()
 
 /**
- * The note claiming `/`: whatever `homepage` names, else a note that slugified
- * to `index`. Absent both, the site gets a generated landing page.
+ * The note claiming `/`. Resolved in `src/lib/vault.ts` rather than here,
+ * because `astro.config.ts` needs the same answer for the feed and there must
+ * be exactly one.
  */
-export const homepage: VaultNote | undefined = (() => {
-  if (config.homepage) {
-    const named =
-      vault.bySlug.get(config.homepage) ??
-      notes.find((n) => n.path === config.homepage || n.filename === config.homepage)
-    if (named?.published) return named
-  }
-  return vault.bySlug.get('index')?.published ? vault.bySlug.get('index') : undefined
-})()
+export const homepage: VaultNote | undefined = homepageNote(vault, config.homepage)
 
 export const backlinksFor = (slug: string) => graph.backlinks.get(slug) ?? []
 export const outgoingFor = (slug: string) => graph.outgoing.get(slug) ?? []

@@ -54,6 +54,10 @@ export default defineConfig({ linkResolution: 'absolute' })
 | `Plugin.SyntaxHighlighting` | Built in (Shiki, both themes) |
 | `Plugin.TableOfContents` | `features.toc` |
 | `Plugin.ContentIndex` and the search component | `features.search` — Pagefind builds the index at the end of `astro build`, and jotter draws the modal in its own tokens rather than using Pagefind's web components |
+| `Plugin.ContentIndex({ enableRSS: true })` | `features.rss`, plus `url` — jotter refuses the flag without one, because a feed's links resolve against nothing. The feed is `/rss.xml`, not Quartz's `/index.xml`; keep your existing subscribers with `redirects: { '/index.xml': '/rss.xml' }`, which jotter writes into both `_redirects` and `vercel.json` |
+| `rssFullHtml` | **No equivalent.** The excerpt only, which is Quartz's own default. Full HTML would mean rewriting every wikilink, image and transclusion to an absolute URL, and that is the layer Open Publish exists to be |
+| `rssLimit` | **No equivalent.** Fixed at 50. Quartz's default of 10 is too few once you notice that a *revision* re-enters the window, so a weekend of tidying can evict a new note before a subscriber polls — and readers dedupe on `guid`, so they never see it |
+| `rssSlug` | **No equivalent.** Fixed at `rss.xml` |
 | `quartz.layout.ts` | `layout: 'column' \| 'panels'` and `nav: 'tree' \| 'tags' \| 'none'` |
 | `quartz/styles/custom.scss` | `src/styles/custom.css` (plain CSS) |
 
@@ -77,6 +81,12 @@ export default defineConfig({ linkResolution: 'absolute' })
   GIF passed through untouched.
 - **Obsidian's embed pipe rule.** `![[img.png|300]]` is a size,
   `![[img.png|A caption]]` is a caption. Quartz treats the pipe as alt text.
+- **A feed that validates.** Quartz's is missing `<atom:link rel="self">` and
+  the namespace it needs, `<language>`, `<lastBuildDate>` and an explicit
+  `isPermaLink`; it hardcodes `https://` rather than using the URL you
+  configured; and it wraps note text in CDATA with no `]]>` guard, so a note
+  containing that sequence corrupts the document. jotter escapes instead, which
+  has no such hole to forget, and the build asserts the rest.
 - **Search that indexes your notes and nothing else.** Quartz's
   `ContentIndex` indexes every emitted page, so a hit can land on a tag listing
   that merely mentions the note you wanted. jotter marks only note pages as

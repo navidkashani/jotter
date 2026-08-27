@@ -89,6 +89,7 @@ export const jotterConfigSchema = z
         graph: z.boolean().default(false),
         search: z.boolean().default(false),
         hoverPreview: z.boolean().default(false),
+        /** `/rss.xml`, written at build. Requires `url` — see the root refine. */
         rss: z.boolean().default(false),
       })
       .prefault({}),
@@ -136,6 +137,19 @@ export const jotterConfigSchema = z
     redirects: z.record(z.string(), z.string()).default({}),
   })
   .strict()
+  /**
+   * The one constraint spanning two top-level keys, which is why it is here
+   * rather than beside either of them.
+   *
+   * Every link in a feed has to be absolute — a reader resolves them against
+   * nothing. So `features.rss` without `url` is not a degraded feed, it is one
+   * nobody can follow, and it fails the build naming the key it needs in the
+   * same shape as the two analytics refinements above. Degrade loudly.
+   */
+  .refine((c) => !c.features.rss || !!c.url, {
+    path: ['url'],
+    message: 'is required when `features.rss` is on: a feed’s links must be absolute',
+  })
 
 export type JotterConfig = z.infer<typeof jotterConfigSchema>
 export type JotterConfigInput = z.input<typeof jotterConfigSchema>

@@ -9,6 +9,8 @@ import { svgIntrinsicSize, isOptimizable } from '../src/lib/embed.js'
 import { sectionOf, preresolveLinks, expandTransclusions } from '../src/lib/transclude.js'
 import { defineConfig, jotterConfigSchema } from '../src/lib/config.js'
 import { buildRedirects, toNetlify, toVercel, robotsTxt } from '../src/lib/redirects.js'
+import { feedXml, MAX_ITEMS, FEED_PATH } from '../src/lib/feed.js'
+import type { VaultNote } from '../src/lib/vault.js'
 
 const VAULT = fileURLToPath(new URL('./fixtures/vault', import.meta.url))
 const vault = () => {
@@ -308,6 +310,270 @@ describe('config — analytics', () => {
     expect(() =>
       defineConfig({ analytics: { provider: 'plausible', id: 'X', src: '<script>' } } as never),
     ).toThrow(/src/)
+  })
+})
+
+describe('feed', () => {
+  const v = vault()
+
+  /**
+   * The whole vault, unfiltered, exactly as `src/integrations/vault.ts` hands
+   * it over. Filtering is `feedXml`'s own job, and that is what the first test
+   * below is really checking.
+   */
+  const options = {
+    notes: v.notes,
+    title: 'Slipbox',
+    description: 'A garden of notes.',
+    siteUrl: 'https://example.com',
+    locale: 'en',
+  }
+  const xml = feedXml(options)
+
+  /** One item's inner XML, by the title it carries. */
+  const item = (feed: string, title: string) =>
+    [...feed.matchAll(/<item>([\s\S]*?)<\/item>/g)]
+      .map((m) => m[1])
+      .find((body) => body.includes(`<title>${title}</title>`)) ?? ''
+  const value = (body: string, tag: string) =>
+    body.match(new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)</${tag}>`))?.[1] ?? ''
+  const titles = (feed: string) =>
+    [...feed.matchAll(/<item>[\s\S]*?<title>([^<]*)<\/title>/g)].map((m) => m[1])
+
+  /**
+   * A synthetic note, because the fixture vault has no note with an empty
+   * excerpt and none whose title is hostile to XML. Shaped rather than scanned:
+   * `feedXml` reads six fields and inventing a whole markdown file to exercise
+   * one of them would hide what each test is about.
+   */
+  const note = (over: Partial<VaultNote> = {}): VaultNote =>
+    ({
+      path: 'Note.md',
+      slug: 'note',
+      filename: 'Note',
+      title: 'Note',
+      aliases: [],
+      published: true,
+      frontmatter: {},
+      body: '',
+      tags: [],
+      excerpt: 'An excerpt.',
+      bodyOffset: 0,
+      dates: { created: new Date('2026-01-02T00:00:00Z'), updated: new Date('2026-03-04T00:00:00Z') },
+      ...over,
+    }) as VaultNote
+
+  /**
+   * The reason this module takes the *whole* vault rather than a filtered list.
+   * The feed is the one output whose note list is not the route list, so a leak
+   * here is a leak nothing else in the build would catch.
+   */
+  it('never emits an unpublished note, title or link', () => {
+    expect(xml).not.toContain('My Very Private Title')
+    expect(xml).not.toContain('secret-log')
+    expect(titles(xml)).not.toContain('Secret Log')
+  })
+
+  it('windows by updated, newest first', () => {
+    const order = titles(xml)
+    const updated = order.map((title) => new Date(value(item(xml, title), 'atom:updated')).getTime())
+    expect(updated).toEqual([...updated].sort((a, b) => b - a))
+  })
+
+  /**
+   * `pubDate` is the *created* date and must not move when a typo is fixed:
+   * readers sort by it, and a stable guid means a revision never resurfaces
+   * anyway. Wiring both elements to `updated` is the mistake this catches.
+   */
+  it('publishes at created and revises at updated', () => {
+    const home = item(xml, 'Home')
+    expect(value(home, 'pubDate')).toBe(new Date('2026-01-02').toUTCString())
+    expect(value(home, 'atom:updated')).toBe(new Date('2026-03-04').toISOString())
+    expect(value(home, 'pubDate')).not.toBe(value(home, 'atom:updated'))
+  })
+
+  /** Two formats, one item, and they are not interchangeable. */
+  it('spells pubDate as RFC-822 and atom:updated as RFC-3339', () => {
+    for (const title of titles(xml)) {
+      const body = item(xml, title)
+      const pub = value(body, 'pubDate')
+      const updated = value(body, 'atom:updated')
+      expect(pub).toMatch(/^[A-Z][a-z]{2}, \d{2} [A-Z][a-z]{2} \d{4} \d{2}:\d{2}:\d{2} GMT$/)
+      expect(updated).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
+      expect(Number.isNaN(new Date(pub).getTime())).toBe(false)
+      expect(Number.isNaN(new Date(updated).getTime())).toBe(false)
+    }
+  })
+
+  /**
+   * A revision re-enters the window, so revising old notes can push an unread
+   * new one out of a short feed before a subscriber polls — silent loss, since
+   * readers dedupe on guid and it never comes back. Hence 50 rather than
+   * Quartz's 10.
+   */
+  it('caps the window, keeping the most recently updated', () => {
+    const many = Array.from({ length: MAX_ITEMS + 10 }, (_, i) =>
+      note({
+        slug: `n-${i}`,
+        title: `N ${i}`,
+        dates: { created: new Date(2026, 0, 1), updated: new Date(2026, 0, 1 + i) },
+      }),
+    )
+    const capped = feedXml({ ...options, notes: many })
+    expect(titles(capped)).toHaveLength(MAX_ITEMS)
+    expect(titles(capped)[0]).toBe(`N ${MAX_ITEMS + 9}`)
+    expect(capped).not.toContain('<title>N 0</title>')
+  })
+
+  it('links and guids are absolute, on the configured origin, and agree with noteHref', () => {
+    for (const title of titles(xml)) {
+      const body = item(xml, title)
+      const link = value(body, 'link')
+      expect(link.startsWith('https://example.com/')).toBe(true)
+      expect(value(body, 'guid')).toBe(link)
+    }
+    const luhmann = item(xml, 'Niklas Luhmann')
+    expect(value(luhmann, 'link')).toBe(`https://example.com${noteHref('notes/luhmann')}`)
+  })
+
+  it('marks the guid as a permalink rather than trusting the default', () => {
+    expect(xml).toContain('<guid isPermaLink="true">')
+  })
+
+  /**
+   * `src/pages/[...slug].astro` gives the homepage note no route of its own, so
+   * an item linking to its slug would be a dead end with no navigation to
+   * recover through. The `index` slug is the same question, answered by
+   * `noteHref` itself.
+   */
+  it('sends the homepage note to the site root, not to a slug with no page', () => {
+    const notes = [note({ slug: 'home', title: 'Home page' })]
+    const withHome = feedXml({ ...options, notes, homepageSlug: 'home' })
+    expect(value(item(withHome, 'Home page'), 'link')).toBe('https://example.com/')
+
+    const withIndex = feedXml({ ...options, notes: [note({ slug: 'index', title: 'Landing' })] })
+    expect(value(item(withIndex, 'Landing'), 'link')).toBe('https://example.com/')
+  })
+
+  it('percent-encodes a unicode slug the way every page link does', () => {
+    const cyrillic = item(xml, 'Заметка')
+    expect(value(cyrillic, 'link')).toBe(
+      'https://example.com/notes/%D0%B7%D0%B0%D0%BC%D0%B5%D1%82%D0%BA%D0%B0',
+    )
+  })
+
+  /**
+   * Escaped, never CDATA: a CDATA section ends at the first `]]>`, so a note
+   * containing one would terminate it early and corrupt the document. Quartz's
+   * feed has exactly that hole.
+   */
+  it('escapes hostile text rather than wrapping it in CDATA', () => {
+    const hostile = feedXml({
+      ...options,
+      notes: [note({ title: 'A & B <tag> ]]> "quoted" it’s', excerpt: 'Ampersand & angle <' })],
+    })
+    expect(hostile).not.toContain('<![CDATA[')
+    expect(hostile).toContain('<title>A &amp; B &lt;tag&gt; ]]&gt; &quot;quoted&quot; it’s</title>')
+    expect(hostile).toContain('<description>Ampersand &amp; angle &lt;</description>')
+    // Nothing outside a tag is a bare `&`, which is the property that matters.
+    expect(hostile.replace(/&(?:amp|lt|gt|quot|apos|#\d+);/g, '')).not.toContain('&')
+  })
+
+  it('emits one category per tag, and none for an untagged note', () => {
+    const zettel = item(xml, 'Zettelkasten')
+    expect([...zettel.matchAll(/<category>([^<]*)<\/category>/g)].map((m) => m[1])).toEqual([
+      'method/zettelkasten',
+      'inline-ish',
+      'plain',
+    ])
+    expect(item(xml, 'Niklas Luhmann')).not.toContain('<category>')
+  })
+
+  /**
+   * RSS's `<author>` requires an e-mail address and `config.author` is a name,
+   * so the profile's advice is `dc:creator` — and never both.
+   */
+  it('names an author only when one is configured', () => {
+    expect(xml).not.toContain('<dc:creator>')
+    expect(xml).not.toContain('<author>')
+    const credited = feedXml({ ...options, author: 'Navid Kashani' })
+    expect(credited).toContain('<dc:creator>Navid Kashani</dc:creator>')
+    expect(credited).not.toContain('<author>')
+  })
+
+  /** RSS requires a title *or* a description; the title is always there. */
+  it('omits the description for a note with no prose rather than emitting an empty one', () => {
+    const silent = feedXml({ ...options, notes: [note({ excerpt: '' })] })
+    expect(item(silent, 'Note')).not.toContain('<description>')
+    expect(silent).not.toContain('<description></description>')
+  })
+
+  it('carries the channel children RSS requires, and declares both namespaces', () => {
+    expect(xml).toContain('xmlns:atom="http://www.w3.org/2005/Atom"')
+    expect(xml).toContain('xmlns:dc="http://purl.org/dc/elements/1.1/"')
+    expect(xml).toContain('<title>Slipbox</title>')
+    expect(xml).toContain('<link>https://example.com/</link>')
+    expect(xml).toContain('<description>A garden of notes.</description>')
+    expect(xml).toContain('<language>en</language>')
+    expect(xml).toContain(
+      `<atom:link href="https://example.com${FEED_PATH}" rel="self" type="application/rss+xml"/>`,
+    )
+  })
+
+  /** An empty `<description>` is invalid, and it is a required channel child. */
+  it('falls back to the title when no description is configured', () => {
+    const bare = feedXml({ ...options, description: '' })
+    expect(bare).toContain('<description>Slipbox</description>')
+  })
+
+  /**
+   * `lastBuildDate` is the newest item's `updated`, never `new Date()`, so a
+   * deploy diff of two unchanged builds is empty.
+   */
+  it('stamps lastBuildDate from the content, so two builds are byte-identical', () => {
+    const newest = titles(xml)[0]
+    expect(xml).toContain(
+      `<lastBuildDate>${new Date(value(item(xml, newest), 'atom:updated')).toUTCString()}</lastBuildDate>`,
+    )
+    expect(feedXml(options)).toBe(xml)
+  })
+
+  it('still produces a valid channel for an empty vault', () => {
+    const empty = feedXml({ ...options, notes: [] })
+    expect(empty).toContain('<channel>')
+    expect(empty).toContain('<description>A garden of notes.</description>')
+    expect(empty).not.toContain('<item>')
+    // Nothing was built, so there is no last build to report.
+    expect(empty).not.toContain('<lastBuildDate>')
+  })
+})
+
+describe('config — rss', () => {
+  it('leaves the feed off by default', () => {
+    expect(defineConfig({}).features.rss).toBe(false)
+  })
+
+  /**
+   * A feed of relative links is not a degraded feed, it is one no reader can
+   * resolve. Degrade loudly, naming the key that is missing.
+   */
+  it('refuses features.rss without a url, naming url', () => {
+    expect(() => defineConfig({ features: { rss: true } })).toThrow(/url/)
+  })
+
+  it('accepts features.rss with a url', () => {
+    const config = defineConfig({ features: { rss: true }, url: 'https://example.com' })
+    expect(config.features.rss).toBe(true)
+    expect(config.url).toBe('https://example.com')
+  })
+
+  it('still parses with the feed off and no url', () => {
+    expect(defineConfig({ features: { rss: false } }).url).toBeUndefined()
+  })
+
+  /** Wrapping the root in a refinement must not stop `.strict()` biting. */
+  it('keeps rejecting an unknown key through the refinement', () => {
+    expect(() => defineConfig({ colour: 'blue' } as never)).toThrow()
   })
 })
 

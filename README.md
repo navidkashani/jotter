@@ -56,7 +56,7 @@ import { defineConfig } from './src/lib/config'
 export default defineConfig({
   title: 'Slipbox',
   description: '',
-  url: 'https://example.com',   // needed for sitemap and canonical links
+  url: 'https://example.com',   // needed for sitemap, canonical links and RSS
   author: '',
 
   locale: 'en',
@@ -82,7 +82,7 @@ export default defineConfig({
     graph: false,               // the local graph — `layout: 'panels'` only
     hoverPreview: false,        // excerpt cards on hovering a link
     search: false,              // Cmd/Ctrl+K full-text search over your notes
-    rss: false,                 // v2
+    rss: false,                 // /rss.xml — requires `url`
   },
 
   analytics: {
@@ -127,7 +127,10 @@ By default every note is published unless it says otherwise. Set
 
 An excluded note gets no page, no route, and no mention. Links to it render as
 inert `<span class="dead-link">` labelled with the filename the author typed —
-**never with the note's own title.** The build asserts this.
+**never with the note's own title.** The build asserts this over every text
+file in `dist/`, not only the pages: the feed and the sitemap carry titles too,
+and a check that read only HTML would have said "anywhere in `dist/`" while
+reading none of them.
 
 ---
 
@@ -190,6 +193,7 @@ have falls back rather than emitting a link to a page that will not exist.
 | `/404` | Offers search and recent notes |
 | `/_vault/*` | Attachments Astro does not process (SVG, GIF, video, PDF) |
 | `/pagefind/*` | The search index, with `features.search` on. Disallowed in `robots.txt` |
+| `/rss.xml` | The feed, with `features.rss` on. Linked from every page |
 
 ---
 
@@ -199,8 +203,8 @@ have falls back rather than emitting a link to a page that will not exist.
 npm run dev          # http://localhost:4321
 npm run build        # astro build, then the build assertions
 npm run verify       # the assertions alone, against the current dist/
-npm run verify:full  # also rebuilds with features off, with analytics on, and at 1,000 notes
-npm test             # 274 unit tests
+npm run verify:full  # also rebuilds with features off, analytics on, RSS on, and at 1,000 notes
+npm test             # 296 unit tests
 npm run check        # astro check
 npm run clean        # see the note below
 ```
@@ -341,6 +345,48 @@ shaped like "anything the user typed" is not an assertion. Six providers, six
 known origins — or none, which is the default. If you need something else, paste
 its snippet into `src/layouts/Base.astro`.
 
+And **RSS**, off by default and the last v1 flag the build did not honour.
+`features.rss: true` writes `/rss.xml` at the end of `astro build` and links it
+from the `<head>` of every page, which is how a browser and every reader find
+it. It needs `url` — a feed's links are resolved against nothing, so a relative
+one is not a degraded link but an unfollowable one, and the config refuses the
+pair rather than shipping a feed nobody can use.
+
+Items carry the note's title, its excerpt, its tags as `<category>`, and both of
+its dates. That last part is worth stating rather than leaving to be
+discovered: **a revised note updates in place, it does not resurface.** Readers
+dedupe on `<guid>`, and RSS Guard stopped re-marking updated items unread in
+4.6.4 — FreshRSS behaves the same. So `<pubDate>` is the note's *created* date
+and never moves, because moving it would reshuffle a subscriber's list for
+nothing; the revision time goes in `<atom:updated>`, which is the element that
+means that. Two consecutive builds of an unchanged vault produce a
+byte-identical file.
+
+The window is the 50 most recently updated notes, a constant rather than a
+config key. Ten — Quartz's default — is too few once you notice that a
+revision re-enters the window: a weekend of tidying old notes can push a new one
+out before a fortnightly subscriber ever polls, and because of the guid rule
+above they will never be shown it. Fifty is wide enough that it cannot happen
+and still a few KB at any vault size. A feed is a change notification; `/notes`
+is the archive, one click from every item.
+
+The feed carries excerpts rather than full HTML — Quartz's default agrees — and
+escapes every value rather than wrapping it in CDATA, which closes the `]]>`
+hole a CDATA section has by construction. There is no XSLT stylesheet: it is
+the usual way to make a feed readable in a browser and it is dying, with
+Chrome's XSLT removal announced for November 2026 and Firefox and WebKit
+signalling the same. And there is no JSON Feed, which is still published
+*alongside* RSS rather than instead of it, so it would be a second surface to
+keep correct for readers that already accept the first.
+
+One thing jotter cannot do from the build: **set the Content-Type**. Netlify and
+Vercel both serve `.xml` as `application/xml` by default and every reader
+accepts that, but misconfigured hosts are reported in the wild. If a reader
+refuses your feed, check the header your host is actually sending.
+
+`noIndex: true` does not suppress the feed. `noIndex` is about crawlers, and a
+subscription is something you opted into twice — the flag and a `url`.
+
 ### What "no network" means now
 
 It used to mean *nothing jotter ships reaches the network*. Search ended that
@@ -378,7 +424,7 @@ injected, so configuring `cloudflare` here counts twice. And a Netlify or Vercel
 preview deploy is a production build, so the tag ships there too — Plausible and
 Fathom simply will not count a domain you have not registered, and GA4 will.
 
-**Still to come:** OG images, RSS, and the Open Publish `scripts/` layer.
+**Still to come:** OG images and the Open Publish `scripts/` layer.
 
 ## License
 

@@ -4,6 +4,7 @@
   "site.openNavigation": "Open navigation",
   "site.closeNavigation": "Close navigation",
   "site.search": "Search",
+  "site.feed": "{title} — RSS feed",
 
   "search.placeholder": "Search notes…",
   "search.results": "{count} results",

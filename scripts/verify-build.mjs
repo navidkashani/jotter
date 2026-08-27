@@ -64,6 +64,29 @@ const pages = await Promise.all(
   htmlFiles.map(async (file) => ({ file: relative(DIST, file), html: await readFile(file, 'utf8') })),
 )
 
+/**
+ * Every text output in `dist/`, not only the pages.
+ *
+ * `pages` is `.html` and nothing else, which was invisible for as long as HTML
+ * was all jotter emitted that carried a note's *words*. The feed ends that: it
+ * carries titles and excerpts, it is published to the world, and a publish-gate
+ * check that reads only `pages` would not read one byte of it — while claiming
+ * to cover "anywhere in dist/". The feed's note list is also the one list in
+ * the build that is not the route list, so a mistake in it is exactly what
+ * nothing else would catch.
+ *
+ * So the corpus widens once, here, rather than the gate gaining a second
+ * feed-shaped clause: the sitemap, `_redirects`, `vercel.json` and whatever is
+ * emitted next are covered by the same move. Binary output (images,
+ * attachments, Pagefind's index fragments) is skipped because a UTF-8 read of
+ * it would find nothing either way.
+ */
+const TEXT_OUTPUT = /\.(?:html|xml|json|txt|css|js|map|webmanifest)$/i
+const textFiles = await walk(DIST, (n) => TEXT_OUTPUT.test(n) || n === '_redirects')
+const outputs = await Promise.all(
+  textFiles.map(async (file) => ({ file: relative(DIST, file), text: await readFile(file, 'utf8') })),
+)
+
 /** Everything inside the rendered note body, where our markdown output lands. */
 const proseOf = (html) =>
   [...html.matchAll(/<div class="note-body prose">([\s\S]*?)<nav class="prev-next"|<div class="note-body prose">([\s\S]*?)<\/div>/g)]
@@ -118,14 +141,26 @@ section('Images')
 section('Publish gate')
 {
   const PRIVATE_TITLE = 'A title that must never reach the site'
-  const leaked = pages.filter(({ html }) => html.includes(PRIVATE_TITLE))
+  // Over `outputs`, not `pages`: this is jotter's strongest privacy claim and
+  // it should read every file that could carry a title out of the vault.
+  const leaked = outputs.filter(({ text }) => text.includes(PRIVATE_TITLE))
   check(leaked.length === 0, 'no unpublished note’s title appears anywhere in dist/', leaked.map((p) => p.file).join(', '))
 
   const routed = htmlFiles.some((f) => /half-formed/i.test(f))
   check(!routed, 'no unpublished note has a page of its own')
 
-  const linkedTo = pages.some(({ html }) => /href="[^"]*half-formed/i.test(html))
-  check(!linkedTo, 'nothing links to an unpublished note')
+  /**
+   * Anchored on the ways a *URL* is written rather than on the slug alone. The
+   * name legitimately appears as text in the demo — `Kitchen sink.md` links to
+   * `[[Half-formed]]`, which renders as a dead-link span showing the filename
+   * the author typed, which is the documented behaviour. What must never appear
+   * is a link that resolves to it, and in a feed those are `<link>` and
+   * `<guid>` rather than `href=`.
+   */
+  const linkedTo = outputs.filter(({ text }) =>
+    /(?:href="|<link>|<guid[^>]*>)[^"<]*half-formed/i.test(text),
+  )
+  check(!linkedTo.length, 'nothing links to an unpublished note', linkedTo.map((p) => p.file).join(', '))
 }
 
 /* -------------------------------------------- the compressHTML: jsx trap */
@@ -806,6 +841,281 @@ section('Search')
   }
 }
 
+/* -------------------------------------------------------------------- feed */
+
+/**
+ * A minimal XML well-formedness scan, hand-rolled.
+ *
+ * Node ships no XML parser and the feed takes no dependency to concatenate
+ * forty lines of markup, so this is deliberately narrow: it is aimed at the two
+ * ways a *generated* feed actually breaks — a tag that never closes, and an
+ * interpolated value that reached the file unescaped. Both are the failure
+ * Quartz's CDATA has by construction, and both are what `escapeXml` in
+ * `src/lib/feed.ts` exists to prevent.
+ *
+ * `xmllint --noout` and the W3C Feed Validation Service are the real parsers,
+ * and the README points at them. This is the one that runs on every build.
+ *
+ * Returns a reason, or `null` when nothing is wrong.
+ */
+const ENTITY = /^&(?:amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);/
+
+function xmlWellFormed(xml) {
+  const bareAmpersand = (text) => {
+    for (let k = 0; k < text.length; k++) {
+      if (text[k] === '&' && !ENTITY.test(text.slice(k))) return true
+    }
+    return false
+  }
+
+  const stack = []
+  let roots = 0
+  let i = 0
+
+  while (i < xml.length) {
+    const next = xml.indexOf('<', i)
+    const text = next === -1 ? xml.slice(i) : xml.slice(i, next)
+    if (bareAmpersand(text)) return `bare & in text near ${JSON.stringify(text.trim().slice(0, 40))}`
+    // Forbidden in content, and the exact hole an unguarded CDATA section has.
+    if (text.includes(']]>')) return 'literal ]]> in text'
+    if (next === -1) break
+
+    // Declarations, comments and processing instructions carry no structure.
+    if (xml.startsWith('<!--', next)) {
+      const close = xml.indexOf('-->', next)
+      if (close === -1) return 'unterminated comment'
+      i = close + 3
+      continue
+    }
+    if (xml.startsWith('<?', next) || xml.startsWith('<!', next)) {
+      const close = xml.indexOf('>', next)
+      if (close === -1) return 'unterminated declaration'
+      i = close + 1
+      continue
+    }
+
+    const end = xml.indexOf('>', next)
+    if (end === -1) return 'unterminated tag'
+    const tag = xml.slice(next + 1, end)
+    if (tag.includes('<')) return 'a < inside a tag'
+
+    if (tag.startsWith('/')) {
+      const name = tag.slice(1).trim()
+      if (stack.pop() !== name) return `</${name}> does not close the element that is open`
+      if (stack.length === 0) roots++
+    } else {
+      const name = tag.match(/^[^\s/>]+/)?.[0]
+      if (!name) return 'a tag with no name'
+      if (bareAmpersand(tag)) return `bare & in an attribute of <${name}>`
+      const attrs = tag.slice(name.length).replace(/\/$/, '')
+      if (/=\s*[^"'\s]/.test(attrs)) return `unquoted attribute value in <${name}>`
+      if (tag.endsWith('/')) {
+        if (stack.length === 0) roots++
+      } else {
+        stack.push(name)
+      }
+    }
+    i = end + 1
+  }
+
+  if (stack.length > 0) return `unclosed <${stack[stack.length - 1]}>`
+  if (roots !== 1) return `${roots} root element(s), expected 1`
+  return null
+}
+
+/**
+ * The assertions the feed feature owes, both halves.
+ *
+ * A function taking `pages`, like `thirdPartyOrigins()` above and for the same
+ * reason: on the committed config `url` is unset, so `features.rss` cannot be
+ * on, every check below is vacuously true and deleting the section outright
+ * would change nothing. `--full` rebuilds with the feed on and runs it again
+ * against real output, which is what gives it teeth.
+ *
+ * `MAX_ITEMS` is duplicated from `src/lib/feed.ts` rather than imported: this
+ * is a `.mjs` script and that is a TypeScript module. Kept as a named constant
+ * so a change there fails here loudly rather than widening the assertion.
+ */
+const FEED_MAX_ITEMS = 50
+
+async function feedSection(pages) {
+  const xml = await readFile(join(DIST, 'rss.xml'), 'utf8').catch(() => null)
+
+  const attr = (tag, name) => tag.match(new RegExp(`\\b${name}="([^"]*)"`))?.[1] ?? ''
+  /**
+   * Vault attachments are copied into `dist/_vault/` with no extension
+   * allowlist, so an `.html` file a note links to is in `pages` and is not
+   * jotter's markup — the same exemption `thirdPartyOrigins` names, for the
+   * same reason.
+   */
+  const authored = pages.filter(({ file }) => !file.startsWith(`_vault${sep}`))
+  const alternates = authored.flatMap(({ file, html }) =>
+    [...html.matchAll(/<link\b[^>]*>/g)]
+      .filter((m) => attr(m[0], 'rel') === 'alternate')
+      .map((m) => ({ file, tag: m[0] })),
+  )
+
+  if (!xml) {
+    /**
+     * Off means absent in *both* halves — no file, and no page advertising one
+     * — which is the pairing `search off writes no dist/pagefind/` already
+     * uses. A `rel="alternate"` pointing at a file that was never written is a
+     * reader subscribing to a 404.
+     */
+    pass('no feed in dist/', 'features.rss is off')
+    check(
+      alternates.length === 0,
+      'rss off leaves no rel="alternate" link on any page',
+      alternates.map((a) => a.file).join(', '),
+    )
+    return
+  }
+
+  const problem = xmlWellFormed(xml)
+  check(problem === null, 'the feed is well-formed XML', problem ?? '')
+
+  /** Everything before the first `<item>`: the channel's own children. */
+  const firstItem = xml.indexOf('<item>')
+  const channel = firstItem === -1 ? xml : xml.slice(0, firstItem)
+
+  // The three RSS requires. An empty one is as invalid as a missing one.
+  for (const element of ['title', 'link', 'description']) {
+    check(
+      new RegExp(`<${element}>[^<]+</${element}>`).test(channel),
+      `the channel carries a non-empty <${element}>`,
+    )
+  }
+  check(/<language>[^<]+<\/language>/.test(channel), 'the channel declares a <language>')
+
+  /**
+   * The profile requires it and the W3C validator warns without it. Quartz
+   * omits both this and the namespace it needs, which is why it is asserted
+   * rather than assumed.
+   */
+  const self = channel.match(/<atom:link\b[^>]*\brel="self"[^>]*>/)?.[0] ?? ''
+  check(!!self, 'the feed names its own address with atom:link rel="self"')
+  check(xml.includes('xmlns:atom="http://www.w3.org/2005/Atom"'), 'the atom namespace is declared')
+
+  const selfHref = attr(self, 'href')
+  let origin = ''
+  try {
+    origin = new URL(selfHref).origin
+  } catch {
+    fail('atom:link rel="self" carries an absolute URL', selfHref || '(none)')
+  }
+
+  const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].map((m) => m[1])
+  check(items.length > 0, 'the feed actually has items')
+  check(
+    items.length <= FEED_MAX_ITEMS,
+    `the feed is within its ${FEED_MAX_ITEMS}-item cap`,
+    `${items.length} items`,
+  )
+
+  const value = (body, element) =>
+    body.match(new RegExp(`<${element}(?:\\s[^>]*)?>([\\s\\S]*?)</${element}>`))?.[1] ?? ''
+
+  /**
+   * A relative link in a feed resolves against nothing — the reader has no
+   * document to resolve it in — and an off-origin one is a leak or a mistake.
+   * This is the check that `config.url` reached every URL the feed emits.
+   */
+  const offOrigin = []
+  const guidless = []
+  const badPub = []
+  const badUpdated = []
+
+  const RFC_822 = /^[A-Z][a-z]{2}, \d{2} [A-Z][a-z]{2} \d{4} \d{2}:\d{2}:\d{2} GMT$/
+  const RFC_3339 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/
+  const parses = (v) => !Number.isNaN(new Date(v).getTime())
+
+  for (const body of items) {
+    const title = value(body, 'title')
+    for (const [element, url] of [
+      ['link', value(body, 'link')],
+      ['guid', value(body, 'guid')],
+    ]) {
+      let same = false
+      try {
+        same = new URL(url).origin === origin
+      } catch {
+        same = false
+      }
+      if (!same) offOrigin.push(`${title}: <${element}>${url}`)
+    }
+    if (!/<guid\b[^>]*\bisPermaLink="(?:true|false)"/.test(body)) guidless.push(title)
+
+    const pub = value(body, 'pubDate')
+    const updated = value(body, 'atom:updated')
+    if (!RFC_822.test(pub) || !parses(pub)) badPub.push(`${title}: ${pub || '(none)'}`)
+    if (!RFC_3339.test(updated) || !parses(updated)) badUpdated.push(`${title}: ${updated || '(none)'}`)
+  }
+
+  check(offOrigin.length === 0, 'every item link and guid is absolute and on the site’s own origin', offOrigin.join('\n        '))
+
+  /**
+   * Unique, because the guid is the *only* thing a reader dedupes on. Two items
+   * sharing one collapse into a single entry in every reader, and the note that
+   * loses is one a subscriber is never shown.
+   *
+   * It is also the cheapest signal available for a config problem that has
+   * nothing to do with the feed: two notes both claiming `/`, which happens
+   * when `homepage:` names a note *and* the vault has an `index.md`. jotter
+   * routes one of them and the other gets no page at all — a site-wide bug the
+   * feed does not cause and cannot fix, but can at least name.
+   */
+  const guids = items.map((body) => value(body, 'guid'))
+  const duplicated = [...new Set(guids.filter((g, i) => guids.indexOf(g) !== i))]
+  check(
+    duplicated.length === 0,
+    'every guid is unique, so no item is deduped away by a reader',
+    duplicated.length
+      ? `${duplicated.join(', ')} — two notes claim the same URL; check whether \`homepage:\` names a note while the vault also has an index note`
+      : '',
+  )
+  check(guidless.length === 0, 'every guid states isPermaLink rather than trusting the default', guidless.join(', '))
+  check(badPub.length === 0, 'every <pubDate> is RFC-822', badPub.join('\n        '))
+  check(badUpdated.length === 0, 'every <atom:updated> is RFC-3339', badUpdated.join('\n        '))
+
+  /**
+   * The check that catches the two date elements being wired to the same value,
+   * which no format test can see: both would still parse, and the feed would
+   * still validate. The demo garden has notes with distinct `created:` and
+   * `updated:` frontmatter, so at least one item must differ — and if that ever
+   * stops being true, this fails and says so rather than passing vacuously.
+   */
+  const revised = items.filter(
+    (body) => new Date(value(body, 'pubDate')).getTime() !== new Date(value(body, 'atom:updated')).getTime(),
+  )
+  check(
+    revised.length > 0,
+    'a revised note publishes at created and updates at updated',
+    'every item has pubDate === atom:updated, so both are wired to the same date',
+  )
+
+  /**
+   * The discovery half. Without a `rel="alternate"` the file is findable only
+   * by guessing its name, and one pointing anywhere but at the feed that was
+   * actually written is a subscription that silently never updates.
+   */
+  const unadvertised = authored.filter(({ file }) => !alternates.some((a) => a.file === file))
+  check(unadvertised.length === 0, 'every page advertises the feed', unadvertised.map((p) => p.file).join(', '))
+  const wrongHref = alternates.filter((a) => attr(a.tag, 'href') !== selfHref)
+  check(
+    wrongHref.length === 0,
+    'every rel="alternate" resolves to the feed that was written',
+    wrongHref.map((a) => `${a.file}: ${attr(a.tag, 'href')}`).join(', '),
+  )
+
+  pass(
+    'feed',
+    `${items.length} item(s) at ${selfHref}, ${Math.round(Buffer.byteLength(xml) / 1024)} KB`,
+  )
+}
+
+section('Feed')
+await feedSection(pages)
+
 /* ------------------------------------------------------------ full mode */
 
 const run = (args, options = {}) =>
@@ -875,6 +1185,7 @@ if (FULL) {
     const unrewritten = [
       [/\bthemeToggle:\s*false/, 'features.themeToggle'],
       [/\bsearch:\s*false/, 'features.search'],
+      [/\brss:\s*false/, 'features.rss'],
       [/\bnav:\s*'none'/, 'nav'],
       ...(/\bprovider:/.test(original) ? [[/\bprovider:\s*'none'/, 'analytics.provider']] : []),
     ]
@@ -988,6 +1299,112 @@ if (FULL) {
           files.map(async (file) => ({ file: relative(DIST, file), html: await readFile(file, 'utf8') })),
         )
         thirdPartyOrigins(onPages)
+      }
+
+      await writeFile(configPath, original)
+      await clearContentStores(ROOT)
+    }
+  }
+
+  /**
+   * The third config rewrite, and the one that gives `section('Feed')`
+   * something to bite.
+   *
+   * On the committed config `url` is commented out, so `features.rss` cannot
+   * even be turned on — the schema refuses the pair — and every check in that
+   * section is vacuously true. Turning the feed on in the committed
+   * `jotter.config.ts` is the wrong way to fix that for the same reason
+   * analytics is left off: `url` is a claim about where the site lives, and a
+   * demo build that asserts `https://example.com` into its own canonical links
+   * and sitemap is a demo build lying about itself. A throwaway rebuild costs
+   * one `astro build` and touches nobody.
+   *
+   * `url` is the third top-level key these rewrites reach, and the first that
+   * is *commented out* rather than set — so turning the feed on means
+   * uncommenting a line, not replacing a value.
+   */
+  section('RSS on emits a feed every page advertises')
+  {
+    const configPath = join(ROOT, 'jotter.config.ts')
+    const original = await readFile(configPath, 'utf8')
+
+    /**
+     * `export default defineConfig({`, not `defineConfig({`. The docstring at
+     * the top of `jotter.config.ts` contains the words *`defineConfig({})`
+     * builds a working site* — so the shorter anchor matches a **comment**
+     * first, and a non-global `replace` would insert the key there and nowhere
+     * else. Caught by the guard below rather than shipped, but a guard firing
+     * on a config nobody mistyped is a guard nobody trusts.
+     */
+    const CALL = /export default defineConfig\(\{/
+    let on = original
+    if (/^\s*url:\s*'/m.test(original)) {
+      // Already set — a forker's own URL is better than ours, and leaving it
+      // means the origin assertions run against what they actually ship.
+    } else if (/^\s*\/\/\s*url:\s*'/m.test(original)) {
+      on = on.replace(/^(\s*)\/\/\s*(url:\s*'[^']*',)/m, '$1$2')
+    } else {
+      on = on.replace(CALL, `export default defineConfig({\n  url: 'https://example.com',`)
+    }
+    /**
+     * Three cases, because `features` is not a key every config has: the README
+     * documents `defineConfig({})` as a complete config, and one written that
+     * way has no `features:` block to insert `rss` into.
+     */
+    if (/\brss:\s*(?:true|false)/.test(on)) {
+      on = on.replace(/\brss:\s*(?:true|false)/, 'rss: true')
+    } else if (/\bfeatures:\s*\{/.test(on)) {
+      on = on.replace(/\bfeatures:\s*\{/, 'features: {\n    rss: true,')
+    } else {
+      on = on.replace(CALL, `export default defineConfig({\n  features: { rss: true },`)
+    }
+
+    /**
+     * The `unrewritten` guard, extended to a third key. It exists precisely so
+     * a regex that misses fails loudly instead of running the feed assertions
+     * against a build with no feed in it — where every one of them would pass
+     * for the wrong reason.
+     */
+    const unrewritten = [
+      [/^\s*url:\s*'https?:\/\//m, 'url'],
+      [/\brss:\s*true/, 'features.rss'],
+    ]
+      .filter(([re]) => !re.test(on))
+      .map(([, name]) => name)
+
+    if (unrewritten.length > 0) {
+      fail('the rss-on rewrite reached every key it needed to', `${unrewritten.join(', ')}; the checks below would be vacuous`)
+    } else {
+      await writeFile(configPath, on)
+      await clearContentStores(ROOT)
+
+      const { code, out } = await run(['astro', 'build'])
+      if (code !== 0) {
+        fail('build succeeds with rss on', out.slice(-800))
+      } else {
+        const files = await walk(DIST, (n) => n.endsWith('.html'))
+        const onPages = await Promise.all(
+          files.map(async (file) => ({ file: relative(DIST, file), html: await readFile(file, 'utf8') })),
+        )
+        await feedSection(onPages)
+
+        /**
+         * The publish gate again, against the build that has a feed in it. The
+         * widened corpus above is what makes this reach `rss.xml` at all, and
+         * this is the only pass where there is one to reach.
+         */
+        const onOutputs = await Promise.all(
+          (await walk(DIST, (n) => TEXT_OUTPUT.test(n) || n === '_redirects')).map(async (file) => ({
+            file: relative(DIST, file),
+            text: await readFile(file, 'utf8'),
+          })),
+        )
+        const leaked = onOutputs.filter(({ text }) => text.includes('A title that must never reach the site'))
+        check(
+          leaked.length === 0,
+          'no unpublished note’s title reaches the feed either',
+          leaked.map((p) => p.file).join(', '),
+        )
       }
 
       await writeFile(configPath, original)
