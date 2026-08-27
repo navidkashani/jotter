@@ -16,6 +16,7 @@ import { scanVault } from './src/lib/vault'
 import { buildGraph } from './src/lib/graph'
 import { jotterPlugins, satteriFeatures } from './src/markdown'
 import { jotterVault } from './src/integrations/vault'
+import { jotterSearch } from './src/integrations/search'
 import { buildRedirects } from './src/lib/redirects'
 import { buildTree, folders } from './src/lib/tree'
 
@@ -32,11 +33,17 @@ const vault = scanVault({ root: vaultRoot, publishGate: jotter.publishGate })
 const graph = buildGraph(vault, jotter.linkResolution)
 
 const published = vault.notes.filter((note) => note.published)
+
+/** Every slug this build routes: a note page, or a folder index above one. */
+const routed = [
+  ...published.map((note) => note.slug),
+  ...folders(buildTree(published)).map((folder) => folder.slug),
+]
+
 const redirects = buildRedirects({
   notes: published,
   taken: [
-    ...published.map((note) => note.slug),
-    ...folders(buildTree(published)).map((folder) => folder.slug),
+    ...routed,
     // Routes jotter owns itself.
     'notes',
     'tags',
@@ -132,6 +139,13 @@ export default defineConfig({
       noIndex: jotter.noIndex,
       siteUrl: jotter.url,
     }),
+    /**
+     * After the vault integration, so `dist/` is finished before Pagefind
+     * reads it. Registered at all only when the flag is on: the integration
+     * imports `pagefind` lazily, but an unconditional registration would still
+     * put an indexing pass, and a `dist/pagefind/`, into every build.
+     */
+    ...(jotter.features.search ? [jotterSearch({ locale: jotter.locale, slugs: routed })] : []),
     // A site that asked not to be indexed should not hand out a map of itself.
     ...(jotter.url && !jotter.noIndex ? [sitemap()] : []),
   ],
@@ -168,6 +182,14 @@ export default defineConfig({
        * not.
        */
       'import.meta.env.JOTTER_HOVER_PREVIEW': JSON.stringify(jotter.features.hoverPreview),
+
+      /**
+       * The same trap again, and this one is the widest of the three:
+       * `Search.astro` is mounted from `Base.astro`, so left as a plain
+       * `config.features.search` test its script would ship on *every page of
+       * the site* with the feature off.
+       */
+      'import.meta.env.JOTTER_SEARCH': JSON.stringify(jotter.features.search),
     },
   },
 

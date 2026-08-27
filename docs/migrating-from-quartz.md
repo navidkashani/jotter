@@ -4,8 +4,7 @@ Quartz is mature, free and well maintained. jotter is not trying to replace it
 for everyone. Move if you want a site that looks composed rather than
 generated, or if you have been fighting link resolution.
 
-Stay on Quartz if you depend on its plugin ecosystem, Mermaid, KaTeX, or its
-full-text search today.
+Stay on Quartz if you depend on its plugin ecosystem, Mermaid, or KaTeX.
 
 ---
 
@@ -50,6 +49,7 @@ export default defineConfig({ linkResolution: 'absolute' })
 | `Plugin.ObsidianFlavoredMarkdown` | Built in |
 | `Plugin.SyntaxHighlighting` | Built in (Shiki, both themes) |
 | `Plugin.TableOfContents` | `features.toc` |
+| `Plugin.ContentIndex` and the search component | `features.search` — Pagefind builds the index at the end of `astro build`, and jotter draws the modal in its own tokens rather than using Pagefind's web components |
 | `quartz.layout.ts` | `layout: 'column' \| 'panels'` and `nav: 'tree' \| 'tags' \| 'none'` |
 | `quartz/styles/custom.scss` | `src/styles/custom.css` (plain CSS) |
 
@@ -63,18 +63,25 @@ export default defineConfig({ linkResolution: 'absolute' })
   filename you typed.
 - **A design system you can actually change.** Forty tokens, one file, WCAG AA
   asserted at build in both themes.
-- **Almost no JavaScript.** A default build ships about 1.1 KB per page, and
-  about 22 KB on a note page with the local graph turned on. Quartz's client
-  bundle — `d3` entire, `pixi.js` and `@tweenjs/tween.js`, 107 KB before its
-  graph draws anything — is a documented complaint.
+- **Almost no JavaScript.** A default build ships about 1.1 KB per page, about
+  22 KB on a note page with the local graph turned on, and about 29 KB with the
+  graph and search both on. Quartz's client bundle — `d3` entire, `pixi.js` and
+  `@tweenjs/tween.js`, 107 KB before its graph draws anything — is a documented
+  complaint. Pagefind's runtime is fetched when a reader opens the modal, not
+  when the page loads, so a visit that never searches pays none of it.
 - **Images optimized by default.** AVIF/WebP with intrinsic dimensions; SVG and
   GIF passed through untouched.
 - **Obsidian's embed pipe rule.** `![[img.png|300]]` is a size,
   `![[img.png|A caption]]` is a caption. Quartz treats the pipe as alt text.
+- **Search that indexes your notes and nothing else.** Quartz's
+  `ContentIndex` indexes every emitted page, so a hit can land on a tag listing
+  that merely mentions the note you wanted. jotter marks only note pages as
+  indexable, and cuts the breadcrumb, the dates and the prev/next links back
+  out — so an excerpt opens with the note's own prose rather than with its file
+  path and its modification date.
 
 ## What you lose
 
-- **Search**, until v2 (Pagefind).
 - **The global graph.** jotter has the *local* graph — `features.graph`, in
   the `panels` rail — but there is no whole-site graph page. The local one is
   `d3-force` on a 2D canvas rather than Pixi, and it keeps the readable list of

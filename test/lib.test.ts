@@ -10,6 +10,13 @@ import { previewFor } from '../src/lib/preview.js'
 import type { VaultNote } from '../src/lib/vault.js'
 import { parseCallout } from '../src/lib/callout.js'
 import { parseEmbedPipe, isMediaTarget } from '../src/lib/embed.js'
+import {
+  excerptParts,
+  headingJumps,
+  isTypingTarget,
+  nextStop,
+  normalizeResultUrl,
+} from '../src/lib/search.js'
 
 describe('protectedRanges — parity with open-publish rewrite.mjs', () => {
   it('protects frontmatter', () => {
@@ -390,5 +397,163 @@ describe('previewFor', () => {
     const one = note(SECTIONED)
     expect(previewFor(one, '#How it works')).toBe(previewFor(one, '#How it works'))
     expect(previewFor(one, '')).not.toBe(previewFor(note(SECTIONED), ''))
+  })
+})
+
+describe('normalizeResultUrl — Pagefind speaks in trailing slashes', () => {
+  it('strips the trailing slash Pagefind puts on every page URL', () => {
+    expect(normalizeResultUrl('/zettelkasten/')).toBe('/zettelkasten')
+    expect(normalizeResultUrl('/method/progressive-summarisation/')).toBe(
+      '/method/progressive-summarisation',
+    )
+  })
+
+  it('leaves the homepage as the site spells it', () => {
+    // The case that makes this more than a `replace`: trimming `/` would give
+    // an empty href.
+    expect(normalizeResultUrl('/')).toBe('/')
+  })
+
+  it('keeps the anchor a sub-result jumps to', () => {
+    expect(normalizeResultUrl('/zettelkasten/#how-it-works')).toBe('/zettelkasten#how-it-works')
+    expect(normalizeResultUrl('/#start-here')).toBe('/#start-here')
+  })
+
+  it('leaves a URL already spelled jotter’s way alone', () => {
+    expect(normalizeResultUrl('/obsidian')).toBe('/obsidian')
+    expect(normalizeResultUrl('/obsidian#links')).toBe('/obsidian#links')
+  })
+})
+
+describe('excerptParts — the excerpt is escaped HTML, not text', () => {
+  const text = (data: string) => ({ nodeType: 3, nodeName: '#text', textContent: data })
+  const mark = (data: string) => ({ nodeType: 1, nodeName: 'MARK', textContent: data })
+
+  it('separates marked runs from unmarked ones', () => {
+    expect(excerptParts([text('a note about '), mark('slipbox'), text(' methods')])).toEqual([
+      { text: 'a note about ', mark: false },
+      { text: 'slipbox', mark: true },
+      { text: ' methods', mark: false },
+    ])
+  })
+
+  it('trusts the parser to have decoded the entities', () => {
+    // `&amp;` and `&#x27;` reach here already decoded, which is the whole
+    // reason the caller parses rather than splitting the string on `<mark>`.
+    expect(excerptParts([text("Luhmann & Ahrens' box")])).toEqual([
+      { text: "Luhmann & Ahrens' box", mark: false },
+    ])
+  })
+
+  it('drops anything that is neither text nor a mark', () => {
+    const script = { nodeType: 1, nodeName: 'SCRIPT', textContent: 'alert(1)' }
+    const img = { nodeType: 1, nodeName: 'IMG', textContent: '' }
+    expect(excerptParts([text('before '), script, img, text('after')])).toEqual([
+      { text: 'before after', mark: false },
+    ])
+  })
+
+  it('merges adjacent runs of the same kind', () => {
+    expect(excerptParts([text('one '), text('two'), mark('a'), mark('b')])).toEqual([
+      { text: 'one two', mark: false },
+      { text: 'ab', mark: true },
+    ])
+  })
+
+  it('skips empty and null text without leaving empty parts', () => {
+    expect(excerptParts([text(''), { nodeType: 3, nodeName: '#text', textContent: null }])).toEqual(
+      [],
+    )
+    expect(excerptParts([])).toEqual([])
+  })
+})
+
+describe('headingJumps — the sub-results worth showing', () => {
+  const sub = (url: string, title = url) => ({ url, title })
+
+  it('drops the sub-result that is only the page again', () => {
+    // Pagefind always returns the page itself first, anchorless, and the
+    // result's own link already is that.
+    const subs = [sub('/zettelkasten/'), sub('/zettelkasten/#how-it-works')]
+    expect(headingJumps(subs, '/zettelkasten', 3).map((s) => s.href)).toEqual([
+      '/zettelkasten#how-it-works',
+    ])
+  })
+
+  it('drops it wherever Pagefind puts it, not just first', () => {
+    const subs = [sub('/a/#one'), sub('/a/'), sub('/a/#two')]
+    expect(headingJumps(subs, '/a', 3).map((s) => s.href)).toEqual(['/a#one', '/a#two'])
+  })
+
+  it('collapses two sections that normalise to the same anchor', () => {
+    const subs = [sub('/a/#dup'), sub('/a/#dup'), sub('/a/#other')]
+    expect(headingJumps(subs, '/a', 5).map((s) => s.href)).toEqual(['/a#dup', '/a#other'])
+  })
+
+  it('caps the list, counting only what survived', () => {
+    const subs = [sub('/a/'), sub('/a/#one'), sub('/a/#two'), sub('/a/#three')]
+    expect(headingJumps(subs, '/a', 2).map((s) => s.href)).toEqual(['/a#one', '/a#two'])
+  })
+
+  it('keeps the caller’s own fields', () => {
+    const subs = [{ url: '/a/#one', title: 'One', excerpt: 'text' }]
+    expect(headingJumps(subs, '/a', 3)).toEqual([
+      { url: '/a/#one', title: 'One', excerpt: 'text', href: '/a#one' },
+    ])
+  })
+
+  it('handles a result with no sub-results at all', () => {
+    expect(headingJumps(undefined, '/a', 3)).toEqual([])
+    expect(headingJumps([], '/a', 3)).toEqual([])
+    expect(headingJumps([sub('/a/')], '/a', 3)).toEqual([])
+  })
+})
+
+describe('nextStop — arrow keys over the focus stops', () => {
+  // Stops are [input, ...results], so a count of 4 is the field plus three.
+  it('moves down and up without wrapping', () => {
+    expect(nextStop(0, 4, 1)).toBe(1)
+    expect(nextStop(2, 4, 1)).toBe(3)
+    expect(nextStop(3, 4, 1)).toBe(3)
+    expect(nextStop(2, 4, -1)).toBe(1)
+    expect(nextStop(0, 4, -1)).toBe(0)
+  })
+
+  it('brings focus home to the field from elsewhere in the dialog', () => {
+    // -1 is the close button, or the dialog itself.
+    expect(nextStop(-1, 4, 1)).toBe(0)
+    expect(nextStop(-1, 4, -1)).toBe(0)
+  })
+
+  it('has nowhere to go when there are no stops', () => {
+    expect(nextStop(-1, 0, 1)).toBe(-1)
+    expect(nextStop(0, 0, -1)).toBe(-1)
+  })
+
+  it('stays put when the field is the only stop', () => {
+    expect(nextStop(0, 1, 1)).toBe(0)
+    expect(nextStop(0, 1, -1)).toBe(0)
+  })
+})
+
+describe('isTypingTarget — when Cmd+K should stand down', () => {
+  it('recognises the fields a keystroke belongs to', () => {
+    expect(isTypingTarget({ tagName: 'INPUT', isContentEditable: false })).toBe(true)
+    expect(isTypingTarget({ tagName: 'TEXTAREA', isContentEditable: false })).toBe(true)
+    expect(isTypingTarget({ tagName: 'SELECT', isContentEditable: false })).toBe(true)
+    expect(isTypingTarget({ tagName: 'DIV', isContentEditable: true })).toBe(true)
+  })
+
+  it('leaves the shortcut alone everywhere else', () => {
+    expect(isTypingTarget({ tagName: 'BODY', isContentEditable: false })).toBe(false)
+    expect(isTypingTarget({ tagName: 'A', isContentEditable: false })).toBe(false)
+    expect(isTypingTarget({ tagName: 'BUTTON', isContentEditable: false })).toBe(false)
+    expect(isTypingTarget(null)).toBe(false)
+    expect(isTypingTarget(undefined)).toBe(false)
+  })
+
+  it('is not fooled by a tag name that merely contains one', () => {
+    expect(isTypingTarget({ tagName: 'INPUT-GROUP', isContentEditable: false })).toBe(false)
+    expect(isTypingTarget({ tagName: 'MY-INPUT', isContentEditable: false })).toBe(false)
   })
 })

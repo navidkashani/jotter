@@ -101,3 +101,12 @@ does; on a typography theme that would eat the gaps below. The build asserts
 this exact line survives.
 
 Probe: word *emphasis* [[Zettelkasten]] `code` **strong** end.
+
+## Escaping probe
+
+Pagefind hands its excerpts back as *escaped* HTML with `<mark>` in them, so a
+search result rebuilt by splitting that string would render the entities
+literally. `src/scripts/search.ts` parses it instead. Nothing else in the demo
+garden contains these characters, so this line is what proves it.
+
+Probe: Ahrens & Luhmann's boxes hold 1 < 2 "quoted" cards.

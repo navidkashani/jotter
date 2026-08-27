@@ -342,6 +342,24 @@ section('JavaScript payload')
     chunks.set(url, { file: relative(DIST, file), bytes: buffer.length, imports, body })
   }
 
+  /**
+   * On demand, not on load, and stated rather than left to luck.
+   *
+   * `search.ts` reaches `/pagefind/pagefind.js` through a dynamic `import()`
+   * behind a user action: nothing under here is downloaded until a reader opens
+   * the search modal, so charging it to page load would repeat the mistake
+   * `750005b` fixed — billing one page for another's bytes.
+   *
+   * Written down because right now it also happens *by accident*: Rollup
+   * minifies the specifier into a variable, so the `IMPORT` regex above never
+   * sees the literal and never charges it. The day Rollup inlines that constant
+   * instead, 45 KB would land on every page of the site with no explanation.
+   * An exclusion that is a decision behaves the same on both of those days.
+   *
+   * The weight is reported instead, in the Search section below.
+   */
+  const ON_DEMAND = '/pagefind/'
+
   /** The chunks a page really downloads: the ones it names, plus their imports. */
   const closure = (entries) => {
     const seen = new Set()
@@ -350,7 +368,7 @@ section('JavaScript payload')
       const url = queue.pop()
       // A specifier that resolves to nothing in `dist/` is not ours to explain
       // — a bare module name, or a string that only looked like a path.
-      if (seen.has(url) || !chunks.has(url)) continue
+      if (seen.has(url) || !chunks.has(url) || url.startsWith(ON_DEMAND)) continue
       seen.add(url)
       queue.push(...chunks.get(url).imports)
     }
@@ -401,13 +419,31 @@ section('JavaScript payload')
     `${worst.bytes} bytes at worst (${worst.file}); ${scripts.length} inline block(s) site-wide`,
   )
   /**
-   * 24 KB, and it stays there. Worth knowing while reading a number close to
-   * its ceiling: Astro inlines a script chunk under **4096 bytes** into the
-   * page rather than emitting a `.js` file, so a small island never becomes a
-   * shared chunk at all — and an island that later crosses 4 KB flips to one,
-   * which is a discontinuous jump rather than a gradual one.
+   * 32 KB, raised from 24 KB when search shipped, and the raise is the
+   * deliberate commit rather than the surprise.
+   *
+   * 24 KB was set against the one page that could reach it: a `panels` note
+   * with the graph on, 23,205 bytes of 24,576 with 1,371 to spare. Search is
+   * the second feature heavy enough to become a real chunk, and unlike the
+   * graph it is mounted from `Base.astro` — so its 6,096 bytes land on *every*
+   * page, and on a note page they land on top of the graph's 20,824. That page
+   * measures 29,301 bytes, and no amount of tightening either island closes a
+   * 4,725-byte gap.
+   *
+   * So the ceiling moves once, to the smallest round number above the real
+   * worst case with comparable headroom: 32,768, leaving 3,467. It is still a
+   * ceiling on **one page**, still counted per page, and turning a feature off
+   * still removes its bytes entirely. What it is not any more is a claim that
+   * every jotter site fits in 24 KB — that was true of a build with one island
+   * and stopped being true of a build with two.
+   *
+   * Worth knowing while reading a number close to it: Astro inlines a script
+   * chunk under **4096 bytes** into the page rather than emitting a `.js` file,
+   * so a small island never becomes a shared chunk at all — and an island that
+   * later crosses 4 KB flips to one, which is a discontinuous jump rather than
+   * a gradual one.
    */
-  check(worst.bytes < 24 * 1024, 'a page ships under 24 KB of JavaScript', `${worst.bytes} bytes on ${worst.file}`)
+  check(worst.bytes < 32 * 1024, 'a page ships under 32 KB of JavaScript', `${worst.bytes} bytes on ${worst.file}`)
 
   /**
    * Attribution can hide what a total could not: a chunk that ships in `dist/`
@@ -461,8 +497,111 @@ section('JavaScript payload')
    * `dist/_astro/*.js` an inline-only grep would police nothing and still pass.
    */
   const NETWORK = /\bfetch\(|XMLHttpRequest|new WebSocket|navigator\.sendBeacon|EventSource\(/
-  const fetches = [...scripts, ...chunks.values()].filter((s) => NETWORK.test(s.body))
-  check(fetches.length === 0, 'no runtime network requests', fetches.map((s) => s.file).join(', '))
+
+  /**
+   * One exemption, by path, and it is named rather than a loosening.
+   *
+   * Pagefind *fetches*, and that is not an implementation detail — loading
+   * index chunks over plain GETs as you type is the entire design, and what
+   * makes a 1,000-note vault searchable without shipping one enormous file.
+   * There is no embed-it-at-build-time way out here the way there was for
+   * hover previews, and a fully embedded index would contradict the scale
+   * target the `--full` pass asserts two sections down.
+   *
+   * So `dist/pagefind/**` is allowed and **everything jotter authors still
+   * fails on `fetch(`** — which is the half with teeth, and the half that keeps
+   * the hover-preview decision enforced rather than merely documented. Delete
+   * the filter and this check fails; that is the test that it is doing
+   * anything.
+   */
+  const authored = (s) => !s.file.startsWith(`pagefind${sep}`)
+  const fetches = [...scripts, ...chunks.values()].filter((s) => authored(s) && NETWORK.test(s.body))
+  check(
+    fetches.length === 0,
+    'no runtime network requests from jotter’s own code',
+    fetches.map((s) => s.file).join(', '),
+  )
+}
+
+/* ------------------------------------------------------------------ search */
+
+section('Search')
+{
+  const indexDir = join(DIST, 'pagefind')
+  const built = await stat(indexDir).catch(() => null)
+
+  if (!built) {
+    pass('no search index in dist/', 'features.search is off')
+  } else {
+    /**
+     * A cheap guard on `writePlayground` ever flipping. Pagefind's playground
+     * is an HTML page under `/pagefind/playground/`, and the Markup section
+     * above walks *every* `.html` in `dist/` — so it would fail the skip-link,
+     * `<main>`, `lang` and `<title>` assertions all at once, from a file
+     * nobody in this repo wrote.
+     */
+    const html = await walk(indexDir, (n) => n.endsWith('.html'))
+    check(html.length === 0, 'the search index ships no HTML page', html.map((f) => relative(DIST, f)).join(', '))
+
+    /**
+     * Parsed, not merely present, and every file non-empty.
+     *
+     * A build was once seen where `pagefind-entry.json` and `pagefind.js` came
+     * out 0 bytes — the files existed, so a stat-only check would have passed
+     * while the shipped site loaded a search box that found nothing.
+     * `src/integrations/search.ts` fails the build on this too; this is the
+     * backstop that catches an index which reached `dist/` some other way.
+     */
+    const entry = await readFile(join(indexDir, 'pagefind-entry.json'), 'utf8').catch(() => null)
+    let pageCount = 0
+    try {
+      pageCount = Object.values(JSON.parse(entry ?? '').languages).reduce((n, l) => n + l.page_count, 0)
+    } catch {
+      pageCount = 0
+    }
+    check(pageCount > 0, 'the search index entry file parses and names some pages', String(entry).slice(0, 80))
+
+    const indexFiles = await walk(indexDir, () => true)
+    const emptyFiles = []
+    for (const file of indexFiles) if ((await stat(file)).size === 0) emptyFiles.push(relative(DIST, file))
+    check(emptyFiles.length === 0, 'no file in the search index is empty', emptyFiles.join(', '))
+
+    const indexed = pages.filter(({ html }) => html.includes('data-pagefind-body'))
+    check(indexed.length > 0, 'at least one page is marked as indexable')
+
+    /**
+     * The listing pages are deliberately out of the index: their content is
+     * note titles and excerpts already indexed on the notes themselves, so
+     * indexing them would return the same note twice under a URL that is not
+     * its own. `data-pagefind-body` is site-wide sticky, so this is what
+     * enforces it — one stray attribute on a listing template and the whole
+     * decision quietly reverses.
+     */
+    // Anchored on a path separator, not a prefix: a note legitimately slugged
+    // `tags-and-folders` builds `tags-and-folders/index.html`, which a bare
+    // `^tags` would have failed this check over.
+    const listings = indexed.filter((p) => /^(?:notes|tags)[/\\]/.test(p.file) || p.file === '404.html')
+    check(listings.length === 0, 'no listing page is marked as indexable', listings.map((p) => p.file).join(', '))
+
+    /**
+     * Reported, not asserted, because it is the number the byte budget
+     * deliberately does not charge to a page: none of it is downloaded until a
+     * reader opens the modal. Reporting it is what keeps that exclusion honest
+     * — the weight is visible, it is just billed to the right event.
+     *
+     * `pagefind-ui` and friends are pruned by `src/integrations/search.ts`;
+     * this is what is left, so a jump here means either the vault grew or
+     * Pagefind started writing something new.
+     */
+    const bytes = (await Promise.all(indexFiles.map(async (f) => (await stat(f)).size))).reduce((a, b) => a + b, 0)
+    pass(
+      'search index, downloaded on demand',
+      `${Math.round(bytes / 1024)} KB across ${indexFiles.length} file(s) for ${pageCount} note(s); no page loads any of it`,
+    )
+
+    const vendorUi = indexFiles.filter((f) => /pagefind-(?:component-)?(?:modular-)?ui\.|pagefind-highlight\./.test(f))
+    check(vendorUi.length === 0, 'Pagefind’s own unused UI bundles were pruned', vendorUi.map((f) => relative(DIST, f)).join(', '))
+  }
 }
 
 /* ------------------------------------------------------------ full mode */
@@ -525,6 +664,8 @@ if (FULL) {
       const tagChips = offPages.filter((html) => html.includes('tag-chip'))
 
       const previewAttrs = offPages.filter((html) => html.includes('data-preview'))
+      const searchAttrs = offPages.filter((html) => html.includes('data-pagefind-body'))
+      const searchIndex = await stat(join(DIST, 'pagefind')).catch(() => null)
 
       check(themeCode.length === 0, 'themeToggle off removes its inline script entirely')
       check(tagChips.length === 0, 'tags off removes every tag chip')
@@ -534,6 +675,14 @@ if (FULL) {
        * merely unread — the flag decides whether the bytes are emitted at all.
        */
       check(previewAttrs.length === 0, 'hoverPreview off emits no data-preview attribute')
+      /**
+       * The same guarantee, both halves. With `search` off the integration is
+       * never registered — so there is no index directory — *and* the markup
+       * that would have been indexed is unmarked, rather than marked and
+       * unused.
+       */
+      check(searchIndex === null, 'search off writes no dist/pagefind/')
+      check(searchAttrs.length === 0, 'search off emits no data-pagefind-body attribute')
       check(
         inline.length === 0 && offJs.length === 0,
         'no JavaScript at all when every scripted feature and the nav are off',
@@ -545,6 +694,22 @@ if (FULL) {
     await clearContentStores(ROOT)
   }
 
+  /**
+   * At whatever `jotter.config.ts` currently says, which is the honest thing
+   * for it to do: a forker running this gets their own feature set measured.
+   *
+   * On the committed default that means **search is off here**, so Pagefind's
+   * indexing time is not in the 60s number below. Measured by hand once, at
+   * this same 1,000-note vault: 597ms to index and 380ms to write, so about
+   * **1.0s**, against a 60s envelope — 1.7%, and it does not grow with the
+   * number of *pages* so much as with the amount of prose. The index directory
+   * lands at 4.2 MB, none of which a reader downloads until they search.
+   *
+   * Left off rather than forced on, because a second before the ceiling cannot
+   * be what fails this check, and a Pagefind regression at scale is Pagefind's
+   * to catch. Turn `features.search` on in your own config and this pass covers
+   * it for free. Re-measure if that 1.0s is ever load-bearing.
+   */
   section('Scale')
   {
     const SCALE = join(tmpdir(), `jotter-scale-${process.pid}`)

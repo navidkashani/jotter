@@ -11,7 +11,7 @@
  * already computed for the sidebar, so it costs one array lookup per note.
  */
 import type { VaultNote } from '../lib/vault.js'
-import { allFolders } from '../lib/site.js'
+import { allFolders, config } from '../lib/site.js'
 import { noteHref } from '../lib/href.js'
 
 interface Props {
@@ -24,9 +24,18 @@ const segments = note.path.split('/').slice(0, -1)
 const crumbs = segments
   .map((_, i) => allFolders.find((folder) => folder.path === segments.slice(0, i + 1).join('/')))
   .filter((folder) => folder !== undefined)
+
+/**
+ * Out of the search index. This sits at the top of the article, inside
+ * `data-pagefind-body`, so without this every result's excerpt opened with a
+ * file path — “Niklas Luhmann.md” — before a word of the note itself. The
+ * folder names are also links to *other* pages, which is the same argument
+ * `Note.astro` makes for the rail.
+ */
+const indexed = config.features.search ? '' : undefined
 ---
 
-<p class="label note-crumb">
+<p class="label note-crumb" data-pagefind-ignore={indexed}>
   {
     crumbs.map((folder) => (
       <>

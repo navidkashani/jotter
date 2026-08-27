@@ -285,8 +285,16 @@ describe('redirects', () => {
   })
 
   it('writes a robots.txt that matches the noIndex setting', () => {
-    expect(robotsTxt(true)).toContain('Disallow: /')
+    expect(robotsTxt(true)).toContain('Disallow: /\n')
     expect(robotsTxt(false, 'https://x.com/sitemap-index.xml')).toContain('Sitemap: https://x.com')
-    expect(robotsTxt(false)).not.toContain('Disallow')
+    expect(robotsTxt(false)).toContain('Allow: /\n')
+  })
+
+  it('keeps crawlers out of the search index either way', () => {
+    // Unconditional: a robots.txt that flips with a feature flag is one
+    // somebody has to remember to check.
+    expect(robotsTxt(false)).toContain('Disallow: /pagefind/')
+    // …but noIndex already disallows everything, and says so in one line.
+    expect(robotsTxt(true)).not.toContain('/pagefind/')
   })
 })

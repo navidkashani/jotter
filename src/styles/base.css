@@ -704,6 +704,176 @@ body {
   font-size: var(--step-nav);
 }
 
+/* ---- Search ------------------------------------------------------------ */
+
+/**
+ * Every element here is invented by `src/scripts/search.ts` and appended to
+ * `<body>`, so — like `.note-preview` and for the same reason — the styles
+ * cannot live in a scoped `<style>`: Astro's scoping has no element to hash
+ * against at build time.
+ *
+ * The recipe is the raised surface every other card in jotter uses:
+ * `--surface`, one hairline `--rule`, `--radius-l`, and no `box-shadow`. There
+ * is deliberately no shadow token.
+ */
+.search-dialog {
+  inline-size: min(92vw, 40rem);
+  max-block-size: min(70dvh, 34rem);
+  /* Near the top rather than centred: the results grow downwards, and a
+     centred dialog would walk up the screen as they arrive. */
+  margin-block: 12vh auto;
+  margin-inline: auto;
+  padding: 0;
+  overflow: hidden;
+  background: var(--surface);
+  border: var(--hairline) solid var(--rule);
+  border-radius: var(--radius-l);
+  color: var(--ink);
+}
+
+/**
+ * Scoped to `[open]`. A `<dialog>` is `display: none` until it is shown, so a
+ * `display: flex` on the bare class would make the closed dialog visible.
+ */
+.search-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+/* See the note on `.graph-dialog::backdrop`: `--scrim` resolves by
+   inheritance, and where it does not the backdrop is simply transparent. */
+.search-dialog::backdrop {
+  background: var(--scrim);
+}
+
+.search-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  flex: none;
+  /* Logical, and the four-value `padding` shorthand would not have been: it is
+     top/right/bottom/left, so it survives the RTL lint and still puts the
+     magnifier's breathing room on the wrong side in `dir: 'rtl'`. */
+  padding-block: var(--space-2xs);
+  padding-inline: var(--space-s) var(--space-2xs);
+  border-block-end: var(--hairline) solid var(--rule);
+  color: var(--ink-faint);
+}
+
+/**
+ * No `outline: 0` here. The field is focused the moment the dialog opens and a
+ * ring around it is not the prettiest thing in the theme — but "visible focus
+ * everywhere, never removed" is a claim the README makes, and a borderless
+ * input is exactly the control that cannot afford to lose it.
+ */
+.search-input {
+  flex: 1;
+  min-inline-size: 0;
+  padding-block: var(--space-2xs);
+  padding-inline: 0;
+  background: none;
+  border: 0;
+  color: var(--ink-strong);
+  font-size: var(--step-ui);
+  line-height: var(--leading-ui);
+}
+
+.search-input::placeholder {
+  color: var(--ink-faint);
+}
+
+/**
+ * The count, and every failure message. `aria-live="polite"` is on it in the
+ * script, so this is what a screen reader hears after each search — which is
+ * also why the message is never hidden when it is empty: an element that comes
+ * and goes is not a live region.
+ */
+.search-status {
+  flex: none;
+  padding: var(--space-2xs) var(--space-s);
+  font-family: var(--font-code);
+  font-size: var(--step-meta);
+  line-height: var(--leading-meta);
+  letter-spacing: var(--tracking-meta);
+  color: var(--ink-muted);
+}
+
+/**
+ * Zero its padding, never `display: none`.
+ *
+ * `display: none` here would contradict the comment above it and defeat the
+ * point of the region: a polite live region that is *not rendered* at the
+ * moment text is inserted into it is not reliably announced — the element has
+ * to be in the tree, and in the layout, before the content arrives. Collapsing
+ * the padding leaves it 0px tall and costs no vertical space.
+ */
+.search-status:empty {
+  padding-block: 0;
+}
+
+.search-results {
+  flex: 1;
+  overflow-y: auto;
+  padding-block-end: var(--space-2xs);
+}
+
+.search-result,
+.search-section {
+  display: block;
+  padding: var(--space-2xs) var(--space-s);
+  color: var(--ink);
+}
+
+.search-result:hover,
+.search-section:hover,
+.search-result:focus-visible,
+.search-section:focus-visible {
+  background: var(--soft);
+}
+
+/* Inside the scroller, so the ring is not clipped by the row above it. */
+.search-result:focus-visible,
+.search-section:focus-visible {
+  outline-offset: -2px;
+}
+
+.search-result-title {
+  display: block;
+  font-size: var(--step-ui);
+  font-weight: var(--weight-medium);
+  color: var(--ink-strong);
+  letter-spacing: var(--tracking-tight);
+}
+
+.search-excerpt {
+  display: block;
+  margin-block-start: 2px;
+  font-size: var(--step-excerpt);
+  line-height: var(--leading-ui);
+  color: var(--ink-muted);
+}
+
+.search-excerpt mark {
+  background: var(--mark);
+  color: var(--mark-ink);
+  border-radius: var(--radius-xs);
+}
+
+/**
+ * Heading jumps, indented under the note they are in. The rule is an inline
+ * border rather than a bullet, so the nesting survives RTL by construction.
+ */
+.search-sections {
+  margin-inline-start: var(--space-l);
+  border-inline-start: var(--hairline) solid var(--rule);
+}
+
+.search-section .search-result-title {
+  font-size: var(--step-nav);
+  font-weight: var(--weight-normal);
+  color: var(--ink);
+}
+
 /* ---- Hover previews ---------------------------------------------------- */
 
 /**

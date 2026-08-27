@@ -81,7 +81,7 @@ export default defineConfig({
     themeToggle: true,
     graph: false,               // the local graph — `layout: 'panels'` only
     hoverPreview: false,        // excerpt cards on hovering a link
-    search: false,              // v2
+    search: false,              // Cmd/Ctrl+K full-text search over your notes
     rss: false,                 // v2
   },
 
@@ -185,6 +185,7 @@ have falls back rather than emitting a link to a page that will not exist.
 | `/tags`, `/tags/<a>`, `/tags/<a>/<b>` | Tag pages, parents rolling up children |
 | `/404` | Offers search and recent notes |
 | `/_vault/*` | Attachments Astro does not process (SVG, GIF, video, PDF) |
+| `/pagefind/*` | The search index, with `features.search` on. Disallowed in `robots.txt` |
 
 ---
 
@@ -195,7 +196,7 @@ npm run dev          # http://localhost:4321
 npm run build        # astro build, then the build assertions
 npm run verify       # the assertions alone, against the current dist/
 npm run verify:full  # also rebuilds with features off, and at 1,000 notes
-npm test             # 196 unit tests
+npm test             # 251 unit tests
 npm run check        # astro check
 npm run clean        # see the note below
 ```
@@ -270,7 +271,15 @@ are the theme island and the drawer enhancement, about 1.1 KB together. Turn
 22 KB in all; the graph's own accessible list stays underneath it either way.
 `features.hoverPreview` adds about 1.2 KB and no request at all, plus the
 excerpts themselves in the markup — 1 KB raw and under 200 bytes brotli'd on
-the demo's most-linked page.
+the demo's most-linked page. `features.search` adds about 6 KB, on every page
+rather than only note pages, and nothing else until a reader actually opens it:
+the modal is keyboard-first, focus is trapped and returned, results are real
+links, and the count is announced. With scripting off there is no search button
+at all, because one that did nothing would be worse than none.
+
+The per-page budget is asserted at 32 KB. It was 24 KB until search shipped;
+graph and search together measure 29,334 bytes on a note page, so the ceiling
+moved once, deliberately, and `scripts/verify-build.mjs` says why.
 
 ---
 
@@ -292,14 +301,38 @@ opens the same graph in a dialog where nothing is elided.
 And hover previews, also off by default: hold the pointer over a link and a
 small card shows the target's title and opening paragraph, so you can decide
 whether to follow it without leaving the paragraph you are in. Quartz and
-Obsidian Publish both *fetch* the target; jotter cannot, because the build
-asserts that nothing it ships reaches the network. So the excerpt travels in
-the HTML instead — instant, offline, and the first paragraph rather than the
-whole note. Pointer only, and the card is `aria-hidden`: it repeats what the
+Obsidian Publish both *fetch* the target; jotter does not, because the build
+fails on `fetch(` anywhere in jotter's own code. So the excerpt travels in the
+HTML instead — instant, offline, and the first paragraph rather than the whole
+note. Pointer only, and the card is `aria-hidden`: it repeats what the
 destination already says, one click away.
 
-**Still to come:** search (Pagefind), OG images, RSS, analytics, and the Open
-Publish `scripts/` layer.
+And **search**, off by default too: `features.search` puts a magnifier in the
+header and binds Cmd/Ctrl+K on every page, over the notes only. Pagefind builds
+the index at the end of `astro build`; the runtime is fetched on first open
+rather than on page load, so a reader who never searches downloads none of it.
+Results carry the matching section's anchor, so a hit inside a long note jumps
+to the heading rather than the top.
+
+### What "no network" means now
+
+It used to mean *nothing jotter ships reaches the network*, and search ends
+that — Pagefind loads index chunks over plain GETs as you type, which is the
+entire reason a thousand-note vault is searchable without shipping one enormous
+file. The claim is narrower now, and worth stating exactly:
+
+- **No third-party requests.** No CDN, no analytics unless you configure one,
+  no fonts from someone else's server — they are self-hosted and subset.
+- **No server, and no tracking.** Every page is a static file. Search runs in
+  the reader's browser against files on your own origin; no query leaves it.
+- **jotter's own code makes no requests at all.** `scripts/verify-build.mjs`
+  still fails the build on `fetch(`, `XMLHttpRequest`, `WebSocket`,
+  `sendBeacon` or `EventSource` in any inline block or bundled chunk. The
+  exemption is `dist/pagefind/**`, by path, and nothing else — which is what
+  keeps hover previews embedded rather than fetched.
+
+**Still to come:** OG images, RSS, analytics, and the Open Publish `scripts/`
+layer.
 
 ## License
 

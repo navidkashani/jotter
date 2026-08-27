@@ -1,5 +1,6 @@
 ---
 import type { VaultNote } from '../lib/vault.js'
+import { config } from '../lib/site.js'
 import { noteHref } from '../lib/href.js'
 import { t } from '../i18n/index.js'
 
@@ -8,11 +9,28 @@ interface Props {
   next?: VaultNote
 }
 const { previous, next } = Astro.props
+
+/**
+ * Belt and braces, and deliberately so. Pagefind skips `<nav>` by default, so
+ * this attribute changes nothing today — but the default is a list of element
+ * names in someone else's release, and the reason these two titles must stay
+ * out of the index is jotter's: they belong to *other* notes, and indexed here
+ * every note would match on both its neighbours' names. Saying it out loud
+ * costs 22 bytes and survives a change of default.
+ *
+ * `<PrevNext>` sits inside `.note-body`, which is inside the article carrying
+ * `data-pagefind-body`, so nothing above it excludes it. See `Note.astro`.
+ */
+const indexed = config.features.search ? '' : undefined
 ---
 
 {
   (previous || next) && (
-    <nav class="prev-next" aria-label={`${t('note.previous')} / ${t('note.next')}`}>
+    <nav
+      class="prev-next"
+      aria-label={`${t('note.previous')} / ${t('note.next')}`}
+      data-pagefind-ignore={indexed}
+    >
       {previous && (
         <a class="previous" href={noteHref(previous.slug)} rel="prev">
           <span class="label">{t('note.previous')}</span>

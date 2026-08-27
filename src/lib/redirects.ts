@@ -67,8 +67,17 @@ export const toVercel = (redirects: Record<string, string>): string =>
     2,
   ) + '\n'
 
-/** A site that asked not to be indexed should say so where crawlers look. */
+/**
+ * A site that asked not to be indexed should say so where crawlers look.
+ *
+ * `/pagefind/` is disallowed unconditionally, whether or not search is built.
+ * Those files are index chunks and a WebAssembly module — machine-readable
+ * fragments of pages a crawler can already read whole, at their own URLs. A
+ * crawler has nothing to gain there and jotter has a budget to lose. The rule
+ * is unconditional because a `robots.txt` that flips with a feature flag is a
+ * `robots.txt` someone has to remember to check.
+ */
 export const robotsTxt = (noIndex: boolean, sitemapUrl?: string): string =>
   noIndex
     ? 'User-agent: *\nDisallow: /\n'
-    : `User-agent: *\nAllow: /\n${sitemapUrl ? `\nSitemap: ${sitemapUrl}\n` : ''}`
+    : `User-agent: *\nAllow: /\nDisallow: /pagefind/\n${sitemapUrl ? `\nSitemap: ${sitemapUrl}\n` : ''}`

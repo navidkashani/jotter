@@ -80,6 +80,30 @@ const HoverPreview = showHoverPreview
   ? (await import('../components/HoverPreview.astro')).default
   : null
 
+/**
+ * What Pagefind indexes, and — the part worth naming — what it therefore does
+ * *not*. `data-pagefind-body` is **site-wide sticky**: once it appears on any
+ * page, every page without it is dropped. So putting it here quietly decides
+ * that the tag pages, the folder listings, `/notes` and the 404 are all out of
+ * the index. That is the right answer rather than a side effect: a listing's
+ * content is note titles and excerpts that are already indexed on the notes
+ * themselves, so indexing it would return the same note twice, once under a
+ * URL that is not its own.
+ *
+ * On the `<article>` rather than on `.note-body`, so the title, the
+ * frontmatter and the tags are inside it with the prose. One element down and
+ * the `<h1>` falls outside, and Pagefind loses every result's title.
+ *
+ * `.note-aside` and `.note-rail` are cut back out. All of it is navigation
+ * whose text belongs to *other* notes — the outline aside, every note would
+ * otherwise match on each of its neighbours' titles. `<PrevNext>` carries the
+ * same attribute for the same reason.
+ *
+ * A plain `config` test is enough here: these are attributes, not a script, so
+ * there is no bundle to drop. Off, they are absent rather than ignored.
+ */
+const indexed = config.features.search ? '' : undefined
+
 /** Which of the two DOM shapes above to emit. Resolved at build. */
 const panels = config.layout === 'panels'
 const hasToc = config.features.toc
@@ -87,7 +111,7 @@ const hasRail = config.features.backlinks || showGraph
 ---
 
 <Base title={note.title} description={description} current={note.slug}>
-  <article class="note-layout" data-layout={config.layout}>
+  <article class="note-layout" data-layout={config.layout} data-pagefind-body={indexed}>
     <header class="note-head">
       <Breadcrumb note={note} />
       <h1 class="note-title">{note.title}</h1>
@@ -97,10 +121,10 @@ const hasRail = config.features.backlinks || showGraph
 
     {
       panels && (hasToc || hasRail) && (
-        <div class="note-aside">
+        <div class="note-aside" data-pagefind-ignore={indexed}>
           {hasToc && <Toc headings={headings} />}
           {hasRail && (
-            <aside class="note-rail" aria-label={t('note.context')}>
+            <aside class="note-rail" aria-label={t('note.context')} data-pagefind-ignore={indexed}>
               {LocalGraph && <LocalGraph neighbourhood={neighbourhood} current={note.slug} />}
               {config.features.backlinks && <Backlinks links={backlinks} />}
             </aside>
@@ -118,7 +142,7 @@ const hasRail = config.features.backlinks || showGraph
 
     {
       !panels && hasRail && (
-        <aside class="note-rail" aria-label={t('note.context')}>
+        <aside class="note-rail" aria-label={t('note.context')} data-pagefind-ignore={indexed}>
           {LocalGraph && <LocalGraph neighbourhood={neighbourhood} current={note.slug} />}
           {config.features.backlinks && <Backlinks links={backlinks} />}
         </aside>

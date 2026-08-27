@@ -1,0 +1,41 @@
+---
+/**
+ * The search island: a script, and the strings it cannot reach.
+ *
+ * `src/scripts/search.ts` builds every element the feature has — the trigger in
+ * the header, the dialog, the results — so nothing is rendered here that a
+ * reader with scripting off would be left holding. That is the same argument
+ * `LocalGraph.astro` makes for its expand button.
+ *
+ * The one exception is this span, and it is the same channel `LocalGraph.astro`
+ * uses for the two labels its dialog needs: a browser script may not import
+ * `src/i18n/`, which reaches `src/lib/site.ts` and through it `node:fs`, so the
+ * translated strings have to travel in the markup. A `data-` attribute on an
+ * empty hidden element is the cheapest way to carry them, it is inert with
+ * scripting off, and it keeps the script out of the page as a bundled file
+ * shared across every page rather than inlined on each one.
+ *
+ * The component exists in order to be *conditionally imported*. A bare
+ * `<script>` behind `{config.features.search && …}` would still ship: Astro
+ * hoists and bundles component scripts at compile time regardless of the
+ * surrounding conditional. Only dropping the import takes it out of the module
+ * graph. See `JOTTER_SEARCH` in `astro.config.ts`, and the same trap documented
+ * beside `JOTTER_GRAPH`.
+ */
+import { t } from '../i18n/index.js'
+
+const labels = {
+  search: t('site.search'),
+  placeholder: t('search.placeholder'),
+  results: t('search.results'),
+  noResults: t('search.noResults'),
+  close: t('search.close'),
+  unavailable: t('search.unavailable'),
+}
+---
+
+<span hidden data-search={JSON.stringify(labels)}></span>
+
+<script>
+  import '../scripts/search.js'
+</script>

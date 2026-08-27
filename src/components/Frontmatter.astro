@@ -16,6 +16,7 @@
  * whether it is still being tended.
  */
 import type { VaultNote } from '../lib/vault.js'
+import { config } from '../lib/site.js'
 import { formatDate, isoDate, t } from '../i18n/index.js'
 
 interface Props {
@@ -64,12 +65,27 @@ const rows: { key: string; label: string; value: string; datetime?: string }[] =
     return value ? [{ key, label: t(`note.field.${key}`), value }] : []
   }),
 ]
+
+/**
+ * The dates leave the search index; everything else stays in it.
+ *
+ * Both rows sit inside `data-pagefind-body`, so “Created Jan 12, 2026 Updated
+ * Apr 8, 2026” led every excerpt for every note — forty characters of the one
+ * thing nobody searches prose for. `aliases` is the reason this is a row-level
+ * decision rather than a `<dl>`-level one: an alias is exactly what somebody
+ * types when they cannot remember a note's real title, and dropping the whole
+ * block would have made “Slipbox method” stop finding Zettelkasten.
+ *
+ * A date row is the one that carries a `datetime`, so the test is the data
+ * rather than a second list to keep in step.
+ */
+const indexed = config.features.search ? '' : undefined
 ---
 
 <dl class="note-frontmatter">
   {
     rows.map((row) => (
-      <div>
+      <div data-pagefind-ignore={row.datetime ? indexed : undefined}>
         <dt>{row.label}</dt>
         <dd>{row.datetime ? <time datetime={row.datetime}>{row.value}</time> : row.value}</dd>
       </div>
