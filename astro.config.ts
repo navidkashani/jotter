@@ -86,6 +86,26 @@ export default defineConfig({
       styles: ['normal', 'italic'],
       subsets: ['latin', 'latin-ext'],
       fallbacks: ['ui-sans-serif', 'system-ui', 'sans-serif'],
+      /**
+       * Astro's metric-matched fallback is *wrong* for this face, and wrong in
+       * the most visible way there is: it emitted
+       *
+       *   @font-face { font-family: "Public Sans … fallback: Arial";
+       *                src: local("Arial"); size-adjust: 169.9189%; … }
+       *
+       * and prepended it to `--font-sans`, so every first paint before the real
+       * font arrives rendered Arial at 170% and then snapped back. Public Sans
+       * and Arial have near-identical x-heights; the honest number is around
+       * 100%. The same build computes 99.98% for IBM Plex Mono against Courier
+       * New — the difference between them is that the mono face is static and
+       * this one is variable, which is where the metrics read goes wrong.
+       *
+       * Off, so the fallback is the stack above: `ui-sans-serif` is the system
+       * UI face, close enough to Public Sans that the swap is a change of
+       * typeface rather than of size. Worth re-testing when Astro updates —
+       * a correct optimized fallback is better than an unoptimized one.
+       */
+      optimizedFallbacks: false,
     },
     {
       provider: fontProviders.google(),
