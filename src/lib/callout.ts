@@ -6,34 +6,43 @@
  * struct; the Satteri adapter in src/markdown does the tree surgery.
  */
 
+/**
+ * Obsidian's callout types, mapped to the title jotter gives an untitled one.
+ *
+ * A label and nothing else. Each entry used to carry an `icon` name too —
+ * `pencil`, `flame`, `check-circle` and ten others — feeding a `calloutIcon()`
+ * that no component ever called, naming SVGs that were never in the repository.
+ * `prose.css` states the design those leftovers predate: *"One rule set, one
+ * hue variable. A callout type is a hue and nothing else."*
+ */
 export const CALLOUT_TYPES = {
-  note: { icon: 'pencil', label: 'Note' },
-  abstract: { icon: 'clipboard', label: 'Abstract' },
-  summary: { icon: 'clipboard', label: 'Summary' },
-  tldr: { icon: 'clipboard', label: 'TL;DR' },
-  info: { icon: 'info', label: 'Info' },
-  todo: { icon: 'check-circle', label: 'Todo' },
-  tip: { icon: 'flame', label: 'Tip' },
-  hint: { icon: 'flame', label: 'Hint' },
-  important: { icon: 'flame', label: 'Important' },
-  success: { icon: 'check', label: 'Success' },
-  check: { icon: 'check', label: 'Check' },
-  done: { icon: 'check', label: 'Done' },
-  question: { icon: 'help', label: 'Question' },
-  help: { icon: 'help', label: 'Help' },
-  faq: { icon: 'help', label: 'FAQ' },
-  warning: { icon: 'alert', label: 'Warning' },
-  caution: { icon: 'alert', label: 'Caution' },
-  attention: { icon: 'alert', label: 'Attention' },
-  failure: { icon: 'cross', label: 'Failure' },
-  fail: { icon: 'cross', label: 'Fail' },
-  missing: { icon: 'cross', label: 'Missing' },
-  danger: { icon: 'zap', label: 'Danger' },
-  error: { icon: 'zap', label: 'Error' },
-  bug: { icon: 'bug', label: 'Bug' },
-  example: { icon: 'list', label: 'Example' },
-  quote: { icon: 'quote', label: 'Quote' },
-  cite: { icon: 'quote', label: 'Cite' },
+  note: 'Note',
+  abstract: 'Abstract',
+  summary: 'Summary',
+  tldr: 'TL;DR',
+  info: 'Info',
+  todo: 'Todo',
+  tip: 'Tip',
+  hint: 'Hint',
+  important: 'Important',
+  success: 'Success',
+  check: 'Check',
+  done: 'Done',
+  question: 'Question',
+  help: 'Help',
+  faq: 'FAQ',
+  warning: 'Warning',
+  caution: 'Caution',
+  attention: 'Attention',
+  failure: 'Failure',
+  fail: 'Fail',
+  missing: 'Missing',
+  danger: 'Danger',
+  error: 'Error',
+  bug: 'Bug',
+  example: 'Example',
+  quote: 'Quote',
+  cite: 'Cite',
 } as const
 
 export type CalloutType = keyof typeof CALLOUT_TYPES
@@ -76,14 +85,11 @@ export function parseCallout(text: string): Callout | undefined {
     type,
     known,
     // Obsidian titles an untitled callout with its type, capitalized.
-    title: rawTitle.trim() || (known ? CALLOUT_TYPES[type as CalloutType].label : capitalize(type)),
+    title: rawTitle.trim() || (known ? CALLOUT_TYPES[type as CalloutType] : capitalize(type)),
     collapsible: fold !== undefined,
     defaultOpen: fold === '+',
     markerLength: leading + full.length,
   }
 }
-
-export const calloutIcon = (type: string): string =>
-  Object.hasOwn(CALLOUT_TYPES, type) ? CALLOUT_TYPES[type as CalloutType].icon : CALLOUT_TYPES.note.icon
 
 const capitalize = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s)

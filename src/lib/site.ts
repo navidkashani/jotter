@@ -13,7 +13,6 @@ import { scanVault, type VaultNote } from './vault.js'
 import { buildGraph } from './graph.js'
 import { buildTree, folders } from './tree.js'
 import { tagTree, expandTag } from './tags.js'
-import { buildRedirects } from './redirects.js'
 import { resolveSocialImage, socialImageUrl } from './social.js'
 
 export const config = jotter
@@ -87,14 +86,3 @@ export const homepage: VaultNote | undefined = notes.find((n) => n.slug === 'ind
 
 export const backlinksFor = (slug: string) => graph.backlinks.get(slug) ?? []
 export const outgoingFor = (slug: string) => graph.outgoing.get(slug) ?? []
-
-/**
- * Redirects generated from `aliases:`, plus whatever the config adds. Emitted
- * as `_redirects` and `vercel.json` by the vault integration; exposed here so a
- * page can link an alias if it wants to.
- */
-export const aliasRedirects: Record<string, string> = buildRedirects({
-  notes,
-  taken: [...notes.map((n) => n.slug), ...allFolders.map((f) => f.slug), 'notes', 'tags', '404'],
-  extra: config.redirects,
-})

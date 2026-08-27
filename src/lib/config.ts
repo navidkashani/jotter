@@ -193,9 +193,3 @@ export function defineConfig(input: JotterConfigInput = {}): JotterConfig {
       `Every field is optional; remove the offending key to take its default.`,
   )
 }
-
-/** Feature flags, resolved. Handy for the "feature off means no JS" assertion. */
-export const enabledFeatures = (config: JotterConfig): string[] =>
-  Object.entries(config.features)
-    .filter(([, on]) => on)
-    .map(([name]) => name)

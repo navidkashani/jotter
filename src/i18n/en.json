@@ -2,7 +2,6 @@
   "site.skipToContent": "Skip to content",
   "site.toggleTheme": "Toggle colour theme",
   "site.openNavigation": "Open navigation",
-  "site.closeNavigation": "Close navigation",
   "site.search": "Search",
   "site.feed": "{title} — RSS feed",
 
@@ -35,7 +34,6 @@
   "note.field.series": "Series",
   "note.previous": "Previous",
   "note.next": "Next",
-  "note.transcludedFrom": "Transcluded from",
 
   "index.startHere": "Start here",
   "index.recentlyUpdated": "Recently updated",
@@ -46,7 +44,6 @@
 
   "tags.title": "Tags",
   "tags.intro": "Every tag in the garden, nested tags rolled up into their parents.",
-  "tags.taggedWith": "Tagged {tag}",
   "tags.count": "{count} notes",
   "tags.childTags": "Nested tags",
 
