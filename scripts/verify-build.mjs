@@ -12,7 +12,7 @@
  *   npm run verify:full     also rebuilds with features off, and at scale
  */
 import { readFile, readdir, stat, mkdir, writeFile, rm } from 'node:fs/promises'
-import { join, relative, extname } from 'node:path'
+import { join, relative, extname, sep } from 'node:path'
 import { spawn } from 'node:child_process'
 import { tmpdir } from 'node:os'
 
@@ -301,49 +301,135 @@ section('Redirects and robots')
 
 section('JavaScript payload')
 {
+  const INLINE = /<script\b[^>]*>([\s\S]*?)<\/script>/g
   const scripts = pages.flatMap(({ file, html }) =>
-    [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)].map((m) => ({ file, body: m[1] })),
+    [...html.matchAll(INLINE)].map((m) => ({ file, body: m[1] })),
   )
   const jsFiles = await walk(DIST, (n) => n.endsWith('.js'))
-  const sharedBytes = (await Promise.all(jsFiles.map(async (f) => (await stat(f)).size))).reduce(
-    (a, b) => a + b,
-    0,
-  )
 
   /**
-   * Budget per *page*, not across the site: the inline blocks are counted one
-   * page at a time rather than summed, so this measures what a reader
-   * downloads instead of how many notes the demo has.
+   * Every emitted chunk, by the URL a page would reference it as.
    *
-   * `sharedBytes` is the honest caveat. It totals *every* `.js` in `dist/` and
-   * charges that total to every page, so the graph chunk only note pages load
-   * is billed to the tag index too. Deliberately left alone: attributing it
-   * properly means walking each page's module graph, and over-charging is the
-   * safe direction for a budget to be wrong in.
+   * `imports` is what makes this survive contact with the future. There are no
+   * cross-chunk imports in `dist/` today — one chunk, zero specifiers — so the
+   * closure below is a no-op right now. It stops being one the first time
+   * Rollup hoists a shared vendor chunk out of two islands, which is exactly
+   * the day a check that only read `<script src>` would start under-counting.
    */
-  const perPage = pages.map(({ file, html }) => ({
-    file,
-    bytes:
-      [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)].reduce(
-        (n, m) => n + Buffer.byteLength(m[1]),
-        0,
-      ) + sharedBytes,
-  }))
+  const IMPORT = /\b(?:import|from)\s*\(?\s*["']([^"']+\.js)["']/g
+  const urlOf = (file) => '/' + relative(DIST, file).split(sep).join('/')
+
+  /** Resolve a relative specifier against the importing chunk's own URL directory. */
+  const resolveSpecifier = (dir, spec) => {
+    const out = dir.split('/').filter(Boolean)
+    for (const part of spec.split('/')) {
+      if (!part || part === '.') continue
+      if (part === '..') out.pop()
+      else out.push(part)
+    }
+    return '/' + out.join('/')
+  }
+
+  const chunks = new Map()
+  for (const file of jsFiles) {
+    const url = urlOf(file)
+    const buffer = await readFile(file)
+    const body = buffer.toString('utf8')
+    const dir = url.slice(0, url.lastIndexOf('/'))
+    const imports = [...body.matchAll(IMPORT)].map(([, spec]) =>
+      spec.startsWith('.') ? resolveSpecifier(dir, spec) : spec,
+    )
+    chunks.set(url, { file: relative(DIST, file), bytes: buffer.length, imports, body })
+  }
+
+  /** The chunks a page really downloads: the ones it names, plus their imports. */
+  const closure = (entries) => {
+    const seen = new Set()
+    const queue = [...entries]
+    while (queue.length > 0) {
+      const url = queue.pop()
+      // A specifier that resolves to nothing in `dist/` is not ours to explain
+      // — a bare module name, or a string that only looked like a path.
+      if (seen.has(url) || !chunks.has(url)) continue
+      seen.add(url)
+      queue.push(...chunks.get(url).imports)
+    }
+    return seen
+  }
+
+  /**
+   * What a page names. Astro emits a `<script src>` for a chunk the page needs
+   * and *nothing at all* for a page that needs none, so this is the browser's
+   * own answer rather than an approximation of it. `modulepreload` is read too:
+   * Astro does not emit one here today, but a preloaded chunk is downloaded
+   * just the same, and missing it would under-count.
+   */
+  const referencedBy = (html) =>
+    [/<script\b[^>]*\bsrc="([^"]+\.js)"/g, /<link\b[^>]*\bhref="([^"]+\.js)"/g].flatMap((re) =>
+      [...html.matchAll(re)].map((m) => m[1]),
+    )
+
+  /**
+   * Budget per *page*, not across the site, and per page means *this* page.
+   *
+   * This used to total every `.js` in `dist/` and charge that total to all of
+   * them, so 20 KB of `d3-force` was billed to the 404 page and every tag
+   * index. That was defensible while the graph was the only client code —
+   * over-charging is the safe direction — but it stopped being defensible once
+   * a 1.2 KB feature's fate depended on a number that was mostly somebody
+   * else's chunk. It also made "the worst page" useless as a diagnostic, which
+   * is the part a budget is actually for.
+   *
+   * Fixing the metric deliberately does *not* move the ceiling. It buys about
+   * 20 KB of apparent headroom on most pages, and that headroom is not a
+   * budget increase — it was never spent.
+   */
+  const perPage = pages.map(({ file, html }) => {
+    const inline = [...html.matchAll(INLINE)].reduce((n, m) => n + Buffer.byteLength(m[1]), 0)
+    const loaded = closure(referencedBy(html))
+    const shared = [...loaded].reduce((n, url) => n + chunks.get(url).bytes, 0)
+    return { file, bytes: inline + shared, loaded }
+  })
   const worst = perPage.reduce((a, b) => (a.bytes >= b.bytes ? a : b), { file: '-', bytes: 0 })
 
   pass(
     'JavaScript per page',
-    `${worst.bytes} bytes at worst (${worst.file}); ${jsFiles.length} shared file(s), ${scripts.length} inline block(s) site-wide`,
+    `${worst.bytes} bytes at worst (${worst.file}); ${scripts.length} inline block(s) site-wide`,
   )
   /**
-   * 24 KB, and it stays there. Worth knowing while reading a number this close
-   * to its ceiling: Astro inlines a script chunk under **4096 bytes** into the
-   * page rather than emitting a `.js` file, so a small island costs nothing in
-   * `sharedBytes` — and an island that later crosses 4 KB flips to a shared
-   * file charged to *every* page, which is a discontinuous jump rather than a
-   * gradual one.
+   * 24 KB, and it stays there. Worth knowing while reading a number close to
+   * its ceiling: Astro inlines a script chunk under **4096 bytes** into the
+   * page rather than emitting a `.js` file, so a small island never becomes a
+   * shared chunk at all — and an island that later crosses 4 KB flips to one,
+   * which is a discontinuous jump rather than a gradual one.
    */
   check(worst.bytes < 24 * 1024, 'a page ships under 24 KB of JavaScript', `${worst.bytes} bytes on ${worst.file}`)
+
+  /**
+   * Attribution can hide what a total could not: a chunk that ships in `dist/`
+   * and is charged to nobody because nothing references it. That is dead weight
+   * a reader still pays to have deployed, and now that no page is billed for it
+   * the budget would never notice.
+   *
+   * The counts are reported rather than asserted. The assertion with real teeth
+   * is which *pages* may load which chunk — d3-force appearing on a tag index
+   * would be a bug the byte total cannot name, because 20 KB on a 1 KB page is
+   * still under budget. That needs a per-chunk allowlist, which is not worth
+   * hardcoding against a single chunk; revisit when there are two.
+   */
+  const loadedBy = new Map([...chunks.keys()].map((url) => [url, 0]))
+  for (const { loaded } of perPage) for (const url of loaded) loadedBy.set(url, loadedBy.get(url) + 1)
+
+  if (chunks.size > 0) {
+    pass(
+      'shared chunks',
+      [...loadedBy]
+        .map(([url, n]) => `${chunks.get(url).file} ${chunks.get(url).bytes}B on ${n}/${pages.length} page(s)`)
+        .join('; '),
+    )
+  }
+  const orphans = [...loadedBy].filter(([, n]) => n === 0).map(([url]) => chunks.get(url).file)
+  check(orphans.length === 0, 'every emitted chunk is referenced by a page', orphans.join(', '))
 
   /**
    * Nothing here should be reaching the network at runtime — and that has to
@@ -352,11 +438,8 @@ section('JavaScript payload')
    * bodies covered everything; the moment client code moves into
    * `dist/_astro/*.js` an inline-only grep would police nothing and still pass.
    */
-  const bundled = await Promise.all(
-    jsFiles.map(async (f) => ({ file: relative(DIST, f), body: await readFile(f, 'utf8') })),
-  )
   const NETWORK = /\bfetch\(|XMLHttpRequest|new WebSocket|navigator\.sendBeacon|EventSource\(/
-  const fetches = [...scripts, ...bundled].filter((s) => NETWORK.test(s.body))
+  const fetches = [...scripts, ...chunks.values()].filter((s) => NETWORK.test(s.body))
   check(fetches.length === 0, 'no runtime network requests', fetches.map((s) => s.file).join(', '))
 }
 
