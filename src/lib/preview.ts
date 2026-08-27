@@ -25,7 +25,7 @@ import { sectionById } from './transclude.js'
 import type { VaultNote } from './vault.js'
 
 export interface Preview {
-  /** The note's title, plus ` › Heading` when the link points into a section. */
+  /** The note's title, plus ` > Heading` when the link points into a section. */
   title: string
   /** The opening paragraph of whatever the link points at. */
   text: string
@@ -67,7 +67,10 @@ function compute(note: VaultNote, subpath: string): Preview | undefined {
   if (subpath && !subpath.startsWith('#^')) {
     const section = sectionById(note.body, slugifyHeading(subpath.slice(1)))
     const text = section && excerpt(section.body)
-    if (section && text) return { title: `${note.title} › ${section.heading}`, text }
+    // ` > ` rather than a typographic `›`, matching the separator `liveLabel`
+    // already puts in the link's own text. The card sits beside the link it
+    // came from; two spellings of one separator would read as two things.
+    if (section && text) return { title: `${note.title} > ${section.heading}`, text }
   }
 
   /**

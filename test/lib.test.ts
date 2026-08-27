@@ -358,7 +358,7 @@ describe('previewFor', () => {
 
   it('shows the section’s opening for a heading link, and names it in the title', () => {
     expect(previewFor(note(SECTIONED), '#How it works')).toEqual({
-      title: 'Sections › How it works',
+      title: 'Sections > How it works',
       text: 'Each note gets an address.',
     })
   })

@@ -202,7 +202,9 @@ describe('hover previews', () => {
 
   it('previews the section a heading link points at, and names it', () => {
     const html = render('Previews.md', on)
-    expect(html).toContain('data-preview-title="Sections › How it works"')
+    // `>` needs no escaping inside a double-quoted attribute value, so this
+    // reads literally here while the link's own text renders it as `&gt;`.
+    expect(html).toContain('data-preview-title="Sections > How it works"')
     expect(html).toContain(
       'data-preview="Each note gets an address, and new notes are filed behind whichever note they answer."',
     )
