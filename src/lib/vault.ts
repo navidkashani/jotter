@@ -16,7 +16,7 @@ import { join, relative, sep } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 
 import { protectedRanges, isProtected } from './protected.js'
-import { assignSlugs } from './slug.js'
+import { assignSlugs, normalizePermalinks, slugHazards, type SlugStyle } from './slug.js'
 import { mergeTags } from './tags.js'
 import { gitDates, resolveDates, type NoteDates } from './dates.js'
 import { excerpt } from './excerpt.js'
@@ -36,6 +36,13 @@ export interface LinkEdge {
 }
 
 export interface VaultNote extends ResolvableNote {
+  /**
+   * Every value of `permalink:`, normalised, in the order the note wrote them.
+   * The first is this note's slug — unless a collision displaced it — and the
+   * rest are redirect sources. Empty for a note that declares none, which is
+   * every note in a vault that has never heard of the key.
+   */
+  permalinks: string[]
   frontmatter: Record<string, unknown>
   /** Raw markdown with frontmatter removed. */
   body: string
@@ -48,6 +55,8 @@ export interface VaultNote extends ResolvableNote {
 
 export interface Vault extends VaultIndex<VaultNote> {
   root: string
+  /** The style every slug in here was assigned under, for anything re-deriving one. */
+  slugs: SlugStyle
   notes: VaultNote[]
   bySlug: Map<string, VaultNote>
   /** Intrinsic size for assets Astro's image pipeline will not measure (SVG). */
@@ -85,6 +94,15 @@ export interface ScanOptions {
    * must pass it.
    */
   image?: string
+  /**
+   * `config.slugs`: how a vault path becomes a slug — `derive` (the default,
+   * and what every jotter site has always done), `preserve` or `obsidian`.
+   *
+   * The same memo-key caveat as `homepage` and `image` above, and it bites
+   * harder here: two scans disagreeing about the *slug scheme* would give the
+   * markdown plugins one set of URLs and every page another.
+   */
+  slugs?: SlugStyle
 }
 
 const DEFAULT_IGNORE = ['node_modules', '.git', '.obsidian', '.trash', '.jotter']
@@ -202,11 +220,18 @@ export function scanVault(options: ScanOptions): Vault {
   const cached = cache.get(key)
   if (cached) return cached
 
-  const { root, publishGate = 'all', ignore = DEFAULT_IGNORE, homepage, image } = options
+  const {
+    root,
+    publishGate = 'all',
+    ignore = DEFAULT_IGNORE,
+    homepage,
+    image,
+    slugs: style = 'derive',
+  } = options
   const warnings: string[] = []
 
   if (!existsSync(root)) {
-    const empty = emptyVault(root, [`Vault directory not found: ${root}`])
+    const empty = emptyVault(root, style, [`Vault directory not found: ${root}`])
     cache.set(key, empty)
     return empty
   }
@@ -215,7 +240,7 @@ export function scanVault(options: ScanOptions): Vault {
   const markdown = files.filter((f) => /\.md$/i.test(f))
   const assetPaths = files.filter((f) => !/\.(md|mdx)$/i.test(f))
 
-  const { slugs, collisions } = assignSlugs(markdown)
+  const { slugs, collisions } = assignSlugs(markdown, style)
   for (const { slug, paths } of collisions) {
     warnings.push(
       `Slug collision on "${slug}": ${paths.join(', ')}. ` +
@@ -244,6 +269,7 @@ export function scanVault(options: ScanOptions): Vault {
     notes.push({
       path,
       slug: slugs.get(path) ?? path,
+      permalinks: [],
       filename,
       title: resolveTitle(frontmatter, body, filename),
       aliases,
@@ -258,7 +284,9 @@ export function scanVault(options: ScanOptions): Vault {
     edges.set(path, extractEdges(body))
   }
 
+  applyPermalinks(notes, warnings)
   claimRoot(notes, homepage, warnings)
+  warnings.push(...slugHazards(notes))
 
   const linkOverrides = loadLinksIndex(root, warnings)
   if (linkOverrides) {
@@ -274,6 +302,7 @@ export function scanVault(options: ScanOptions): Vault {
 
   const vault: Vault = {
     root,
+    slugs: style,
     notes,
     edges,
     warnings,
@@ -433,9 +462,10 @@ function push<K, V>(map: Map<K, V[]>, key: K, value: V): void {
   else map.set(key, [value])
 }
 
-function emptyVault(root: string, warnings: string[]): Vault {
+function emptyVault(root: string, style: SlugStyle, warnings: string[]): Vault {
   return {
     root,
+    slugs: style,
     notes: [],
     edges: new Map(),
     warnings,
@@ -445,6 +475,104 @@ function emptyVault(root: string, warnings: string[]): Vault {
     byFilename: new Map(),
     byAlias: new Map(),
     assets: new Map(),
+  }
+}
+
+/**
+ * Move every note that declares a `permalink:` to the address it names.
+ *
+ * Beside `claimRoot` below, in the same seam and for the reason its docstring
+ * already gives: `assignSlugs` runs on paths alone, before a single file has
+ * been read, so anything frontmatter-driven has to happen after the note loop
+ * and before `buildIndex()` — the last point before `bySlug` is built from
+ * these slugs.
+ *
+ * The value is taken **verbatim** in every `slugs:` style: NFC and stripped of
+ * leading and trailing slashes (see `normalizePermalinks`), and nothing else.
+ * Slugifying it would defeat the entire point — this key exists so a note can
+ * keep an address somebody else already published, and `Wisdom+&+Approaches`
+ * put through `slugifySegment` is not that address. It is the semantics
+ * Obsidian Publish, Jekyll, Hugo (`url`) and 11ty all give the key. Quartz is
+ * the odd one out; see `docs/migrating-from-quartz.md`.
+ *
+ * A note may name more than one. The first is the slug; the rest stay on the
+ * note as redirect sources, which is what closes the gap the Open Publish
+ * starter names in `frontmatter.mjs` — *"one old URL per note, because one is
+ * all `permalink` holds … if that ever changes, the rest need `_redirects`."*
+ * jotter writes `_redirects` anyway.
+ *
+ * Runs **before** `claimRoot`, so the precedence is
+ * `config.homepage` > `homepage: true` > `permalink` > path.
+ */
+function applyPermalinks(notes: VaultNote[], warnings: string[]): void {
+  /** slug -> the note holding it. Unique by construction: `assignSlugs` said so. */
+  const claimed = new Map<string, VaultNote>(notes.map((note) => [note.slug, note]))
+  /** The notes holding their slug because they asked for it, rather than by path. */
+  const explicit = new Set<VaultNote>()
+
+  /** The next free `-2`, `-3`… under a taken slug, exactly as `claimRoot` does it. */
+  const suffixed = (base: string): string => {
+    let n = 2
+    let slug = `${base}-${n}`
+    while (claimed.has(slug)) slug = `${base}-${++n}`
+    return slug
+  }
+
+  const collide = (loser: VaultNote, winner: VaultNote, wanted: string, moved: string): void => {
+    // Renamed either way, so `bySlug` cannot hold two notes at one slug — but
+    // only *reported* when the displaced note is published, because an
+    // unpublished one is served nowhere and its slug is observable nowhere.
+    if (!loser.published) return
+    warnings.push(
+      `Both "${loser.path}" and "${winner.path}" claim "/${wanted}". ` +
+        `"${winner.path}" wins; "${loser.path}" is served at "/${moved}" instead. ` +
+        `Rename one, or change its \`permalink:\`, to choose deliberately.`,
+    )
+  }
+
+  // `notes` is in sorted path order, so which of two notes naming the same
+  // permalink wins does not depend on filesystem enumeration — the same rule
+  // `assignSlugs` and `claimRoot` already break their ties by.
+  for (const note of notes) {
+    const declared = normalizePermalinks(note.frontmatter.permalink)
+    if (declared.length === 0) continue
+    note.permalinks = declared
+
+    const wanted = declared[0]
+    if (note.slug === wanted) {
+      explicit.add(note)
+      continue
+    }
+
+
+    const incumbent = claimed.get(wanted)
+    let slug = wanted
+
+    if (incumbent && explicit.has(incumbent)) {
+      // Two notes name the same permalink. Neither is more explicit than the
+      // other, so the one that already has it keeps it and this one is
+      // suffixed — the loser of a tie, not the loser of an argument.
+      slug = suffixed(wanted)
+      collide(note, incumbent, wanted, slug)
+    } else if (incumbent) {
+      // A permalink beats a derived slug, because it is the deliberate
+      // statement of the two. The displaced note keeps a page under a suffixed
+      // slug rather than vanishing from a site that still lists it everywhere,
+      // which is the same choice `claimRoot` makes one function down.
+      const moved = suffixed(wanted)
+      claimed.delete(incumbent.slug)
+      incumbent.slug = moved
+      claimed.set(moved, incumbent)
+      collide(incumbent, note, wanted, moved)
+    }
+
+    claimed.delete(note.slug)
+    note.slug = slug
+    claimed.set(slug, note)
+    // Only when it got what it asked for. A note suffixed after losing a tie is
+    // sitting on a slug it never named, so a later note that *does* name that
+    // slug should displace it — same rule, one level down.
+    if (slug === wanted) explicit.add(note)
   }
 }
 
@@ -466,7 +594,8 @@ function emptyVault(root: string, warnings: string[]): Vault {
  * slugs. `assignSlugs` cannot do this: it runs on paths alone, before a single
  * file has been read.
  *
- * Precedence: `config.homepage` > frontmatter `homepage: true` > `index.md`.
+ * Precedence: `config.homepage` > frontmatter `homepage: true` > `permalink:`
+ * (applied above, in `applyPermalinks`) > `index.md`.
  * Unpublished notes never qualify, so a `homepage:` naming one falls through to
  * the next candidate exactly as a `homepage:` naming nothing does.
  */

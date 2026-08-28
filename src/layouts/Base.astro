@@ -16,6 +16,7 @@
 import { Font } from 'astro:assets'
 
 import { config, socialImage } from '../lib/site.js'
+import { decodeSlug, encodeSlug } from '../lib/url.js'
 import { FEED_PATH } from '../lib/feed.js'
 import { t } from '../i18n/index.js'
 import Header from '../components/Header.astro'
@@ -57,7 +58,19 @@ const Search = showSearch ? (await import('../components/Search.astro')).default
 
 const pageTitle = title ? `${title} — ${config.title}` : config.title
 const pageDescription = description || config.description
-const canonical = config.url ? new URL(Astro.url.pathname, config.url).href : undefined
+/**
+ * The canonical URL, spelled the way every `<a href>` on the site spells it.
+ *
+ * `Astro.url.pathname` is the WHATWG form, which leaves `&` and `+` literal, so
+ * on a site whose slugs carry either one this used to disagree with the links
+ * pointing at the very same page — and RFC 3986 §6.2.2.2 keeps `/a&b` and
+ * `/a%26b` formally distinct, so Google reads that as two URLs for one page.
+ * The round trip is the whole fix, and it covers the pages with no slug at all
+ * — tags, `/notes`, the 404 — for free.
+ */
+const canonical = config.url
+  ? new URL(encodeSlug(decodeSlug(Astro.url.pathname)), config.url).href
+  : undefined
 
 /**
  * How a browser and every reader *discover* a feed. Without this the file is

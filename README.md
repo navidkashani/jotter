@@ -70,6 +70,7 @@ export default defineConfig({
   linkResolution: 'shortest',   // 'shortest' | 'absolute' | 'relative'
   publishGate: 'all',           // 'all' | 'opt-in'
   homepage: undefined,          // the note that claims '/' — see “The note at /” below
+  slugs: 'derive',              // 'derive' | 'preserve' | 'obsidian' — see “URLs” below
   strictLineBreaks: false,      // Obsidian's own default
   images: 'optimize',           // 'optimize' | 'passthrough'
   noIndex: false,
@@ -121,6 +122,7 @@ image: attachments/og.png      # the link-preview card — see “Link previews�
 publish: false                 # exclude this note
 draft: true                    # also excludes it
 homepage: true                 # this note claims '/' — see “The note at /” below
+permalink: Company/About+us    # serve this note here instead — see “URLs” below
 direction: rtl                 # this note's baseline — see “Mixed-direction vaults”
 ---
 ```
@@ -351,6 +353,45 @@ deliberate statement: it takes `/`, the `index.md` note keeps a page under a
 suffixed slug, and the build prints a warning naming both files. Nothing is
 dropped. A `homepage:` naming a note that is unpublished or absent falls through
 to the next way of claiming it.
+
+### URLs you already published
+
+By default a path becomes a slug: `Wisdom & Approaches/Critical Thinking.md` is
+served at `/wisdom-approaches/critical-thinking`. That is right for a new site
+and wrong for one moving onto a domain whose old addresses are already in other
+people's bookmarks and in Google's index.
+
+Two opt-in keys change it. Both leave a default build byte-for-byte unchanged.
+
+```ts
+// jotter.config.ts — the site-wide rule
+slugs: 'obsidian',   // 'derive' (default) | 'preserve' | 'obsidian'
+```
+
+| `slugs:` | that note is served at |
+| --- | --- |
+| `'derive'` | `/wisdom-approaches/critical-thinking` |
+| `'preserve'` | `/Wisdom%20&%20Approaches/Critical%20Thinking` |
+| `'obsidian'` | `/Wisdom+%26+Approaches/Critical+Thinking` — byte-identical to Obsidian Publish |
+
+```yaml
+---
+permalink: Company/About+us    # frontmatter — the per-note override
+---
+```
+
+The note is served **there**, honoured character for character in every mode,
+and its derived slug 301s to it. A list gives one page and a redirect from each
+of the rest. This is the same key the Open Publish Quartz starter already writes
+a note's old Obsidian URL into, so a vault it prepared needs no changes.
+
+One caveat before you deploy: **Netlify 301s mixed-case paths to lowercase**,
+with no opt-out, so `/Company/About+us` will not survive there. Cloudflare Pages,
+Vercel and GitHub Pages serve them as written, and the build warns whenever it
+emits a slug with an uppercase letter in it.
+
+Full detail, including the slug/URL split and what the build asserts about it:
+[`docs/url-styles.md`](docs/url-styles.md).
 
 ---
 

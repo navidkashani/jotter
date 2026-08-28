@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { fileURLToPath } from 'node:url'
-import { cpSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { cpSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
@@ -302,12 +302,18 @@ describe('neighbourhood edges', () => {
 })
 
 /** A throwaway copy of the fixture vault, with files of our own written over it. */
-function vaultWith(files: Record<string, string>, homepage?: string) {
+function vaultWith(
+  files: Record<string, string>,
+  options: string | Partial<Parameters<typeof scanVault>[0]> = {},
+) {
   const root = mkdtempSync(join(tmpdir(), 'jotter-homepage-'))
   cpSync(VAULT, root, { recursive: true })
-  for (const [path, source] of Object.entries(files)) writeFileSync(join(root, path), source)
+  for (const [path, source] of Object.entries(files)) {
+    mkdirSync(join(root, path, '..'), { recursive: true })
+    writeFileSync(join(root, path), source)
+  }
   clearVaultCache()
-  return scanVault({ root, homepage })
+  return scanVault({ root, ...(typeof options === 'string' ? { homepage: options } : options) })
 }
 
 const NOTE = (front: string) => `---\n${front}\n---\n\nA note.\n`
@@ -400,6 +406,177 @@ describe('the note that claims /', () => {
     const warning = v.warnings.find((w) => w.includes('homepage: true'))
     expect(warning).toContain('Alpha.md')
     expect(warning).toContain('Home.md')
+  })
+})
+
+/**
+ * `permalink:` is the per-note half of the URL story. The site-wide half is
+ * `slugs:`; this is what overrides it for one note, and the reason it exists is
+ * that a note's old address is a fact about the world rather than something a
+ * slug rule can derive.
+ */
+describe('permalink: the address a note keeps', () => {
+  const AT = (front: string) => NOTE(front)
+
+  it('takes the value verbatim, in every slug style', () => {
+    for (const style of ['derive', 'preserve', 'obsidian'] as const) {
+      const v = vaultWith(
+        { 'Legacy Note.md': AT('title: Legacy\npermalink: Company/About+us') },
+        { slugs: style },
+      )
+      expect(v.byPath.get('legacy note.md')?.slug).toBe('Company/About+us')
+      expect(v.bySlug.get('Company/About+us')?.path).toBe('Legacy Note.md')
+    }
+  })
+
+  it('never slugifies it — no lowercasing, no dashes, no substitutions', () => {
+    const v = vaultWith({
+      'Legacy Note.md': AT('title: Legacy\npermalink: Wisdom+&+Approaches/Critical+Thinking'),
+    })
+    expect(v.byPath.get('legacy note.md')?.slug).toBe('Wisdom+&+Approaches/Critical+Thinking')
+  })
+
+  it('accepts either spelling of the slashes, the way Hugo does', () => {
+    const v = vaultWith({ 'Legacy Note.md': AT('title: Legacy\npermalink: /company/about/') })
+    expect(v.byPath.get('legacy note.md')?.slug).toBe('company/about')
+  })
+
+  /**
+   * The gap the Open Publish starter names and cannot close on Quartz — *"one
+   * old URL per note, because one is all `permalink` holds"*. jotter writes
+   * `_redirects` anyway, so the rest are kept on the note for the redirect
+   * writer to pick up.
+   */
+  it('serves the first value and keeps the rest as redirect sources', () => {
+    const v = vaultWith({
+      'Legacy Note.md': AT('title: Legacy\npermalink: [Company/About+us, Company/About, about]'),
+    })
+    const note = v.byPath.get('legacy note.md')!
+    expect(note.slug).toBe('Company/About+us')
+    expect(note.permalinks).toEqual(['Company/About+us', 'Company/About', 'about'])
+  })
+
+  it('leaves permalinks empty on every note that declares none', () => {
+    expect(scan().notes.every((n) => n.permalinks.length === 0)).toBe(true)
+  })
+
+  /** Precedence: `config.homepage` > `homepage: true` > `permalink` > path. */
+  it('loses / to config.homepage and to homepage: true', () => {
+    const byConfig = vaultWith(
+      { 'Legacy Note.md': AT('title: Legacy\npermalink: index') },
+      { homepage: 'Zettelkasten' },
+    )
+    expect(byConfig.bySlug.get('index')?.path).toBe('Zettelkasten.md')
+
+    // `test/fixtures/vault/Home.md` sets `homepage: true`.
+    const byFlag = vaultWith({ 'Legacy Note.md': AT('title: Legacy\npermalink: index') })
+    expect(byFlag.bySlug.get('index')?.path).toBe('Home.md')
+  })
+
+  /**
+   * A permalink beats a derived slug because it is the deliberate statement of
+   * the two — and the displaced note keeps a page rather than vanishing from a
+   * site that still lists it, which is the same choice `claimRoot` makes.
+   */
+  it('displaces a derived slug, suffixes the loser and names both files', () => {
+    const v = vaultWith({ 'Legacy Note.md': AT('title: Legacy\npermalink: zettelkasten') })
+    expect(v.bySlug.get('zettelkasten')?.path).toBe('Legacy Note.md')
+    expect(v.byPath.get('zettelkasten.md')?.slug).toBe('zettelkasten-2')
+    const warning = v.warnings.find((w) => w.includes('claim "/zettelkasten"'))
+    expect(warning).toContain('Zettelkasten.md')
+    expect(warning).toContain('Legacy Note.md')
+    expect(warning).toMatch(/Rename one/)
+  })
+
+  it('breaks a tie between two permalinks in path order, keeping both pages', () => {
+    const v = vaultWith({
+      'Alpha.md': AT('title: Alpha\npermalink: shared'),
+      'Beta.md': AT('title: Beta\npermalink: shared'),
+    })
+    expect(v.bySlug.get('shared')?.path).toBe('Alpha.md')
+    expect(v.byPath.get('beta.md')?.slug).toBe('shared-2')
+    expect(v.warnings.some((w) => w.includes('claim "/shared"'))).toBe(true)
+  })
+
+  /**
+   * And a note suffixed after losing that tie is sitting on a slug it never
+   * named, so a note that *does* name it takes it — the same rule one level
+   * down, rather than a special case that stops applying after the first
+   * collision.
+   */
+  it('lets a later permalink displace a slug a tie-loser was suffixed onto', () => {
+    const v = vaultWith({
+      'Alpha.md': NOTE('title: Alpha\npermalink: shared'),
+      'Beta.md': NOTE('title: Beta\npermalink: shared'),
+      'Gamma.md': NOTE('title: Gamma\npermalink: shared-2'),
+    })
+    expect(v.bySlug.get('shared')?.path).toBe('Alpha.md')
+    expect(v.bySlug.get('shared-2')?.path).toBe('Gamma.md')
+    expect(v.byPath.get('beta.md')?.slug).toBe('shared-2-2')
+  })
+
+  it('says nothing about displacing a note nobody can reach', () => {
+    const v = vaultWith({
+      'Hidden.md': AT('title: Hidden\npublish: false'),
+      'Legacy Note.md': AT('title: Legacy\npermalink: hidden'),
+    })
+    expect(v.bySlug.get('hidden')?.path).toBe('Legacy Note.md')
+    expect(v.warnings.some((w) => w.includes('claim "/hidden"'))).toBe(false)
+  })
+
+  it('stops the build on a permalink that would escape dist/, naming the note', () => {
+    expect(() =>
+      vaultWith({ 'Legacy Note.md': AT('title: Legacy\npermalink: ../../etc/passwd') }),
+    ).toThrow(/Legacy Note\.md/)
+  })
+})
+
+describe('slug styles, end to end', () => {
+  it('keeps the vault path under preserve and obsidian, and keys bySlug by it', () => {
+    const files = { 'Wisdom & Approaches/Critical Thinking.md': NOTE('title: Critical') }
+
+    const preserve = vaultWith(files, { slugs: 'preserve' })
+    expect(preserve.bySlug.get('Wisdom & Approaches/Critical Thinking')?.title).toBe('Critical')
+
+    const obsidian = vaultWith(files, { slugs: 'obsidian' })
+    expect(obsidian.bySlug.get('Wisdom+&+Approaches/Critical+Thinking')?.title).toBe('Critical')
+    expect(obsidian.slugs).toBe('obsidian')
+  })
+
+  /**
+   * The failure this prevents is invisible: Astro NFC-normalises every route
+   * param itself, so a decomposed slug would be *routed* at its composed path
+   * while `bySlug`, every href and every redirect stayed decomposed — and every
+   * link to that note would 404. The path must stay byte-exact the other way,
+   * because the collection's `generateId` is the path.
+   */
+  it('composes the slug to NFC while leaving the path as the filesystem wrote it', () => {
+    const decomposed = 'Café.md' // as macOS Finder writes it
+    const v = vaultWith({ [decomposed]: NOTE('title: Cafe') }, { slugs: 'preserve' })
+    const note = v.notes.find((n) => n.title === 'Cafe')!
+    expect(note.slug).toBe('Café'.normalize('NFC'))
+    expect(v.bySlug.get('Café'.normalize('NFC'))).toBe(note)
+    expect(note.path.normalize('NFC')).toBe('Café.md'.normalize('NFC'))
+  })
+
+  /**
+   * The scan forwards what `slugHazards` finds — reported, and nothing renamed,
+   * because renaming would be jotter inventing a slug it was told to carry
+   * verbatim. (The case-only collision the same pass catches cannot be *made*
+   * here: on the macOS filesystem these tests run on, `Note.md` and `note.md`
+   * are one file, which is the very failure it warns about. It is asserted over
+   * the function directly, in `test/lib.test.ts`.)
+   */
+  it('forwards a slug hazard as a warning, and renames nothing', () => {
+    const v = vaultWith({ 'Q|A.md': NOTE('title: Windows') }, { slugs: 'preserve' })
+    expect(v.bySlug.get('Q|A')?.title).toBe('Windows')
+    expect(v.warnings.some((w) => /Windows/.test(w) && w.includes('Q|A.md'))).toBe(true)
+  })
+
+  /** An excluded note has no page, so nothing of it is written into `dist/`. */
+  it('says nothing about a hazard on a note that is never written', () => {
+    const v = vaultWith({ 'Q|A.md': NOTE('title: Windows\npublish: false') }, { slugs: 'preserve' })
+    expect(v.warnings.some((w) => w.includes('Q|A.md'))).toBe(false)
   })
 })
 

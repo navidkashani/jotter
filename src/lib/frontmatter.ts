@@ -102,6 +102,22 @@ export const noteFrontmatterSchema = z
     homepage: z.boolean().optional(),
 
     /**
+     * The URL this note is served at, instead of the one its path derives.
+     *
+     * Honoured character for character in every `slugs:` mode — no
+     * lowercasing, no dashes, no substitutions — which is the semantics
+     * Obsidian Publish's own `permalink` property has, and Jekyll's, and
+     * Hugo's `url`. The note's derived slug 301s to it.
+     *
+     * A *list* is accepted, and that is the contract above rather than a
+     * flourish: the Open Publish starter writes a note's `legacyUrls` into
+     * this key, `legacyUrls` is a list, and a future one may hand over more
+     * than one old address. The first value is the slug; the rest become
+     * redirects. See `applyPermalinks` in `src/lib/vault.ts`.
+     */
+    permalink: z.union([textish, z.array(textish)]).optional(),
+
+    /**
      * The card a link to this note unfurls as. `socialImage` and `cover` are
      * Quartz's own two spellings; `image` wins. See `src/lib/social.ts`.
      */

@@ -1,7 +1,18 @@
 import { describe, expect, it } from 'vitest'
 
 import { protectedRanges, isProtected, anchorFor } from '../src/lib/protected.js'
-import { slugifyPath, slugifySegment, assignSlugs, slugifyHeading } from '../src/lib/slug.js'
+import {
+  assignSlugs,
+  normalizePermalinks,
+  obsidianPath,
+  preservePath,
+  slugFor,
+  slugHazards,
+  slugifyHeading,
+  slugifyPath,
+  slugifySegment,
+} from '../src/lib/slug.js'
+import { decodeSlug, encodeSlug } from '../src/lib/url.js'
 import { mergeTags, inlineTags, frontmatterTags, expandTag, tagTree, normalizeTag } from '../src/lib/tags.js'
 import { resolveDates, frontmatterDate } from '../src/lib/dates.js'
 import { excerpt } from '../src/lib/excerpt.js'
@@ -110,6 +121,224 @@ describe('slugify', () => {
 
   it('slugifies headings the way github-slugger does', () => {
     expect(slugifyHeading('Hello, World!')).toBe('hello-world')
+  })
+})
+
+/**
+ * The five acceptance rows, in all three styles, from one table — so a mode
+ * that quietly starts lowercasing, or a rule that only survives in `derive`,
+ * fails here rather than on somebody's live site.
+ */
+describe('slugFor — the three site-wide styles', () => {
+  const ROWS: [path: string, derive: string, preserve: string, obsidian: string][] = [
+    ['notes/plain.md', 'notes/plain', 'notes/plain', 'notes/plain'],
+    ['Projects/Q3 Plan.md', 'projects/q3-plan', 'Projects/Q3 Plan', 'Projects/Q3+Plan'],
+    [
+      'Wisdom & Approaches/Critical Thinking.md',
+      'wisdom-approaches/critical-thinking',
+      'Wisdom & Approaches/Critical Thinking',
+      'Wisdom+&+Approaches/Critical+Thinking',
+    ],
+    [
+      // The zero-width non-joiner survives `preserve` and `obsidian` and is
+      // dropped by `derive`, which keeps letters and numbers and nothing else.
+      'یادداشت‌ها/تفکر نقاد.md',
+      'یادداشتها/تفکر-نقاد',
+      'یادداشت‌ها/تفکر نقاد',
+      'یادداشت‌ها/تفکر+نقاد',
+    ],
+    ['index.md', 'index', 'index', 'index'],
+  ]
+
+  it.each(ROWS)('slugs %s under every style', (path, derive, preserve, obsidian) => {
+    expect(slugFor(path, 'derive')).toBe(derive)
+    expect(slugFor(path, 'preserve')).toBe(preserve)
+    expect(slugFor(path, 'obsidian')).toBe(obsidian)
+  })
+
+  it('defaults to derive, so an unthreaded call site cannot change a site’s URLs', () => {
+    expect(slugFor('Notes/My Note.md')).toBe(slugifyPath('Notes/My Note.md'))
+  })
+
+  /** The two rules that are about routing rather than naming, in every style. */
+  it('drops .md and lets an index.md claim its folder in every style', () => {
+    for (const style of ['derive', 'preserve', 'obsidian'] as const) {
+      expect(slugFor('Notes/index.md', style)).not.toMatch(/index$/)
+      expect(slugFor('Notes/index.md', style)).not.toMatch(/\.md$/)
+    }
+    expect(slugFor('Notes/index.md', 'preserve')).toBe('Notes')
+    // The root one is the exception: `index` is how jotter spells `/`.
+    expect(slugFor('index.md', 'preserve')).toBe('index')
+  })
+
+  it('normalises the slug to NFC while never touching the path', () => {
+    const nfd = 'Café.md' // as macOS Finder writes it
+    expect(slugFor(nfd, 'preserve')).toBe('Café'.normalize('NFC'))
+    expect(slugFor(nfd, 'preserve').normalize('NFD')).not.toBe(slugFor(nfd, 'preserve'))
+    expect(preservePath(nfd)).toBe('Café'.normalize('NFC'))
+  })
+
+  it('keeps assignSlugs deterministic under a non-derive style', () => {
+    const paths = ['B/Note.md', 'A/Note.md']
+    const a = assignSlugs(paths, 'obsidian')
+    const b = assignSlugs([...paths].reverse(), 'obsidian')
+    expect([...a.slugs]).toEqual([...b.slugs])
+    expect(a.slugs.get('A/Note.md')).toBe('A/Note')
+  })
+})
+
+/**
+ * The parity claim, asserted rather than described. `obsidianPublishUrl` is
+ * copied verbatim from open-publish's `plugin/src/core/slug.ts`; the two
+ * projects have to agree character for character or a vault published by the
+ * plugin and rebuilt by jotter answers at two different sets of addresses.
+ */
+describe('obsidianPath — parity with open-publish slug.ts', () => {
+  const obsidianPublishUrl = (path: string): string =>
+    path
+      .replace(/\.md$/i, '')
+      .split('/')
+      .map((segment) => segment.replace(/ /g, '+'))
+      .join('/')
+
+  const FIXTURES = [
+    'Company/About us.md',
+    'Wisdom & Approaches/Critical Thinking.md',
+    'notes/plain.md',
+    'Projects/Q3 Plan.md',
+    'یادداشت‌ها/تفکر نقاد.md',
+    'C++ Notes.md',
+    'A  double  space.md',
+    'attachments/diagram.png',
+  ]
+
+  it.each(FIXTURES)('agrees on %s', (path) => {
+    expect(obsidianPath(path)).toBe(obsidianPublishUrl(path))
+  })
+
+  /** What the plugin's own docstring says the answer is, spelled out once. */
+  it('reproduces the address Obsidian Publish served', () => {
+    expect(obsidianPath('Wisdom & Approaches/Critical Thinking.md')).toBe(
+      'Wisdom+&+Approaches/Critical+Thinking',
+    )
+    expect(encodeSlug(obsidianPath('Wisdom & Approaches/Critical Thinking.md'))).toBe(
+      'Wisdom+%26+Approaches/Critical+Thinking',
+    )
+  })
+})
+
+describe('encodeSlug / decodeSlug — a slug is not a URL', () => {
+  const SLUGS = [
+    'notes/plain',
+    'Wisdom+&+Approaches/Critical+Thinking',
+    'یادداشت‌ها/تفکر+نقاد',
+    'Company/About+us',
+    '100% done',
+    'a?b#c',
+    'index',
+  ]
+
+  it.each(SLUGS)('round-trips %s', (slug) => {
+    expect(decodeSlug(encodeSlug(slug))).toBe(slug)
+  })
+
+  it('encodes the reserved characters and leaves a literal + alone', () => {
+    // `+` is a space only in a query string. In a path it is a plus, which is
+    // the whole reason the stored form can carry one.
+    expect(encodeSlug('Wisdom+&+Approaches')).toBe('Wisdom+%26+Approaches')
+    expect(encodeSlug('a b')).toBe('a%20b')
+    expect(encodeSlug('100% done')).toBe('100%25%20done')
+  })
+
+  it('keeps / a separator rather than encoding it', () => {
+    expect(encodeSlug('a/b/c')).toBe('a/b/c')
+  })
+
+  it('never lowercases and never substitutes — that is slugifySegment’s job', () => {
+    expect(encodeSlug('Q3 Plan')).toBe('Q3%20Plan')
+    expect(encodeSlug('A & B')).not.toContain('-and-')
+    expect(encodeSlug('50%')).not.toContain('-percent')
+  })
+
+  it('returns a segment it cannot decode rather than throwing', () => {
+    // Pagefind reads file paths off disk, so this is what a page in
+    // `dist/100% done/` arrives as.
+    expect(decodeSlug('/100% done')).toBe('/100% done')
+    expect(() => decodeSlug('%')).not.toThrow()
+  })
+
+  /**
+   * The one place jotter cannot *spell* a URL the way Obsidian did, written
+   * down so it is a known difference rather than a bug report.
+   *
+   * Obsidian form-urlencoded `C++ Notes.md` to `C%2B%2B+Notes`. That
+   * percent-decodes to `C+++Notes`, which is the slug — so the old address
+   * still resolves, because a host decodes the request path before looking for
+   * the file. What is lost is only the spelling: jotter emits `C+++Notes` where
+   * Obsidian emitted `C%2B%2B+Notes`, because form-urlencoding cannot be
+   * recovered from a percent-decoded string. `+` there is ambiguous between a
+   * space and a plus, and the slug is on the far side of that ambiguity.
+   */
+  it('resolves Obsidian’s form-urlencoding without reproducing its spelling', () => {
+    const slug = obsidianPath('C++ Notes.md')
+    expect(slug).toBe('C+++Notes')
+    // The old URL and the one jotter emits are the same URL to a static host.
+    expect(decodeSlug('C%2B%2B+Notes')).toBe(slug)
+    expect(decodeSlug(encodeSlug(slug))).toBe(slug)
+    // …and different bytes on the wire, which is the part that cannot be fixed.
+    expect(encodeSlug(slug)).not.toBe('C%2B%2B+Notes')
+  })
+})
+
+describe('normalizePermalinks', () => {
+  it('takes the value verbatim, minus the slashes Hugo also accepts', () => {
+    expect(normalizePermalinks('Company/About+us')).toEqual(['Company/About+us'])
+    expect(normalizePermalinks('/Company/About+us/')).toEqual(['Company/About+us'])
+  })
+
+  it('accepts a list, in order, deduped', () => {
+    expect(normalizePermalinks(['a', 'b', 'a'])).toEqual(['a', 'b'])
+  })
+
+  it('coerces the way every other frontmatter list does, and drops the empties', () => {
+    expect(normalizePermalinks(2026)).toEqual(['2026'])
+    expect(normalizePermalinks(['', '  ', 'x'])).toEqual(['x'])
+    expect(normalizePermalinks(null)).toEqual([])
+    expect(normalizePermalinks(undefined)).toEqual([])
+  })
+
+  it('never slugifies: that is the entire point of the key', () => {
+    expect(normalizePermalinks('Wisdom+&+Approaches/Critical+Thinking')).toEqual([
+      'Wisdom+&+Approaches/Critical+Thinking',
+    ])
+  })
+})
+
+describe('slugHazards — reported, never renamed', () => {
+  it('names a case-only collision, which is a silent overwrite on macOS', () => {
+    const [warning, ...rest] = slugHazards([
+      { path: 'Note.md', slug: 'Note' },
+      { path: 'note.md', slug: 'note' },
+    ])
+    expect(rest).toEqual([])
+    expect(warning).toContain('Note.md')
+    expect(warning).toContain('note.md')
+    expect(warning).toMatch(/case/i)
+  })
+
+  it('names a character Windows refuses in a filename', () => {
+    const [warning] = slugHazards([{ path: 'Q: A.md', slug: 'Q: A' }])
+    expect(warning).toContain('Q: A.md')
+    expect(warning).toMatch(/Windows/)
+  })
+
+  it('says nothing about an ordinary set of slugs', () => {
+    expect(slugHazards([{ path: 'a.md', slug: 'a' }, { path: 'b.md', slug: 'b' }])).toEqual([])
+  })
+
+  it('throws on a slug that would escape dist/, naming the note', () => {
+    expect(() => slugHazards([{ path: 'Note.md', slug: '../etc/passwd' }])).toThrow(/Note\.md/)
+    expect(() => slugHazards([{ path: 'Note.md', slug: '/rooted' }])).toThrow(/outside dist/)
   })
 })
 
@@ -424,6 +653,25 @@ describe('normalizeResultUrl — Pagefind speaks in trailing slashes', () => {
   it('leaves a URL already spelled jotter’s way alone', () => {
     expect(normalizeResultUrl('/obsidian')).toBe('/obsidian')
     expect(normalizeResultUrl('/obsidian#links')).toBe('/obsidian#links')
+  })
+
+  /**
+   * Pagefind indexes the **file path**, so a page in `dist/Wisdom+&+Approaches/`
+   * is stored at the slug rather than at the URL. Without the re-encode a result
+   * would be the one link on the site spelling that page differently from its
+   * own canonical.
+   */
+  it('re-encodes a slug that carries a reserved character', () => {
+    expect(normalizeResultUrl('/Wisdom+&+Approaches/Critical+Thinking/')).toBe(
+      '/Wisdom+%26+Approaches/Critical+Thinking',
+    )
+    expect(normalizeResultUrl('/Wisdom+&+Approaches/Critical+Thinking/#why')).toBe(
+      '/Wisdom+%26+Approaches/Critical+Thinking#why',
+    )
+  })
+
+  it('survives a path Pagefind read off a file it cannot percent-decode', () => {
+    expect(normalizeResultUrl('/100% done/')).toBe('/100%25%20done')
   })
 })
 

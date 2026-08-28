@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url'
 
 import { scanVault, clearVaultCache } from '../src/lib/vault.js'
 import { buildTree, folders, contains } from '../src/lib/tree.js'
+import { encodeSlug } from '../src/lib/url.js'
 import { noteHref, assetHref, tagHref, relativeAssetPath } from '../src/lib/href.js'
 import { liveLabel } from '../src/lib/resolve.js'
 import { svgIntrinsicSize, isOptimizable } from '../src/lib/embed.js'
@@ -64,7 +65,7 @@ describe('liveLabel', () => {
 })
 
 describe('tree', () => {
-  const t = buildTree(vault().notes.filter((n) => n.published))
+  const t = buildTree(vault().notes.filter((n) => n.published), 'derive')
 
   it('derives folders from note paths', () => {
     const names = folders(t).map((f) => f.path).sort()
@@ -92,6 +93,33 @@ describe('tree', () => {
     const notesFolder = folders(t).find((f) => f.path === 'notes')!
     expect(contains(notesFolder, 'notes/luhmann')).toBe(true)
     expect(contains(notesFolder, 'zettelkasten')).toBe(false)
+  })
+
+  /**
+   * Load-bearing, and silent when it breaks: `contains()` is a `startsWith`
+   * over slugs, so a folder slugged one way above notes slugged another matches
+   * nothing — no error, just a sidebar that stops opening the right branch and
+   * stops marking the current page.
+   */
+  it('slugs a folder as a prefix of its notes under every style', () => {
+    for (const style of ['derive', 'preserve', 'obsidian'] as const) {
+      const notes = scanVault({ root: VAULT, slugs: style }).notes.filter((n) => n.published)
+      clearVaultCache()
+      const folder = folders(buildTree(notes, style)).find((f) => f.path === 'notes')!
+      const inside = notes.filter((n) => n.path.startsWith('notes/'))
+      expect(inside.length).toBeGreaterThan(0)
+      for (const note of inside) expect(contains(folder, note.slug)).toBe(true)
+    }
+  })
+
+  /**
+   * And the other half of the same rule: a note a `permalink:` moved out of its
+   * folder stops matching, which is correct — it is no longer served from under
+   * that folder's URL.
+   */
+  it('stops claiming a note a permalink moved out of the folder', () => {
+    const folder = folders(t).find((f) => f.path === 'notes')!
+    expect(contains(folder, 'Company/About+us')).toBe(false)
   })
 })
 
@@ -244,6 +272,18 @@ describe('config', () => {
 
   it('defaults to Obsidian’s line-break behaviour, not CommonMark’s', () => {
     expect(jotterConfigSchema.parse({}).strictLineBreaks).toBe(false)
+  })
+
+  /**
+   * The default has to stay `derive` forever: it is the URL scheme every jotter
+   * site built so far is already published at, and changing it would move every
+   * page on all of them.
+   */
+  it('defaults slugs to derive, and accepts the other two by name', () => {
+    expect(jotterConfigSchema.parse({}).slugs).toBe('derive')
+    expect(defineConfig({ slugs: 'preserve' }).slugs).toBe('preserve')
+    expect(defineConfig({ slugs: 'obsidian' }).slugs).toBe('obsidian')
+    expect(() => defineConfig({ slugs: 'obsidian-publish' as never })).toThrow(/slugs/)
   })
 })
 
@@ -704,12 +744,20 @@ describe('config — image', () => {
 })
 
 describe('redirects', () => {
+  /**
+   * A note as `buildRedirects` reads one. Written out rather than cast, because
+   * the general vacated-slug rule reads `path` and `permalinks` too, and a
+   * fixture missing either would pass for the wrong reason.
+   */
+  const note = (fields: Partial<VaultNote> & { slug: string }): VaultNote =>
+    ({ path: `${fields.slug}.md`, aliases: [], permalinks: [], ...fields }) as VaultNote
+
   const notes = [
-    { slug: 'zettelkasten', aliases: ['Slipbox Method', 'Zettel'] },
-    { slug: 'notes/other', aliases: ['Zettel'] },
-    { slug: 'jotter', aliases: ['jotter'] },
-    { slug: 'plain', aliases: [] },
-  ] as never
+    note({ slug: 'zettelkasten', aliases: ['Slipbox Method', 'Zettel'] }),
+    note({ slug: 'notes/other', path: 'notes/Other.md', aliases: ['Zettel'] }),
+    note({ slug: 'jotter', aliases: ['jotter'] }),
+    note({ slug: 'plain' }),
+  ]
 
   it('turns aliases into redirects', () => {
     const out = buildRedirects({ notes, taken: [] })
@@ -736,29 +784,112 @@ describe('redirects', () => {
   })
 
   /**
-   * The note claiming `/` was published at its own slug until it was promoted,
-   * so that URL is in bookmarks and inbound links. Recomputed from the path,
-   * which is why no `previousSlug` field had to be invented.
+   * One rule for every note whose slug is not the one its path derives, rather
+   * than the homepage-shaped special case it replaces. Recomputed from the
+   * path, which is why no `previousSlug` field had to be invented.
    */
   it('keeps the promoted note’s old URL working', () => {
     const promoted = [
-      { slug: 'index', path: 'Zettelkasten.md', aliases: [] },
-      { slug: 'index', path: 'notes/Deep Note.md', aliases: [] },
-    ] as never
+      note({ slug: 'index', path: 'Zettelkasten.md' }),
+      note({ slug: 'index', path: 'notes/Deep Note.md' }),
+    ]
     const out = buildRedirects({ notes: promoted, taken: [] })
     expect(out['/zettelkasten']).toBe('/')
     expect(out['/notes/deep-note']).toBe('/')
   })
 
   it('emits nothing for a note that was at the root all along', () => {
-    const rooted = [{ slug: 'index', path: 'index.md', aliases: [] }] as never
+    const rooted = [note({ slug: 'index', path: 'index.md' })]
     expect(buildRedirects({ notes: rooted, taken: [] })).toEqual({})
   })
 
   it('gives up the old URL rather than shadow a note that has taken it', () => {
-    const promoted = [{ slug: 'index', path: 'Zettelkasten.md', aliases: [] }] as never
+    const promoted = [note({ slug: 'index', path: 'Zettelkasten.md' })]
     const out = buildRedirects({ notes: promoted, taken: ['zettelkasten'] })
     expect(out['/zettelkasten']).toBeUndefined()
+  })
+
+  /**
+   * The same one rule, reached the other way: a `permalink:` moved the note, so
+   * the URL it used to be published at 301s to the new one.
+   */
+  it('301s a permalinked note’s derived slug to where it now lives', () => {
+    const moved = [note({ slug: 'Company/About+us', path: 'Legacy Note.md' })]
+    const out = buildRedirects({ notes: moved, taken: [], slugs: 'obsidian' })
+    expect(out['/Legacy+Note']).toBe('/Company/About+us')
+  })
+
+  it('turns every permalink after the first into a redirect of its own', () => {
+    const moved = [
+      note({
+        slug: 'Company/About+us',
+        path: 'Legacy Note.md',
+        permalinks: ['Company/About+us', 'Company/About', 'about'],
+      }),
+    ]
+    const out = buildRedirects({ notes: moved, taken: [], slugs: 'obsidian' })
+    expect(out['/Company/About']).toBe('/Company/About+us')
+    expect(out['/about']).toBe('/Company/About+us')
+    // The first is where the note is served; it is not a redirect to itself.
+    expect(out['/Company/About+us']).toBeUndefined()
+  })
+
+  /**
+   * A collision suffix is deliberately *not* a vacated slug: the derived slug
+   * is owned by the note that won it, and `owned` skips it. A redirect there
+   * would shadow a real page.
+   */
+  it('emits nothing for a slug a collision gave to another note', () => {
+    const collided = [note({ slug: 'note-2', path: 'b/Note.md' })]
+    const out = buildRedirects({ notes: collided, taken: ['note'] })
+    expect(out['/note']).toBeUndefined()
+  })
+
+  /**
+   * Sources come out in **URL** space and the comparisons stay in **slug**
+   * space. Netlify's own docs require encoded paths in `_redirects`, and the
+   * shadow check has to keep comparing like with like or it stops catching
+   * anything on a site whose slugs are interesting.
+   */
+  it('encodes redirect sources while still detecting a shadowed page', () => {
+    const moved = [note({ slug: 'new', path: 'Wisdom & Approaches/Critical Thinking.md' })]
+    const out = buildRedirects({ notes: moved, taken: [], slugs: 'obsidian' })
+    expect(out['/Wisdom+%26+Approaches/Critical+Thinking']).toBe('/new')
+    expect(encodeSlug('Wisdom+&+Approaches/Critical+Thinking')).toBe(
+      'Wisdom+%26+Approaches/Critical+Thinking',
+    )
+
+    const shadowed = buildRedirects({
+      notes: moved,
+      taken: ['Wisdom+&+Approaches/Critical+Thinking'],
+      slugs: 'obsidian',
+    })
+    expect(shadowed).toEqual({})
+  })
+
+  it('encodes an alias that is not ASCII', () => {
+    const cyrillic = [note({ slug: 'luhmann', aliases: ['Заметка'] })]
+    const out = buildRedirects({ notes: cyrillic, taken: [] })
+    expect(out['/%D0%B7%D0%B0%D0%BC%D0%B5%D1%82%D0%BA%D0%B0']).toBe('/luhmann')
+  })
+
+  /**
+   * An alias is a *name*. Under `derive` that name is slugified, because the
+   * derived slug it stands in for would have been; under the other two, jotter
+   * does not invent spellings and carries it as typed.
+   */
+  it('slugifies an alias under derive and carries it verbatim otherwise', () => {
+    const aliased = [note({ slug: 'x', path: 'x.md', aliases: ['Slipbox Method'] })]
+    expect(buildRedirects({ notes: aliased, taken: [] })['/slipbox-method']).toBe('/x')
+    expect(
+      buildRedirects({ notes: aliased, taken: [], slugs: 'preserve' })['/Slipbox%20Method'],
+    ).toBe('/x')
+  })
+
+  it('never lets a name become a protocol-relative URL', () => {
+    const aliased = [note({ slug: 'x', path: 'x.md', aliases: ['/leading/slash/'] })]
+    const out = buildRedirects({ notes: aliased, taken: [], slugs: 'preserve' })
+    expect(Object.keys(out)).toEqual(['/leading/slash'])
   })
 
   it('renders the Netlify and Vercel formats', () => {

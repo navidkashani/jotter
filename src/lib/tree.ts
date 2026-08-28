@@ -6,7 +6,7 @@
  * (`/notes/`, `/notes/nested/`), which is what makes a tree parent clickable
  * instead of a label that only toggles.
  */
-import { slugifyPath } from './slug.js'
+import { slugFor, type SlugStyle } from './slug.js'
 import type { VaultNote } from './vault.js'
 
 export interface TreeNote {
@@ -40,7 +40,18 @@ const compare = (a: TreeEntry, b: TreeEntry) => {
   return aName.localeCompare(bName)
 }
 
-export function buildTree(notes: readonly VaultNote[]): TreeEntry[] {
+/**
+ * `style` is not optional in practice, and `contains()` at the bottom of this
+ * file is why: it tests `slug.startsWith(folder.slug + '/')`, so a folder
+ * slugged `wisdom-approaches` above a note slugged `Wisdom+&+Approaches/…`
+ * matches nothing — the sidebar's `<details open>` and the current-page
+ * highlight both go quiet, with no error anywhere. Both callers pass
+ * `vault.slugs`.
+ *
+ * A note that a `permalink:` moved *out* of its folder stops matching too, and
+ * that is correct: it is no longer served from under that folder's URL.
+ */
+export function buildTree(notes: readonly VaultNote[], style: SlugStyle): TreeEntry[] {
   const root: TreeFolder = { kind: 'folder', name: '', path: '', slug: '', children: [], count: 0 }
   const folders = new Map<string, TreeFolder>([['', root]])
 
@@ -55,7 +66,7 @@ export function buildTree(notes: readonly VaultNote[]): TreeEntry[] {
       kind: 'folder',
       name,
       path,
-      slug: slugifyPath(path),
+      slug: slugFor(path, style),
       children: [],
       count: 0,
     }

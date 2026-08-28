@@ -1,6 +1,6 @@
 /**
- * Redirects, generated from `aliases:` frontmatter plus whatever the config
- * adds.
+ * Redirects, generated from vacated slugs and `aliases:` frontmatter plus
+ * whatever the config adds.
  *
  * An alias is a promise that a name still works. Obsidian honours it inside the
  * vault; on the web it has to become a real redirect or the promise is only
@@ -8,9 +8,19 @@
  *
  * Pure, so `astro.config.ts` (which emits the host files) and `src/lib/site.ts`
  * (which is bundled) compute the same set without importing each other.
+ *
+ * ## Slug space in, URL space out
+ *
+ * The map is built entirely in **slug** space, so `owned.has(from)`, the
+ * first-write rule and the `taken` list from `astro.config.ts` all keep
+ * comparing like with like, and encoded **once** at the end. Sources used to be
+ * raw slugs while destinations came from `noteHref()`, which was already wrong
+ * for any non-ASCII alias — and Netlify's own documentation requires paths in
+ * `_redirects` to be URL-encoded.
  */
 import { noteHref } from './href.js'
-import { slugifyPath, slugifySegment } from './slug.js'
+import { slugFor, slugifySegment, type SlugStyle } from './slug.js'
+import { encodeSlug } from './url.js'
 import type { VaultNote } from './vault.js'
 
 export interface RedirectSources {
@@ -18,48 +28,89 @@ export interface RedirectSources {
   /** Slugs already owned by a page: a redirect must never shadow one. */
   taken: Iterable<string>
   extra?: Record<string, string>
+  /** The style the notes' slugs were assigned under. See `src/lib/slug.ts`. */
+  slugs?: SlugStyle
 }
 
-/** `from` path -> `to` path, both site-absolute and leading-slashed. */
-export function buildRedirects({ notes, taken, extra = {} }: RedirectSources): Record<string, string> {
+/**
+ * A name, as a redirect source.
+ *
+ * `derive` slugifies it, because that is what the derived slug it is standing
+ * in for would have been. The other two carry it verbatim: under `preserve` and
+ * `obsidian` the whole contract is that jotter does not invent spellings, and
+ * an alias is a name the author typed. Slashes are trimmed and empty segments
+ * dropped either way — a leading one would make `//host`, which is not a path
+ * on this site at all.
+ */
+const sourceFor = (name: string, style: SlugStyle): string =>
+  style === 'derive'
+    ? slugifySegment(name)
+    : name.normalize('NFC').split('/').filter(Boolean).join('/')
+
+/** `from` path -> `to` path, both site-absolute, leading-slashed and encoded. */
+export function buildRedirects({
+  notes,
+  taken,
+  extra = {},
+  slugs: style = 'derive',
+}: RedirectSources): Record<string, string> {
   const owned = new Set(taken)
-  const out: Record<string, string> = {}
+  /** slug -> slug, first write wins. */
+  const out = new Map<string, string>()
+
+  const claim = (from: string, to: string): void => {
+    // Skip a source that is empty, that is already where it points, that a real
+    // page owns, or that something claimed first. `index` is never a source:
+    // `/` is a real page in every build — the note claiming it, or the
+    // generated landing page — and `/index` is not a URL this site serves.
+    if (!from || from === 'index' || from === to || owned.has(from) || out.has(from)) return
+    out.set(from, to)
+  }
 
   /**
-   * The note that claims `/` was published at its own slug until it was
-   * promoted, so that URL is in bookmarks and inbound links. Recomputed from
-   * the path rather than remembered on the note: `slugifyPath` is pure, and a
-   * `previousSlug` field would be one more thing to keep in step.
+   * Every note whose slug is not the one its path derives 301s from the derived
+   * one, because that is the URL it was published at until something moved it.
+   *
+   * One rule rather than the homepage-shaped special case this replaces, and it
+   * covers all three ways a note moves: promotion to `/`, a `permalink:`, and a
+   * change of `slugs:` style. Recomputed from the path rather than remembered
+   * on the note — `slugFor` is pure, and a `previousSlug` field would be one
+   * more thing to keep in step.
+   *
+   * A collision suffix is *not* covered, and correctly so: there the derived
+   * slug is owned by the note that won it, and `owned.has(from)` skips it.
    *
    * Before the aliases, so a URL that actually served this note outranks a name
    * that only ever pointed at another one — and an alias that was unreachable
    * while the page existed does not become live by inheriting its vacated URL.
    */
   for (const note of notes) {
-    if (note.slug !== 'index') continue
-    const from = slugifyPath(note.path)
-    if (from === 'index' || owned.has(from)) continue
-    out[`/${from}`] = '/'
+    claim(slugFor(note.path, style), note.slug)
+  }
+
+  /**
+   * The second and later values of a `permalink:` list: old addresses the note
+   * answers at without being served from. Ahead of the aliases for the same
+   * reason the vacated slugs are — these are URLs somebody published.
+   */
+  for (const note of notes) {
+    for (const permalink of note.permalinks.slice(1)) claim(permalink, note.slug)
   }
 
   for (const note of notes) {
-    for (const alias of note.aliases) {
-      const from = slugifySegment(alias)
-      // Skip an alias that is empty, that a real page already owns, that
-      // another note claimed first, or that points at its own note.
-      if (!from || owned.has(from) || out[`/${from}`]) continue
-      const to = noteHref(note.slug)
-      if (to === `/${from}`) continue
-      out[`/${from}`] = to
-    }
+    for (const alias of note.aliases) claim(sourceFor(alias, style), note.slug)
   }
 
-  // Explicit config wins over a generated one: it is the escape hatch.
+  const redirects: Record<string, string> = {}
+  for (const [from, to] of out) redirects[`/${encodeSlug(from)}`] = noteHref(to)
+
+  // Explicit config wins over a generated one: it is the escape hatch, it is
+  // written in URL space by hand, and it is merged verbatim.
   for (const [from, to] of Object.entries(extra)) {
-    out[from.startsWith('/') ? from : `/${from}`] = to.startsWith('/') ? to : `/${to}`
+    redirects[from.startsWith('/') ? from : `/${from}`] = to.startsWith('/') ? to : `/${to}`
   }
 
-  return out
+  return redirects
 }
 
 /** Netlify and Cloudflare Pages. */

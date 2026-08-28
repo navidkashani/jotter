@@ -75,6 +75,19 @@ export const jotterConfigSchema = z
     /** Slug of the note that should claim `/`. Falls back to a generated landing page. */
     homepage: z.string().optional(),
 
+    /**
+     * How a vault path becomes a URL.
+     *
+     * `derive` slugifies — lowercase, dashes, punctuation dropped — and is what
+     * every jotter site has always done. `preserve` and `obsidian` carry the
+     * vault path to the URL untouched, and `obsidian` reproduces Obsidian
+     * Publish's own addresses (space → `+`), so a site moving onto the domain
+     * those URLs were served from keeps every inbound link and every search
+     * ranking it had. A single note overrides all three with `permalink:` in
+     * its frontmatter. See `docs/url-styles.md`.
+     */
+    slugs: z.enum(['derive', 'preserve', 'obsidian']).default('derive'),
+
     /** Obsidian's own default is `false`: a single newline becomes a line break. */
     strictLineBreaks: z.boolean().default(false),
 

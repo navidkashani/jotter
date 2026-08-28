@@ -59,6 +59,7 @@ export default defineConfig({ linkResolution: 'absolute' })
 | `rssLimit` | **No equivalent.** Fixed at 50. Quartz's default of 10 is too few once you notice that a *revision* re-enters the window, so a weekend of tidying can evict a new note before a subscriber polls — and readers dedupe on `guid`, so they never see it |
 | `rssSlug` | **No equivalent.** Fixed at `rss.xml` |
 | `socialImage`, `image` or `cover` in frontmatter | `image:` — all three spellings are read, `image` wins, and the file is resolved against the vault the way an embed is. Plus `image` in `jotter.config.ts` for a site-wide default a note can override. Needs `url`, and PNG/JPEG/GIF/WebP: an SVG card is one Facebook will not draw, so it is a build warning rather than a tag |
+| `permalink` in frontmatter | `permalink:` — **and it changes meaning.** On Quartz, `permalink` emits a `noindex` meta-refresh bounce page at that path and the note stays at its derived slug. On jotter the note is *served* there, and the derived slug 301s to it. The same set of URLs works either way; the canonical one moves. That is a migration note, not a bug — and it is the behaviour Obsidian Publish, Jekyll, Hugo (`url`) and 11ty all give the key. jotter also accepts a list, where Quartz takes one value |
 | `Plugin.CustomOgImages` | **Not yet.** Quartz's emitter *generates* a card from each page's title and description; jotter emits the one you declare and nothing where you declare none. Generated images are the half still to come |
 | `quartz.layout.ts` | `layout: 'column' \| 'panels'` and `nav: 'tree' \| 'tags' \| 'none'` |
 | `quartz/styles/custom.scss` | `src/styles/custom.css` (plain CSS) |
@@ -166,6 +167,11 @@ export default defineConfig({ linkResolution: 'absolute' })
    `aliases:` in frontmatter generates redirects automatically, so an alias you
    already had is already handled.
 
+   If the addresses you are keeping are Obsidian Publish's rather than
+   Quartz's — because that is where the vault was before Quartz — `slugs:` does
+   the whole set at once rather than one redirect at a time, and `permalink:`
+   overrides a single note. See [url-styles.md](url-styles.md).
+
 ---
 
 ## Things that will look different and are not bugs
@@ -178,5 +184,8 @@ export default defineConfig({ linkResolution: 'absolute' })
   exactly as Obsidian does.
 - **`index.md` inside a folder claims that folder's URL.** `notes/index.md`
   becomes `/notes`, not `/notes/index`.
+- **A `permalink:` note is served at its permalink**, rather than bouncing to it
+  from a `noindex` page. Both URLs work; the canonical one is the permalink. See
+  the table above.
 - **Folders have their own pages**, so a tree parent is a link rather than a
   label that only toggles.

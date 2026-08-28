@@ -19,6 +19,7 @@ import { fileURLToPath } from 'node:url'
 import type { AstroIntegration } from 'astro'
 
 import { VAULT_ASSET_BASE } from '../lib/href.js'
+import { decodeSlug } from '../lib/url.js'
 import { toNetlify, toVercel, robotsTxt } from '../lib/redirects.js'
 import { feedXml, FEED_PATH, type FeedOptions } from '../lib/feed.js'
 import type { Vault } from '../lib/vault.js'
@@ -95,6 +96,26 @@ export function jotterVault({
         const warnings = [...vault.warnings, ...graph.warnings]
         for (const warning of warnings) logger.warn(warning)
 
+        /**
+         * The one host that cannot honour `preserve`, `obsidian` or a
+         * `permalink:` carrying a capital letter, said once and by name.
+         *
+         * Netlify 301s a mixed-case path to its lowercase form, with no opt-out
+         * — so `/Company/About+us` lands on `/company/about+us`, which this
+         * build does not serve. Cloudflare Pages, Vercel and GitHub Pages all
+         * serve static assets case-sensitively, as written. Degrade loudly: a
+         * site that silently lost half its URLs on deploy is the failure this
+         * whole feature exists to prevent.
+         */
+        const mixedCase = vault.notes.filter((n) => n.published && /\p{Lu}/u.test(n.slug))
+        if (mixedCase.length > 0) {
+          logger.warn(
+            `${mixedCase.length} slug(s) contain an uppercase letter, starting with ` +
+              `"/${mixedCase[0].slug}". Netlify 301s mixed-case paths to lowercase and cannot ` +
+              `be told not to; Cloudflare Pages, Vercel and GitHub Pages serve them as written.`,
+          )
+        }
+
         // Degrade loudly, never silently cap: past the tested scale, say so
         // rather than letting a slow build look like a hang.
         if (vault.notes.length > 1000) {
@@ -110,6 +131,40 @@ export function jotterVault({
       },
 
       'astro:server:setup': ({ server }) => {
+        /**
+         * Make `astro dev` agree with a static host about what a request means.
+         *
+         * Astro's dev router decodes an incoming pathname with `decodeURI`
+         * (`core/util/pathname.js`), which by definition does **not** decode a
+         * reserved character — `%26` stays `%26` — and then keys static paths
+         * by the raw param (`core/render/route-cache.js`). So a link to
+         * `/Wisdom+%26+Approaches/…` 404s in dev while working perfectly in
+         * production, where the host percent-decodes before looking for the
+         * file. Nothing in the built site is wrong; only dev disagrees, which
+         * is the worst place for a disagreement to live.
+         *
+         * The rewrite is to the one form that router is stable under: decode
+         * the pathname to the slug, then re-encode with `encodeURI`, which
+         * escapes exactly what `decodeURI` will put back. `#` and `?` are the
+         * two `encodeURI` leaves alone and must not — they would truncate the
+         * path. Query and hash are carried through untouched.
+         *
+         * A no-op for any URL without an encoded reserved character in it, so a
+         * `derive` site — and every Vite and HMR request — is untouched.
+         *
+         * First, ahead of the `/_vault` middleware below, which already relies
+         * on this ordering: it sees the decoded form and reads the file it
+         * names.
+         */
+        server.middlewares.use((req, _res, next) => {
+          const url = req.url ?? ''
+          const cut = url.search(/[?#]/)
+          const path = cut === -1 ? url : url.slice(0, cut)
+          const minimal = encodeURI(decodeSlug(path)).replace(/#/g, '%23').replace(/\?/g, '%3F')
+          if (minimal !== path) req.url = minimal + (cut === -1 ? '' : url.slice(cut))
+          next()
+        })
+
         server.middlewares.use((req, res, next) => {
           const url = req.url ?? ''
           if (!url.startsWith(`${VAULT_ASSET_BASE}/`)) return next()

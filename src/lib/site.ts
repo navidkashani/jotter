@@ -30,6 +30,7 @@ export const vault = scanVault({
   publishGate: jotter.publishGate,
   homepage: jotter.homepage,
   image: jotter.image,
+  slugs: jotter.slugs,
 })
 
 /**
@@ -56,7 +57,7 @@ export const byUpdated = [...notes].sort(
   (a, b) => b.dates.updated.getTime() - a.dates.updated.getTime(),
 )
 
-export const tree = buildTree(notes)
+export const tree = buildTree(notes, vault.slugs)
 export const allFolders = folders(tree)
 export const tags = tagTree(notes)
 

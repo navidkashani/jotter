@@ -16,6 +16,7 @@
 import { resolveLink, resolveAsset, displayFor, liveLabel, splitTarget } from '../lib/resolve.js'
 import { parseEmbedPipe, isMediaTarget, isOptimizable } from '../lib/embed.js'
 import { noteHref, assetHref, relativeAssetPath } from '../lib/href.js'
+import { decodeSlug } from '../lib/url.js'
 import { anchorFor } from '../lib/protected.js'
 import { previewFor } from '../lib/preview.js'
 import type { VaultNote } from '../lib/vault.js'
@@ -126,14 +127,10 @@ export function wikilinks(doc: DocumentContext) {
   const noteForHref = (url: string): { note: VaultNote; subpath: string } | undefined => {
     const hash = url.indexOf('#')
     const path = hash === -1 ? url : url.slice(0, hash)
-    let slug: string
-    try {
-      // The mirror of `noteHref`: it encodes each segment, and spells the
-      // site root `/` rather than `/index`.
-      slug = path === '/' ? 'index' : path.slice(1).split('/').map(decodeURIComponent).join('/')
-    } catch {
-      return undefined // A malformed escape is not ours to repair.
-    }
+    // `decodeSlug` is the mirror of the encoder `noteHref` uses; the one thing
+    // it does not know is that jotter spells the site root `/` rather than
+    // `/index`, which is this line.
+    const slug = path === '/' ? 'index' : decodeSlug(path.slice(1))
     const note = vault.bySlug.get(slug)
     return note?.published ? { note, subpath: hash === -1 ? '' : url.slice(hash) } : undefined
   }

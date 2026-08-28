@@ -19,6 +19,7 @@ import { jotterVault } from './src/integrations/vault'
 import { jotterSearch } from './src/integrations/search'
 import { buildRedirects } from './src/lib/redirects'
 import { buildTree, folders } from './src/lib/tree'
+import { decodeSlug, encodeSlug } from './src/lib/url'
 
 /**
  * Resolved once, here, and injected into the client/server bundle below.
@@ -34,6 +35,7 @@ const vault = scanVault({
   publishGate: jotter.publishGate,
   homepage: jotter.homepage,
   image: jotter.image,
+  slugs: jotter.slugs,
 })
 const graph = buildGraph(vault, jotter.linkResolution)
 
@@ -42,7 +44,7 @@ const published = vault.notes.filter((note) => note.published)
 /** Every slug this build routes: a note page, or a folder index above one. */
 const routed = [
   ...published.map((note) => note.slug),
-  ...folders(buildTree(published)).map((folder) => folder.slug),
+  ...folders(buildTree(published, vault.slugs)).map((folder) => folder.slug),
 ]
 
 /**
@@ -70,6 +72,7 @@ const feed = jotter.features.rss
 
 const redirects = buildRedirects({
   notes: published,
+  slugs: vault.slugs,
   taken: [
     ...routed,
     // Routes jotter owns itself.
@@ -176,7 +179,31 @@ export default defineConfig({
      */
     ...(jotter.features.search ? [jotterSearch({ locale: jotter.locale, slugs: routed })] : []),
     // A site that asked not to be indexed should not hand out a map of itself.
-    ...(jotter.url && !jotter.noIndex ? [sitemap()] : []),
+    ...(jotter.url && !jotter.noIndex
+      ? [
+          sitemap({
+            /**
+             * The third of the four producers of a page's URL, brought into
+             * line with the other three.
+             *
+             * `@astrojs/sitemap` builds each entry as `new URL(fullPath, site)`
+             * off the same WHATWG pathname `Base.astro`'s canonical link used
+             * to take, so a slug carrying `&` or `+` was spelled one way in
+             * every `<a href>` and another way here — and sitemaps.org requires
+             * percent-encoding, while Google's URL guidelines say a link, a
+             * canonical and a sitemap entry that disagree split one page into
+             * duplicates. The same round trip as the canonical, for the same
+             * reason. XML entity escaping is the `sitemap` package's job and it
+             * does it; emitting `%26` means no raw `&` reaches the XML at all.
+             */
+            serialize: (item) => {
+              const url = new URL(item.url)
+              url.pathname = encodeSlug(decodeSlug(url.pathname))
+              return { ...item, url: url.href }
+            },
+          }),
+        ]
+      : []),
   ],
 
   image: {

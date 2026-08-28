@@ -1,33 +1,36 @@
 /**
  * Every URL the site emits is built here, so there is one answer to "what does
  * a link to this note look like" and one place to change it.
+ *
+ * The encoding itself is `encodeSlug` in `src/lib/url.ts`, and every other
+ * producer of a page's URL — canonical, `og:url`, the sitemap, a search result
+ * — calls the same function: a link and a canonical that spell the same page
+ * differently are two pages as far as a crawler is concerned.
  */
 import { anchorFor } from './protected.js'
+import { encodeSlug } from './url.js'
 
 /** Where vault attachments are served from, in dev and in `dist/`. */
 export const VAULT_ASSET_BASE = '/_vault'
 
 const trimSlashes = (s: string) => s.replace(/^\/+|\/+$/g, '')
 
-/** Percent-encode each segment, leaving the separators readable. */
-const encodePath = (path: string) => path.split('/').map(encodeURIComponent).join('/')
-
 export function noteHref(slug: string, subpath = '', base = ''): string {
   const prefix = base ? `/${trimSlashes(base)}` : ''
   const clean = trimSlashes(slug)
   // `index` is the site root, not `/index`.
-  const path = clean === 'index' ? '' : `/${encodePath(clean)}`
+  const path = clean === 'index' ? '' : `/${encodeSlug(clean)}`
   return `${prefix}${path || '/'}${anchorFor(subpath)}`
 }
 
 export function assetHref(vaultPath: string, base = ''): string {
   const prefix = base ? `/${trimSlashes(base)}` : ''
-  return `${prefix}${VAULT_ASSET_BASE}/${encodePath(trimSlashes(vaultPath))}`
+  return `${prefix}${VAULT_ASSET_BASE}/${encodeSlug(trimSlashes(vaultPath))}`
 }
 
 export function tagHref(tag: string, base = ''): string {
   const prefix = base ? `/${trimSlashes(base)}` : ''
-  return `${prefix}/tags/${encodePath(trimSlashes(tag))}`
+  return `${prefix}/tags/${encodeSlug(trimSlashes(tag))}`
 }
 
 /**

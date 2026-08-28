@@ -9,14 +9,17 @@
  * This file is the one exception to the boundary `local-graph.ts` and
  * `hover-preview.ts` both declare — that nothing in `src/scripts/` may import
  * from `src/lib/`. The reason for that rule is that `src/lib/` is build-time
- * code and reaches for `node:fs`; this module imports nothing at all, from
- * anywhere, and nothing in it touches a global. So it bundles into the
- * browser cleanly *and* it is testable without a DOM, which is the whole
- * argument `src/lib/preview.ts` made for the build-time half of hover previews.
+ * code and reaches for `node:fs`; this module imports one thing, `./url.js`,
+ * which itself imports nothing at all — and nothing in either touches a global.
+ * So it bundles into the browser cleanly *and* it is testable without a DOM,
+ * which is the whole argument `src/lib/preview.ts` made for the build-time half
+ * of hover previews.
  *
  * Keep it that way. The moment this file imports something node-shaped, the
- * search script stops building.
+ * search script stops building. `src/lib/url.ts` is the one import it has, and
+ * that module was written to have none of its own for exactly this reason.
  */
+import { decodeSlug, encodeSlug } from './url.js'
 
 /**
  * Pagefind emits `/foo/` for `dist/foo/index.html`. jotter is
@@ -28,6 +31,14 @@
  * already spelled the way jotter spells it, and trimming it would produce an
  * empty href.
  *
+ * The second mismatch is the same shape and was invisible until a slug could
+ * carry an interesting character. Pagefind reads the **file path** off disk, so
+ * a page in `dist/Wisdom+&+Approaches/` is indexed at `/Wisdom+&+Approaches/…`
+ * — the slug, not the URL. Re-encoding it here is what makes a search result
+ * byte-identical to the `<a href>`, the canonical link and the sitemap entry
+ * for the same page; RFC 3986 §6.2.2.2 keeps `/a&b` and `/a%26b` formally
+ * distinct, and Google's URL guidelines split a page that is linked as both.
+ *
  * `#anchor` survives, because sub-results are the reason heading jumps work.
  */
 export function normalizeResultUrl(url: string): string {
@@ -35,7 +46,7 @@ export function normalizeResultUrl(url: string): string {
   const path = hash === -1 ? url : url.slice(0, hash)
   const anchor = hash === -1 ? '' : url.slice(hash)
   const trimmed = path.replace(/\/+$/, '')
-  return `${trimmed || '/'}${anchor}`
+  return `${encodeSlug(decodeSlug(trimmed)) || '/'}${anchor}`
 }
 
 /**

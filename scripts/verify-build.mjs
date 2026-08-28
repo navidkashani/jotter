@@ -13,6 +13,7 @@
  *                           a homepage set, and at scale
  */
 import { readFile, readdir, stat, mkdir, writeFile, rm } from 'node:fs/promises'
+import { gunzipSync } from 'node:zlib'
 import { join, relative, extname, sep } from 'node:path'
 import { spawn } from 'node:child_process'
 import { tmpdir } from 'node:os'
@@ -101,6 +102,36 @@ const routeOf = (file) =>
     .replace(/\/?index\.html$/, '')
     .replace(/\.html$/, '')
 
+/**
+ * `src/lib/url.ts`, reimplemented in four lines.
+ *
+ * This script is plain Node and that module is TypeScript, so it cannot import
+ * it — and it should not want to. The point of the assertions below is that the
+ * four producers of a page's URL agree with an *independent* idea of how a slug
+ * is spelled; comparing jotter's encoder against itself would pass on the day
+ * it started emitting `-and-`. `test/lib.test.ts` is what keeps the real
+ * function honest.
+ *
+ * `routeOf` above reads file names off disk, which is the **slug**. Everything
+ * a page emits — hrefs, canonical, sitemap — is the **URL**. These two convert.
+ */
+const encodePath = (slug) =>
+  slug.split('/').map((s) => encodeURIComponent(s).replace(/%2B/g, '+')).join('/')
+
+const decodePath = (path) =>
+  path
+    .split('/')
+    .map((s) => {
+      try {
+        return decodeURIComponent(s)
+      } catch {
+        // A malformed escape is a broken URL, but the raw form is what should
+        // be reported — and every lookup below misses it either way.
+        return s
+      }
+    })
+    .join('/')
+
 /** Everything inside the rendered note body, where our markdown output lands. */
 const proseOf = (html) =>
   [...html.matchAll(/<div class="note-body prose">([\s\S]*?)<nav class="prev-next"|<div class="note-body prose">([\s\S]*?)<\/div>/g)]
@@ -140,10 +171,16 @@ async function internalLinks(pages) {
     ...(await walk(DIST, () => true)).map((f) => '/' + relative(DIST, f).split(sep).join('/')),
   ])
 
+  /**
+   * Redirect sources are written in URL space and `served` is keyed in slug
+   * space, so they are decoded on the way in — the same conversion the `href`
+   * lookup below already does. Without it every non-ASCII redirect looked
+   * dangling to this check while working perfectly in production.
+   */
   const netlify = await readFile(join(DIST, '_redirects'), 'utf8').catch(() => '')
   for (const line of netlify.split('\n')) {
     const from = line.trim().split(/\s+/)[0]
-    if (from.startsWith('/')) served.add(from)
+    if (from.startsWith('/')) served.add(decodePath(from))
   }
 
   /**
@@ -154,16 +191,6 @@ async function internalLinks(pages) {
    */
   const authored = pages.filter(({ file }) => !file.startsWith(`_vault${sep}`))
 
-  const decode = (value) => {
-    try {
-      return decodeURIComponent(value)
-    } catch {
-      // A malformed escape is a broken link, but it is the raw form that should
-      // be reported — and the lookup below will miss it either way.
-      return value
-    }
-  }
-
   const offenders = []
   let checked = 0
   for (const { file, html } of authored) {
@@ -171,7 +198,7 @@ async function internalLinks(pages) {
       // Site-absolute only. `//host/x` is another origin, `#x` is this page,
       // and a scheme is somebody else's problem.
       if (!href.startsWith('/') || href.startsWith('//')) continue
-      const path = decode(href.split('#')[0].split('?')[0])
+      const path = decodePath(href.split('#')[0].split('?')[0])
       const target = path.length > 1 ? path.replace(/\/$/, '') : path
       checked++
       if (!served.has(target)) offenders.push(`${file}: ${href}`)
@@ -186,6 +213,131 @@ async function internalLinks(pages) {
   // Without this the check above passes loudest on a `dist/` with no links in
   // it at all.
   check(checked > 0, 'the demo actually has internal links to resolve')
+}
+
+/**
+ * The four things that emit a page's URL spell it identically.
+ *
+ * `internalLinks()` above compares after decoding, so it passes on a site whose
+ * links and canonical disagree — which is the duplicate-URL split Google's URL
+ * guidelines warn about, and RFC 3986 §6.2.2.2 is the reason it is a real
+ * split: `/a&b` and `/a%26b` are formally different URLs, and percent-encoded
+ * reserved characters are protected from normalisation. So "the link resolves"
+ * and "the link is the same URL the page calls itself" are two claims, and only
+ * the first was ever checked. This is the second.
+ *
+ * The four producers are the `<a href>`, the canonical link and `og:url`, the
+ * sitemap entry, and the Pagefind result. Each is compared against the spelling
+ * `encodePath` derives from the page's own path in `dist/` — an independent
+ * answer rather than jotter's, for the reason given at that function.
+ *
+ * Whichever of them this build has: canonical and the sitemap need `config.url`
+ * and Pagefind needs `features.search`, so on a config with neither this checks
+ * the hrefs alone and says how much it covered. `--full` sets both.
+ */
+async function producersAgree(pages) {
+  const authored = pages.filter(({ file }) => !file.startsWith(`_vault${sep}`))
+
+  /** The URL each page ought to be spelled as, keyed by its route on disk. */
+  const expected = new Map(
+    authored.map(({ file }) => {
+      const route = routeOf(join(DIST, file))
+      return [route, route === '/' ? '/' : encodePath(route)]
+    }),
+  )
+
+  const offenders = []
+  const counted = { href: 0, canonical: 0, ogUrl: 0, sitemap: 0, search: 0 }
+
+  const compare = (kind, route, spelling, where) => {
+    const want = expected.get(route)
+    if (want === undefined) return // Not a page; `internalLinks` owns that half.
+    counted[kind]++
+    if (spelling !== want) offenders.push(`${kind} ${where}: ${spelling} != ${want}`)
+  }
+
+  /** The path part of a URL that may be absolute or site-relative. */
+  const pathOf = (url) => (url.startsWith('/') ? url : new URL(url).pathname)
+
+  for (const { file, html } of authored) {
+    for (const [, href] of html.matchAll(/<a\b[^>]*\bhref="([^"]*)"/g)) {
+      if (!href.startsWith('/') || href.startsWith('//')) continue
+      const path = href.split('#')[0].split('?')[0]
+      const route = decodePath(path.length > 1 ? path.replace(/\/$/, '') : path)
+      compare('href', route, path, file)
+    }
+
+    const canonical = /<link rel="canonical" href="([^"]*)"/.exec(html)
+    if (canonical) {
+      const path = pathOf(canonical[1])
+      compare('canonical', decodePath(path), path, file)
+    }
+
+    const ogUrl = /<meta property="og:url" content="([^"]*)"/.exec(html)
+    if (ogUrl) {
+      const path = pathOf(ogUrl[1])
+      compare('ogUrl', decodePath(path), path, file)
+    }
+  }
+
+  for (const sitemapFile of await walk(DIST, (n) => /^sitemap.*\.xml$/.test(n))) {
+    const xml = await readFile(sitemapFile, 'utf8')
+    for (const [, loc] of xml.matchAll(/<loc>([^<]*)<\/loc>/g)) {
+      // The sitemap index lists the sitemaps, not the pages.
+      if (/sitemap.*\.xml$/.test(loc)) continue
+      const path = pathOf(loc.replace(/&amp;/g, '&'))
+      compare('sitemap', decodePath(path), path, relative(DIST, sitemapFile))
+    }
+  }
+
+  /**
+   * Pagefind's fragments are gzip after a `pagefind_dcd` marker, and the `url`
+   * in each is the **file path** it indexed — `/atomic-notes/`, with the
+   * trailing slash `trailingSlash: 'never'` does not use. So the two moves
+   * `normalizeResultUrl()` makes at runtime are made here too, and the result
+   * is what a reader clicking a search result actually gets.
+   */
+  for (const fragment of await walk(DIST, (n) => n.endsWith('.pf_fragment'))) {
+    const raw = await readFile(fragment)
+    const start = raw.indexOf(0x1f, 0)
+    let json
+    try {
+      json = gunzipSync(raw.subarray(start)).toString('utf8')
+    } catch {
+      continue // Not a shape this check understands; the search section owns it.
+    }
+    const url = /"url":"([^"]*)"/.exec(json)
+    if (!url) continue
+    const trimmed = url[1].replace(/\/+$/, '')
+    const spelling = encodePath(decodePath(trimmed)) || '/'
+    compare('search', decodePath(trimmed) || '/', spelling, relative(DIST, fragment))
+  }
+
+  check(
+    offenders.length === 0,
+    'every producer of a page’s URL spells it identically',
+    offenders.slice(0, 12).join('\n        '),
+  )
+  const covered = Object.entries(counted).filter(([, n]) => n > 0).map(([k, n]) => `${k} ${n}`)
+  // Without this the check above passes loudest on a build that emitted none of
+  // them — and three of the four are behind a config key.
+  check(counted.href > 0, 'the demo actually has URLs to compare', covered.join(', '))
+
+  /**
+   * Which producers this config actually has, said out loud rather than left to
+   * be inferred from a number — the same shape as `no feed in dist/` below.
+   * Canonical, `og:url` and the sitemap need `url`; search needs
+   * `features.search`. `npm run verify:full` sets both and covers all four.
+   */
+  const absent = [
+    counted.canonical === 0 && 'canonical',
+    counted.ogUrl === 0 && 'og:url',
+    counted.sitemap === 0 && 'sitemap',
+    counted.search === 0 && 'search',
+  ].filter(Boolean)
+  if (absent.length > 0) {
+    pass(`${absent.join(', ')} not in this build`, 'needs `url`, or `features.search`')
+  }
 }
 
 section('Links')
@@ -205,6 +357,7 @@ section('Links')
   check(deadLinkPages.length > 0, 'the demo actually exercises dead links', 'no dead-link span found anywhere')
 
   await internalLinks(pages)
+  await producersAgree(pages)
 }
 
 /* ----------------------------------------------------------------- images */
@@ -654,13 +807,23 @@ async function redirectsAndRobots() {
       `${fromNetlify.length} vs ${fromVercel.length}`,
     )
 
-    // A redirect pointing at a page that does not exist is worse than none.
+    /**
+     * Both comparisons decode first. `routeOf` reads file names off disk — slug
+     * space — while a redirect's `source` and `destination` are URLs, so the
+     * two only matched by accident of every slug so far being ASCII. Every
+     * non-ASCII redirect this build has ever written reported as dangling, and
+     * every one that really did shadow a page reported as fine.
+     */
     const routes = new Set((await walk(DIST, (n) => n.endsWith('.html'))).map(routeOf))
-    const dangling = fromVercel.filter((r) => !routes.has(r.destination) && r.destination !== '/')
+
+    // A redirect pointing at a page that does not exist is worse than none.
+    const dangling = fromVercel.filter(
+      (r) => !routes.has(decodePath(r.destination)) && r.destination !== '/',
+    )
     check(dangling.length === 0, 'every redirect points at a real page', dangling.map((r) => `${r.source} -> ${r.destination}`).join(', '))
 
     // And one that shadows a real page would make that page unreachable.
-    const shadowing = fromVercel.filter((r) => routes.has(r.source))
+    const shadowing = fromVercel.filter((r) => routes.has(decodePath(r.source)))
     check(shadowing.length === 0, 'no redirect shadows a real page', shadowing.map((r) => r.source).join(', '))
   }
 
@@ -2120,6 +2283,235 @@ if (FULL) {
         await feedSection(onPages)
       }
 
+      await writeFile(configPath, original)
+      await clearContentStores(ROOT)
+    }
+  }
+
+  /**
+   * The fifth config rewrite, and the one both URL features live or die on.
+   *
+   * `slugs:` and `permalink:` exist for a vault whose addresses are already in
+   * other people's bookmarks, and neither is exercised by the committed config
+   * by design — the default is `derive`, and it has to stay that way or every
+   * jotter site built so far moves. Turning them on in `jotter.config.ts` would
+   * be the wrong fix twice over: the demo garden documents the default, and a
+   * forker reading it would inherit a scheme they did not choose.
+   *
+   * So this builds a synthetic vault instead, through the same
+   * `JOTTER_VAULT_OVERRIDE` harness `section('Scale')` uses, holding the five
+   * paths that exercise the modes plus one note carrying a `permalink:`. One
+   * rebuild covers both features and all four URL producers.
+   */
+  section('URLs jotter is told, not URLs jotter invents')
+  {
+    const configPath = join(ROOT, 'jotter.config.ts')
+    const original = await readFile(configPath, 'utf8')
+
+    const URLS = join(tmpdir(), `jotter-urls-${process.pid}`)
+
+    /**
+     * `[vault path, slug, the URL it must be served at]`, under
+     * `slugs: 'obsidian'`.
+     *
+     * The slug is what lands in `dist/`; the URL is what every link, the
+     * canonical, the sitemap and a search result must spell. They differ by
+     * exactly one thing — percent-encoding — and the third row is where that
+     * stops being theoretical.
+     */
+    const ROWS = [
+      ['notes/plain.md', 'notes/plain', '/notes/plain'],
+      ['Projects/Q3 Plan.md', 'Projects/Q3+Plan', '/Projects/Q3+Plan'],
+      [
+        'Wisdom & Approaches/Critical Thinking.md',
+        'Wisdom+&+Approaches/Critical+Thinking',
+        '/Wisdom+%26+Approaches/Critical+Thinking',
+      ],
+      [
+        'یادداشت‌ها/تفکر نقاد.md',
+        'یادداشت‌ها/تفکر+نقاد',
+        `/${encodePath('یادداشت‌ها/تفکر+نقاد')}`,
+      ],
+      ['index.md', 'index', '/'],
+    ]
+
+    /** The note that keeps an address its path would never derive. */
+    const PERMALINK = { path: 'Legacy Note.md', slug: 'Company/About+us', vacated: '/Legacy+Note' }
+
+    const body = (title) =>
+      `---\ntitle: ${title}\n---\n\n# ${title}\n\nA note in the URL fixture vault.\n`
+
+    await rm(URLS, { recursive: true, force: true })
+    for (const [path, , url] of ROWS) {
+      await mkdir(join(URLS, ...path.split('/').slice(0, -1)), { recursive: true })
+      await writeFile(
+        join(URLS, ...path.split('/')),
+        path === 'index.md'
+          ? `---\ntitle: Home\n---\n\n# Home\n\nEvery note: ` +
+              ROWS.filter(([p]) => p !== 'index.md')
+                .map(([p]) => `[[${p.split('/').pop().replace(/\.md$/, '')}]]`)
+                .join(', ') +
+              `, [[Legacy Note]].\n`
+          : body(path.split('/').pop().replace(/\.md$/, '')) + `\nServed at \`${url}\`.\n`,
+      )
+    }
+    await writeFile(
+      join(URLS, PERMALINK.path),
+      `---\ntitle: Legacy\npermalink: ${PERMALINK.slug}\n---\n\n# Legacy\n\n` +
+        `An address this note kept.\n`,
+    )
+
+    const withSlugs = (source) =>
+      /^\s*slugs:\s*'/m.test(source)
+        ? source.replace(/^(\s*)slugs:\s*'[^']*',?$/m, `$1slugs: 'obsidian',`)
+        : source.replace(CALL, `export default defineConfig({\n  slugs: 'obsidian',`)
+
+    /** Search on, so the fourth producer exists to be compared. */
+    const withSearchOn = (source) => {
+      if (/\bsearch:\s*(?:true|false)/.test(source)) {
+        return source.replace(/\bsearch:\s*(?:true|false)/, 'search: true')
+      }
+      if (/\bfeatures:\s*\{/.test(source)) {
+        return source.replace(/\bfeatures:\s*\{/, 'features: {\n    search: true,')
+      }
+      return source.replace(CALL, `export default defineConfig({\n  features: { search: true },`)
+    }
+
+    const on = withSearchOn(withSlugs(withFeedOn(original)))
+
+    const unrewritten = [
+      [/^\s*slugs:\s*'obsidian'/m, 'slugs'],
+      [/\bsearch:\s*true/, 'features.search'],
+      ...FEED_ON_KEYS,
+    ]
+      .filter(([re]) => !re.test(on))
+      .map(([, name]) => name)
+
+    if (unrewritten.length > 0) {
+      fail(
+        'the URL rewrite reached every key it needed to',
+        `${unrewritten.join(', ')}; the checks below would be vacuous`,
+      )
+    } else {
+      await writeFile(configPath, on)
+      await clearContentStores(ROOT)
+
+      const { code, out } = await run(['astro', 'build'], {
+        env: { ...process.env, JOTTER_VAULT_OVERRIDE: URLS },
+      })
+
+      if (code !== 0) {
+        fail('build succeeds with slugs and a permalink set', out.slice(-800))
+      } else {
+        const onPages = await Promise.all(
+          (await walk(DIST, (n) => n.endsWith('.html'))).map(async (file) => ({
+            file: relative(DIST, file),
+            html: await readFile(file, 'utf8'),
+          })),
+        )
+        const textOut = await walk(DIST, (n) => TEXT_OUTPUT.test(n) || n === '_redirects')
+        const onOutputs = await Promise.all(
+          textOut.map(async (file) => ({
+            file: relative(DIST, file),
+            text: await readFile(file, 'utf8'),
+          })),
+        )
+
+        /** Every row: the page is on disk at the slug, and the URL decodes to it. */
+        const everyRow = [...ROWS, [PERMALINK.path, PERMALINK.slug, `/${PERMALINK.slug}`]]
+        for (const [path, slug, url] of everyRow) {
+          // `index` is the site root, which is `dist/index.html` — the one
+          // slug that is not a directory of its own.
+          const page =
+            slug === 'index'
+              ? join(DIST, 'index.html')
+              : join(DIST, ...slug.split('/'), 'index.html')
+          check(
+            (await stat(page).catch(() => null)) !== null,
+            `${path} is served at ${url}`,
+            `no page at ${relative(DIST, page)}`,
+          )
+          check(
+            decodePath(url) === (slug === 'index' ? '/' : `/${slug}`),
+            `and ${url} percent-decodes to the slug it is stored under`,
+            `${decodePath(url)} != /${slug}`,
+          )
+        }
+
+        /**
+         * The permalink half, stated the way `section('A note claiming /')`
+         * states the homepage's: served where it was told, 301 from the URL its
+         * path derives, and that derived URL appearing **nowhere else**. A
+         * working link to the wrong URL is still the wrong URL.
+         */
+        const netlify = onOutputs.find((o) => o.file === '_redirects')?.text ?? ''
+        check(
+          netlify.includes(`${PERMALINK.vacated} /${PERMALINK.slug} 301`),
+          `${PERMALINK.vacated} still works, as a 301 to /${PERMALINK.slug}`,
+          netlify.trim().split('\n').join(' | '),
+        )
+
+        const REDIRECT_FILES = new Set(['_redirects', 'vercel.json'])
+        const spelled = (path) =>
+          new RegExp(
+            `(?:href="|${FEED_ORIGIN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})` +
+              `${path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?=["#?<]|$)`,
+          )
+        const stale = onOutputs.filter(
+          ({ file, text }) =>
+            !file.startsWith(`_vault${sep}`) &&
+            !REDIRECT_FILES.has(file) &&
+            spelled(PERMALINK.vacated).test(text),
+        )
+        check(
+          stale.length === 0,
+          'nothing in dist/ still points at the slug the permalink replaced',
+          stale.map((p) => p.file).join(', '),
+        )
+
+        /**
+         * The Quartz failure, asserted against rather than described.
+         * `slugifyFilePath` maps `&` to `-and-` and `%` to `-percent`, and
+         * `sluggify` lowercases nothing but jotter's own `derive` does — so
+         * these three strings are exactly what "the slug scheme leaked" looks
+         * like. Restricted to URL-shaped occurrences, because `-and-` is also
+         * what a heading called "Emphasis and marks" anchors as, and that is
+         * prose rather than a slug.
+         */
+        const URL_IN = /(?:href="|<loc>)([^"<]*)/g
+        const lowercased = [...ROWS, [PERMALINK.path, PERMALINK.slug]]
+          .map(([, slug]) => slug)
+          .filter((slug) => slug !== slug.toLowerCase())
+          .map((slug) => `/${encodePath(slug.toLowerCase())}`)
+        const leaked = []
+        for (const { file, text } of onOutputs) {
+          if (file.startsWith(`_vault${sep}`) || REDIRECT_FILES.has(file)) continue
+          for (const [, url] of text.matchAll(URL_IN)) {
+            if (!url.startsWith('/') && !url.startsWith(FEED_ORIGIN)) continue
+            const path = url.replace(FEED_ORIGIN, '').split('#')[0]
+            if (/-and-|-percent/.test(path)) leaked.push(`${file}: ${url}`)
+            if (lowercased.includes(path)) leaked.push(`${file}: ${url}`)
+          }
+        }
+        check(
+          leaked.length === 0,
+          'no URL in dist/ was slugified, lowercased or substituted',
+          leaked.slice(0, 8).join('\n        '),
+        )
+        check(lowercased.length > 0, 'the fixture actually has mixed-case slugs to protect')
+
+        /** Degrade loudly: the one host that cannot serve these URLs is named. */
+        check(
+          out.includes('Netlify') && out.includes('uppercase'),
+          'the build says which host lowercases these paths',
+        )
+
+        await internalLinks(onPages)
+        await producersAgree(onPages)
+        await redirectsAndRobots()
+      }
+
+      await rm(URLS, { recursive: true, force: true })
       await writeFile(configPath, original)
       await clearContentStores(ROOT)
     }
