@@ -1344,6 +1344,41 @@ body {
   gap: var(--space-2xl);
 }
 
+/* ---- Titles in the chrome ---------------------------------------------- */
+
+/**
+ * A note title is somebody else's words dropped into our layout, and it may
+ * run the other way from the page around it. `unicode-bidi: isolate` makes
+ * each one its own bidi paragraph, so a Persian title in an English card
+ * cannot drag the punctuation of the label beside it to the wrong end — and a
+ * mixed title like `Radio Marz - رادیو مرز` keeps its own two runs in order.
+ *
+ * One rule rather than a `dir` attribute on fourteen components, and it is the
+ * only form that reaches the two that no `.astro` edit can: the search results
+ * and the graph's link list, both built in the browser.
+ *
+ * The honest limit: this is isolation, not alignment. A Persian card title
+ * stays left-aligned in its box on an LTR site. Per-element `dir` would give
+ * both and cost fourteen files; it is additive later if a screenshot asks for
+ * it. The prose itself is already handled per block — see
+ * `src/markdown/direction.ts`.
+ *
+ * The breadcrumb, the cards, the rows, the nav tree and the TOC are all flex
+ * or grid containers already, and every flex item is its own bidi paragraph,
+ * so those are isolated by their layout. This covers the ones whose title
+ * shares a line with something else.
+ */
+.note-card-title,
+.note-row-title,
+.backlink-card-title,
+.prev-next-title,
+.toc-list a,
+.tag-chip,
+.note-crumb a,
+.graph-list a {
+  unicode-bidi: isolate;
+}
+
 /* ---- Drawer (mobile sidebar) ------------------------------------------- */
 
 /**

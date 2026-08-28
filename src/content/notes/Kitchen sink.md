@@ -88,6 +88,30 @@ Embedding a note inlines it, inside a block that always links back:
 
 Inline tags become chips: #method/zettelkasten and #reference.
 
+## Mixed direction
+
+Every block above and below is read once, at build time, and the ones that run
+the *other* way from the site are marked. This site is `dir: 'ltr'`, so the
+English carries no attribute at all and only the Persian is marked `dir="rtl"`.
+An Arabic or Hebrew site gets the mirror of this: its own script untouched, and
+the English blocks marked instead. A vault written in one script pays nothing
+either way.
+
+اینجا محلی هست برای نوشتن یادداشت‌های کوتاه، به فارسی، در همان باغی که بقیه‌ی
+یادداشت‌ها را نگه می‌دارد.
+
+### صفحات من در فضای وب
+
+- وبلاگ شخصی
+- یک پیوند انگلیسی داخل یک جمله‌ی فارسی: [[Obsidian]]
+- An English item, unmarked, in the same list.
+
+The rule is Unicode's own — the first strong character wins — so a line that
+opens with a year still resolves from the word after it, and a line of digits
+or punctuation alone keeps whatever it inherits. The one case it gets wrong is
+a Persian sentence opening with a Latin word, which Obsidian gets wrong too.
+Put `direction: rtl` in that note's frontmatter to settle it.
+
 ## An unpublished target
 
 This links to a note with `publish: false`: [[Half-formed]]. The alias the

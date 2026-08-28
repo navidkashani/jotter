@@ -111,7 +111,7 @@ describe('scanVault against the hostile fixture', () => {
   const vault = scan()
 
   it('finds every markdown file', () => {
-    expect(vault.notes.length).toBe(13)
+    expect(vault.notes.length).toBe(15)
   })
 
   it('assigns readable, unique slugs', () => {
@@ -469,6 +469,36 @@ describe('declared card images', () => {
 })
 
 /**
+ * `direction:` is the escape hatch for the one case first-strong gets wrong,
+ * and its failure mode is the same silence `image:` had: a value jotter cannot
+ * read falls back to the site's direction, and the only symptom is a paragraph
+ * still aligned the way the author was trying to change. `auto` is not a
+ * mistake — it is the third value the esm7 plugin writes, and it asks for the
+ * behaviour jotter does by default.
+ */
+describe('declared note direction', () => {
+  it('warns, naming the note and the value, when it cannot read one', () => {
+    const v = vaultWith({ 'Farsi.md': NOTE('title: Farsi\ndirection: right') })
+    const warning = v.warnings.find((w) => w.includes('direction: right'))
+    expect(warning).toContain('Farsi.md')
+    expect(warning).toContain('`rtl`, `ltr` or `auto`')
+  })
+
+  it('says nothing about the three values it does read', () => {
+    for (const value of ['rtl', 'LTR', ' auto ']) {
+      const v = vaultWith({ 'Farsi.md': NOTE(`title: Farsi\ndirection: "${value}"`) })
+      expect(v.warnings.some((w) => w.includes('direction'))).toBe(false)
+    }
+  })
+
+  /** No page, nothing to align, nothing to say. */
+  it('leaves an unpublished note alone', () => {
+    const v = vaultWith({ 'Farsi.md': NOTE('title: Farsi\npublish: false\ndirection: right') })
+    expect(v.warnings.some((w) => w.includes('direction'))).toBe(false)
+  })
+})
+
+/**
  * The contract between two answers to the same question.
  *
  * `src/lib/frontmatter.ts` says what a note may contain and `src/lib/vault.ts`
@@ -532,6 +562,18 @@ describe('the frontmatter schema and the scan agree', () => {
    * every note page for as long as the component has existed while being
    * declared nowhere, documented nowhere and set by no note in either vault.
    */
+  /**
+   * Loose on purpose, unlike the strict three below: `direction: 3` is a
+   * cosmetic mistake, and `warnDirections` names it at scan time rather than
+   * the build dying over a paragraph's alignment.
+   */
+  it('declares the direction key, and takes anything the scan will warn about', () => {
+    expect(declared).toContain('direction')
+    expect(accepts({ direction: 'rtl' })).toBe(true)
+    expect(accepts({ direction: 'auto' })).toBe(true)
+    expect(accepts({ direction: 'right' })).toBe(true)
+  })
+
   it('declares every key the note header renders', () => {
     for (const key of DISPLAYED_FIELDS) expect(declared).toContain(key)
     expect(accepts({ status: 'seedling', source: 'Ahrens 2017', author: 'A', series: 'S' })).toBe(true)

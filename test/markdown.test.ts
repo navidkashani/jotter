@@ -5,7 +5,7 @@ import { markdownToHtml } from 'satteri'
 
 import { scanVault, clearVaultCache } from '../src/lib/vault.js'
 import { defineConfig, type JotterConfigInput } from '../src/lib/config.js'
-import { jotterPlugins, satteriFeatures } from '../src/markdown/index.js'
+import { jotterPlugins, jotterHastPlugins, satteriFeatures } from '../src/markdown/index.js'
 
 const VAULT = fileURLToPath(new URL('./fixtures/vault', import.meta.url))
 
@@ -20,6 +20,7 @@ function render(notePath: string, overrides: JotterConfigInput = {}): string {
   const result = markdownToHtml(note.body, {
     features: satteriFeatures,
     mdastPlugins: jotterPlugins(vault, config),
+    hastPlugins: jotterHastPlugins(vault, config),
     fileURL: pathToFileURL(join(VAULT, note.path)),
   })
   return typeof result === 'string' ? result : (result as { html: string }).html
@@ -260,5 +261,109 @@ describe('hover previews', () => {
     const html = render('Previews.md', on)
     expect(html).toContain('<a class="transclusion-source" href="/notes/luhmann">')
     expect(html).not.toMatch(/<a class="transclusion-source"[^>]*data-preview/)
+  })
+})
+
+/**
+ * Per-block direction, through the real pipeline rather than against
+ * `firstStrong` directly. `test/bidi.test.ts` owns the rule; what is asserted
+ * here is everything the rule cannot say on its own — which nodes get asked,
+ * what each one inherits, and that a block agreeing with its page emits
+ * nothing at all.
+ */
+describe('text direction', () => {
+  const ltr = render('notes/Mixed direction.md')
+  const rtl = render('notes/Mixed direction.md', { dir: 'rtl' })
+
+  it('marks a Persian paragraph on an English site', () => {
+    expect(ltr).toMatch(/<p dir="rtl">اینجا محلی هست/)
+  })
+
+  it('marks a Persian heading and a Persian list item', () => {
+    expect(ltr).toMatch(/<h2[^>]*\bdir="rtl"/)
+    expect(ltr).toMatch(/<li dir="rtl">وبلاگ شخصی<\/li>/)
+  })
+
+  /**
+   * The claim the whole feature rests on. Not "the English blocks are marked
+   * `ltr`" — they carry no `dir` at all, which is what makes a monolingual
+   * vault byte-identical to a build without any of this.
+   */
+  it('leaves every English block on an English site completely unmarked', () => {
+    expect(ltr).toContain('<p>An English paragraph, on an English site')
+    expect(ltr).toContain('<li>An English item in the same list.</li>')
+    expect(ltr).not.toContain('dir="ltr"')
+  })
+
+  it('marks a table cell, a callout title and a blockquote body', () => {
+    expect(ltr).toMatch(/<t[hd] dir="rtl">ابزار<\/t[hd]>/)
+    expect(ltr).toMatch(/<div class="callout-title" dir="rtl">یک هشدار فارسی<\/div>/)
+  })
+
+  /**
+   * The assertion that justifies the hast seam, and the one that goes red if
+   * this is ever moved to mdast. Transclusion splices a raw markdown string
+   * wrapped in a literal `<aside>`; the aside arrives as a `raw` node and the
+   * paragraph inside it does not exist at all while mdast is being walked.
+   */
+  it('reaches a paragraph that transclusion brought in', () => {
+    expect(ltr).toMatch(/<aside class="transclusion"[\s\S]*?<p dir="rtl">این یادداشت به فارسی/)
+  })
+
+  it('never repeats a dir a block already inherits from its parent', () => {
+    // The Persian blockquote is marked; the paragraph inside it must not be.
+    expect(rtl).not.toMatch(/<blockquote dir="ltr">\s*<p dir="ltr">/)
+    expect(ltr).not.toMatch(/dir="rtl"[^>]*>\s*<p dir="rtl">/)
+  })
+
+  /**
+   * The mirror. An RTL site marks the *English*, and its own script goes
+   * untouched — one rule, no second code path.
+   */
+  it('marks the English and leaves the Persian alone on an RTL site', () => {
+    expect(rtl).toMatch(/<p dir="ltr">An English paragraph/)
+    expect(rtl).toMatch(/<li dir="ltr">An English item in the same list\.<\/li>/)
+    expect(rtl).toContain('<p>اینجا محلی هست')
+    expect(rtl).not.toContain('dir="rtl"')
+  })
+
+  /**
+   * `pre` resolves to `ltr` — code is left-to-right and must not be re-ordered
+   * — but it is emitted under the same rule as everything else, so it costs an
+   * LTR site nothing. Forcing it unconditionally was defect 3 of the plan's
+   * scenario pass.
+   */
+  it('marks a code block only where it differs from the page', () => {
+    expect(ltr).not.toMatch(/<pre[^>]*\bdir=/)
+    expect(rtl).toMatch(/<pre[^>]*\bdir="ltr"/)
+  })
+
+  /** A Persian comment inside a fence is code, not prose, and is never asked. */
+  it('never marks anything inside a code fence', () => {
+    expect(ltr).not.toMatch(/<code[^>]*\bdir=/)
+    expect(ltr).not.toMatch(/<span[^>]*\bdir=/)
+  })
+
+  /**
+   * The escape hatch, and the case that catches an implementation which only
+   * ever emits `rtl`: an RTL note on an LTR site, where it is the *English*
+   * blocks that differ.
+   */
+  describe('the direction: frontmatter override', () => {
+    const html = render('notes/English in Persian.md')
+
+    it('flips the note baseline, so only its English blocks are marked', () => {
+      expect(html).toContain('<p>این یادداشت به فارسی')
+      expect(html).toMatch(/<p dir="ltr">An English paragraph inside an RTL note/)
+      expect(html).toMatch(/<h2[^>]*\bdir="ltr"/)
+      expect(html).toMatch(/<li dir="ltr">An English list item<\/li>/)
+      expect(html).not.toContain('dir="rtl"')
+    })
+
+    it('is what the note says, not what the site says', () => {
+      // Same note, RTL site: the note already agreed, so nothing changes.
+      const onRtlSite = render('notes/English in Persian.md', { dir: 'rtl' })
+      expect(onRtlSite).toMatch(/<p dir="ltr">An English paragraph inside an RTL note/)
+    })
   })
 })

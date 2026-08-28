@@ -31,6 +31,7 @@
 import type { VaultNote } from '../lib/vault.js'
 import type { GraphLink, Neighbourhood } from '../lib/graph.js'
 import { config, vault } from '../lib/site.js'
+import { textDir } from '../lib/bidi.js'
 import Base from './Base.astro'
 import Toc from '../components/Toc.astro'
 import type { Heading } from '../lib/headings.js'
@@ -131,7 +132,7 @@ const hasRail = config.features.backlinks || showGraph
   <article class="note-layout" data-layout={config.layout} data-pagefind-body={indexed}>
     <header class="note-head">
       <Breadcrumb note={note} />
-      <h1 class="note-title">{note.title}</h1>
+      <h1 class="note-title" dir={textDir(note.title, config.dir)}>{note.title}</h1>
       <Frontmatter note={note} />
       {config.features.tags && <TagList tags={note.tags} />}
     </header>

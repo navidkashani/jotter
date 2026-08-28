@@ -22,6 +22,7 @@ import { gitDates, resolveDates, type NoteDates } from './dates.js'
 import { excerpt } from './excerpt.js'
 import { svgIntrinsicSize } from './embed.js'
 import { frontmatterImage, resolveSocialImage } from './social.js'
+import { normalizeDirection } from './bidi.js'
 import { loadLinksIndex, type LinkOverrides } from './links-index.js'
 import type { ResolvableNote, VaultIndex } from './resolve.js'
 
@@ -269,6 +270,7 @@ export function scanVault(options: ScanOptions): Vault {
 
   const index = buildIndex(notes, assetPaths, warnings)
   warnSocialImages(notes, image, index, warnings)
+  warnDirections(notes, warnings)
 
   const vault: Vault = {
     root,
@@ -325,6 +327,32 @@ function warnSocialImages(
     const { status } = resolveSocialImage(configImage, '', index)
     if (status === 'unresolved' || status === 'unsupported') {
       complain('`image` in jotter.config.ts', `image: ${configImage}`, status)
+    }
+  }
+}
+
+/**
+ * Every `direction:` value, checked once, at the scan.
+ *
+ * The same shape and the same pass as `warnSocialImages` above, for the same
+ * reason: a key that jotter cannot read must say so somewhere a person will
+ * see it. `direction: right` or `direction: RTL-x` silently falls back to the
+ * site's direction, and the only symptom is a paragraph still aligned the way
+ * the author was trying to change — which is exactly the failure that sends
+ * somebody hunting through CSS.
+ *
+ * Published notes only, like the image check: an excluded note renders nowhere.
+ */
+function warnDirections(notes: readonly VaultNote[], warnings: string[]): void {
+  for (const note of notes) {
+    if (!note.published) continue
+    const declared = note.frontmatter.direction
+    if (declared == null) continue
+    if (normalizeDirection(declared) === undefined) {
+      warnings.push(
+        `"${note.path}" sets \`direction: ${String(declared)}\`, which is not a direction. ` +
+          `Use \`rtl\`, \`ltr\` or \`auto\`. This note took the site's direction instead.`,
+      )
     }
   }
 }

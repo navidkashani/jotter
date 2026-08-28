@@ -84,8 +84,8 @@ describe('tree', () => {
 
   it('counts notes into every ancestor', () => {
     const notesFolder = folders(t).find((f) => f.path === 'notes')!
-    // 4 directly in notes/, plus 1 in notes/nested/
-    expect(notesFolder.count).toBe(5)
+    // 6 directly in notes/, plus 1 in notes/nested/
+    expect(notesFolder.count).toBe(7)
   })
 
   it('knows which folder holds the current note', () => {

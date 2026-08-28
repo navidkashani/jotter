@@ -61,7 +61,7 @@ export default defineConfig({
   author: '',
 
   locale: 'en',
-  dir: 'ltr',                   // 'rtl' works; every rule uses logical properties
+  dir: 'ltr',                   // the site's baseline; blocks that differ are marked per block
 
   vault: 'src/content/notes',
   layout: 'column',             // 'column' | 'panels'
@@ -121,6 +121,7 @@ image: attachments/og.png      # the link-preview card — see “Link previews�
 publish: false                 # exclude this note
 draft: true                    # also excludes it
 homepage: true                 # this note claims '/' — see “The note at /” below
+direction: rtl                 # this note's baseline — see “Mixed-direction vaults”
 ---
 ```
 
@@ -173,6 +174,53 @@ inert `<span class="dead-link">` labelled with the filename the author typed —
 file in `dist/`, not only the pages: the feed and the sitemap carry titles too,
 and a check that read only HTML would have said "anywhere in `dist/`" while
 reading none of them.
+
+### Mixed-direction vaults
+
+`dir` is the site's **baseline**, not its only direction. Every block is read at
+build time, and the ones running the other way are marked:
+
+```html
+<!-- an English site (dir: 'ltr') -->
+<h2>I'm Navid</h2>
+<p>I'm a guy who enjoys…</p>
+<p dir="rtl">اینجا محلی هست…</p>
+<h3 dir="rtl">صفحات من در فضای وب</h3>
+<li dir="rtl"><a>وبلاگ شخصی</a></li>
+```
+
+It is symmetric. An Arabic or Hebrew site (`dir: 'rtl'`) gets the mirror — its
+own script untouched, and the *English* blocks marked `dir="ltr"` instead. The
+majority language is never marked, so **a vault written in one script emits not
+a single extra byte.**
+
+The rule is Unicode's own (UBA P2/P3, the same one `dir="auto"` and Obsidian's
+editor run): the first strong character in a block wins. Digits, punctuation,
+symbols and emoji do not vote, so `۱۳۹۹ سال خوبی بود` and `2026 مرور سال` both
+resolve right-to-left. A block with no letters in it keeps whatever it inherits.
+
+The one case it gets wrong is a sentence opening with a word from the other
+script — `Obsidian یک برنامه است` — which Obsidian gets wrong too. Set
+`direction:` on that note to settle it:
+
+```yaml
+direction: rtl    # or ltr, or auto
+```
+
+Same key, same three values, as the community Obsidian RTL plugin, so a vault
+that already carries it keeps working. `auto` means the default per-block
+behaviour, i.e. the same as leaving it out.
+
+> **Tip.** A note that is *entirely* Persian on an English site gets every block
+> marked. Setting `direction: rtl` on that note flips its own baseline, so only
+> its English blocks are marked instead — the same rendering, fewer attributes.
+> Your choice; nothing is automated here.
+
+Two limits worth knowing. Obsidian detects direction per *line* and jotter per
+*block*, so a paragraph whose lines run different ways is one direction here;
+`direction:` is the escape hatch. And with `features.search` on, Pagefind
+indexes the whole site under `locale`, so prose in a second language is stemmed
+with the wrong rules.
 
 ### Link previews
 
@@ -375,7 +423,9 @@ The fastest way to re-skin jotter is to override tokens in
 
 Every rule in the theme uses logical properties, so `dir: 'rtl'` is a config
 change and not a second stylesheet. The build fails if a physical property
-sneaks in.
+sneaks in — and because the CSS is logical throughout, a block that runs the
+other way flips its alignment, indents, list markers and quote bars for free.
+See “Mixed-direction vaults”.
 
 ### Accessibility
 

@@ -125,6 +125,23 @@ export const noteFrontmatterSchema = z
     author: displayed.optional(),
     series: displayed.optional(),
     // `aliases`, the fifth displayed field, is declared with `alias` above.
+
+    /**
+     * The base direction of this note's blocks — the escape hatch for the one
+     * case first-strong detection gets wrong (`Obsidian یک برنامه است`, a
+     * sentence opening with a word from the other script).
+     *
+     * `rtl` | `ltr` | `auto`, the key and the three values the community
+     * Obsidian RTL plugin (esm7) already writes, so a vault that used it keeps
+     * working. `auto` means the default per-block behaviour, which is to say
+     * the same thing as not setting the key at all.
+     *
+     * Loose on purpose, unlike the strict three above: a value this schema
+     * cannot read is a cosmetic mistake, not a privacy or routing one, and
+     * `src/lib/vault.ts` warns about it by name at scan time rather than
+     * failing a build over a paragraph's alignment. See `src/lib/bidi.ts`.
+     */
+    direction: z.string().optional(),
   })
   /**
    * An unknown key is somebody's Dataview field or plugin metadata. It is not

@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url'
 import jotter from './jotter.config'
 import { scanVault } from './src/lib/vault'
 import { buildGraph } from './src/lib/graph'
-import { jotterPlugins, satteriFeatures } from './src/markdown'
+import { jotterPlugins, jotterHastPlugins, satteriFeatures } from './src/markdown'
 import { jotterVault } from './src/integrations/vault'
 import { jotterSearch } from './src/integrations/search'
 import { buildRedirects } from './src/lib/redirects'
@@ -97,7 +97,7 @@ export default defineConfig({
     processor: satteri({
       features: satteriFeatures,
       mdastPlugins: jotterPlugins(vault, jotter),
-      hastPlugins: [],
+      hastPlugins: jotterHastPlugins(vault, jotter),
     }),
     // Astro composes [highlighter] -> [hastPlugins] -> [image marker] ->
     // [heading ids] regardless of processor, so Shiki and anchor ids are free.

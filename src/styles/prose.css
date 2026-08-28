@@ -452,6 +452,16 @@ details.callout[open] > summary.callout-title::after {
   content: '↳ ';
 }
 
+/**
+ * A generated glyph is a *character*, not a mirror pair, so the bidi algorithm
+ * will not turn this one around the way it turns a parenthesis around. The
+ * nav-tree chevron at `base.css` has had its counterpart since the beginning;
+ * this one did not, and pointed back into the text on an RTL site.
+ */
+[dir='rtl'] .prose .transclusion-source::before {
+  content: '↲ ';
+}
+
 .prose .transclusion-source:hover {
   color: var(--accent-hover);
 }

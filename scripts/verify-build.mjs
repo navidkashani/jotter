@@ -360,6 +360,194 @@ section('Markup')
   )
 }
 
+/* ------------------------------------------------------------- direction */
+
+/**
+ * Elements that never have a closing tag, and so never open a scope.
+ * Without these the stack below would swallow every sibling of an `<img>`.
+ */
+const VOID_TAGS = new Set([
+  'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
+  'link', 'meta', 'source', 'track', 'wbr',
+])
+
+/** Elements whose content is text, not markup. A `<` in here is not a tag. */
+const RAW_TEXT = new Set(['script', 'style', 'textarea', 'title'])
+
+/**
+ * Every `dir` attribute in a page, each with the direction its element would
+ * have inherited had it not set one.
+ *
+ * A stack rather than a regex sweep, because the claim being checked is about
+ * *inheritance*: `dir="rtl"` on a paragraph inside an already-`rtl` blockquote
+ * is the redundant attribute this is looking for, and nothing that reads one
+ * tag at a time can see it. Astro emits well-formed markup, so a tag scanner
+ * with a stack is exact here in a way it would not be over hand-written HTML.
+ */
+function directionAttributes(html) {
+  const TAG = /<(\/?)([a-zA-Z][a-zA-Z0-9-]*)((?:"[^"]*"|'[^']*'|[^>"'])*?)(\/?)>/g
+  const found = []
+  const stack = []
+  let rawUntil = null
+  let match
+
+  while ((match = TAG.exec(html)) !== null) {
+    const [, closing, rawName, attrs, selfClosing] = match
+    const tag = rawName.toLowerCase()
+
+    if (rawUntil) {
+      if (closing && tag === rawUntil) rawUntil = null
+      continue
+    }
+    if (closing) {
+      const opened = stack.findLastIndex((entry) => entry.tag === tag)
+      if (opened !== -1) stack.length = opened
+      continue
+    }
+
+    const inherited = stack.length > 0 ? stack[stack.length - 1].dir : undefined
+    const dir = /\bdir="([^"]*)"/.exec(attrs)?.[1]
+    if (dir !== undefined) found.push({ tag, dir, inherited, end: TAG.lastIndex })
+
+    if (RAW_TEXT.has(tag) && !selfClosing) rawUntil = tag
+    else if (!VOID_TAGS.has(tag) && !selfClosing) stack.push({ tag, dir: dir ?? inherited })
+  }
+
+  return found
+}
+
+/** The text of the element that opened at `end`, tags and entities stripped. */
+const elementText = (html, end, tag) => {
+  const close = html.indexOf(`</${tag}>`, end)
+  return html.slice(end, close === -1 ? end + 400 : close).replace(/<[^>]*>/g, '')
+}
+
+/**
+ * Every right-to-left script jotter claims to detect, as a second opinion.
+ *
+ * Deliberately *not* an import of `src/lib/bidi.ts` — this file is `.mjs` and
+ * could not import it anyway, but the point stands on its own: a check that
+ * restates the implementation proves only that the implementation is
+ * self-consistent. These are Unicode block ranges rather than script
+ * properties, written from the other end.
+ */
+const RTL_CHARACTER =
+  /[֐-׿؀-ۿ܀-ݏހ-޿߀-߿ࠀ-࠿ࡀ-࡟ࢠ-ࣿיִ-﷿ﹰ-﻿]|[\u{10D00}-\u{10D3F}\u{1E900}-\u{1E95F}]/u
+
+const LATIN_LETTER = /[A-Za-z]/
+
+/**
+ * Per-block text direction, over a real build.
+ *
+ * The unit tests own the rule; what only `dist/` can show is that the rule
+ * reached the page — and, far more importantly, that it *stayed off* the
+ * blocks that agree with it. Written as a function, like `internalLinks()`
+ * above, because `--full` runs the whole thing again against a rebuild with
+ * `dir: 'rtl'`. That mirror pass is the only thing that can prove the feature
+ * is symmetric, and it is what would have caught the two defects the plan's
+ * scenario pass found by hand.
+ */
+function directionSection(pages, outputs) {
+  /**
+   * The hole beside the `lang` check in `section('Markup')`, which has always
+   * asserted that a page declares a language and never that it declares a
+   * direction. Every per-block `dir` below is stated relative to this one, so
+   * a page missing it has no baseline for anything else here to mean.
+   */
+  const undeclared = pages.filter(({ html }) => !/<html[^>]+\bdir="(?:ltr|rtl)"/.test(html))
+  check(
+    undeclared.length === 0,
+    'every page declares ltr or rtl on <html>',
+    undeclared.map((p) => p.file).join(', '),
+  )
+
+  /**
+   * The invariant that keeps the `[dir='rtl']` idiom in `base.css` valid.
+   * jotter computes direction at build time and emits the answer; a `dir="auto"`
+   * in `dist/` means something has started deferring to the browser instead,
+   * and `[dir='rtl']` does not match an element whose direction the browser
+   * resolved. Over every text output rather than the pages, so a stray one in
+   * the feed or a bundled script counts too.
+   */
+  const auto = outputs.filter(({ text }) => /\bdir="auto"/.test(text))
+  check(
+    auto.length === 0,
+    'no dir="auto" anywhere in dist/',
+    auto.map((p) => p.file).join(', '),
+  )
+
+  const authored = pages.filter(({ file }) => !file.startsWith(`_vault${sep}`))
+  const attributes = authored.map(({ file, html }) => ({
+    file,
+    html,
+    dirs: directionAttributes(html),
+  }))
+
+  const illegal = []
+  const redundant = []
+  const unfounded = []
+  let marked = 0
+  const markedTags = new Set()
+
+  for (const { file, html, dirs } of attributes) {
+    const page = dirs.find(({ tag }) => tag === 'html')?.dir
+    for (const { tag, dir, inherited, end } of dirs) {
+      if (dir !== 'ltr' && dir !== 'rtl') {
+        illegal.push(`${file}: <${tag} dir="${dir}">`)
+        continue
+      }
+      if (inherited !== undefined && dir === inherited) {
+        redundant.push(`${file}: <${tag} dir="${dir}"> inside a ${inherited} parent`)
+      }
+      if (dir === 'rtl' && tag !== 'html' && !RTL_CHARACTER.test(elementText(html, end, tag))) {
+        unfounded.push(`${file}: <${tag} dir="rtl"> over text with no RTL character in it`)
+      }
+      if (tag !== 'html' && dir !== page) {
+        marked++
+        markedTags.add(tag)
+      }
+    }
+  }
+
+  check(illegal.length === 0, 'no dir with a value other than ltr or rtl', illegal.join('\n        '))
+
+  /**
+   * The zero-cost claim, and the check that catches a future "simplification"
+   * into marking every block the way Obsidian Publish does.
+   *
+   * Stated against each page's own `<html dir>` rather than against the
+   * literal `ltr`, so it is equally right on the `--full` RTL rebuild — where
+   * `dir="ltr"` on an English paragraph is the *correct* answer and marking
+   * the Persian would be the bug.
+   */
+  check(
+    redundant.length === 0,
+    'no block repeats the direction it already inherits',
+    redundant.slice(0, 12).join('\n        '),
+  )
+
+  check(
+    unfounded.length === 0,
+    'every rtl block actually contains right-to-left characters',
+    unfounded.slice(0, 8).join('\n        '),
+  )
+
+  /**
+   * And the demo actually exercises it, so the three checks above are not
+   * passing over a build with no mixed-direction content in it at all. Stated
+   * as "blocks that differ from the page" rather than "Persian blocks",
+   * because on the RTL rebuild the blocks that differ are the English ones.
+   */
+  check(
+    marked > 0 && markedTags.size > 1,
+    'the demo has blocks running the other way for these checks to bite on',
+    `${marked} marked block(s) across ${markedTags.size} kind(s): ${[...markedTags].join(', ')}`,
+  )
+}
+
+section('Direction')
+directionSection(pages, outputs)
+
 /* ------------------------------------------------------------------- CSS */
 
 section('Design tokens')
@@ -386,8 +574,17 @@ section('Design tokens')
   }
   check(offenders.length === 0, 'no colour literal outside tokens.css', offenders.join('\n        '))
 
-  // Physical properties are how RTL support rots. Logical ones cost nothing.
-  const PHYSICAL = /(?:^|[\s;{])(?:padding|margin|border)-(?:left|right)\b|(?:^|[\s;{])(?:left|right|top|bottom)\s*:/
+  /**
+   * Physical properties are how RTL support rots. Logical ones cost nothing.
+   *
+   * `text-align`, `float` and `clear` joined the list alongside the per-block
+   * direction work: they are the three that survive a `padding-left` sweep and
+   * still pin content to one side of the page. The repo was clean on all three
+   * when this was widened, which is the cheapest possible moment to add a lint
+   * — it goes in green, so it can only ever fail on something new.
+   */
+  const PHYSICAL =
+    /(?:^|[\s;{])(?:padding|margin|border)-(?:left|right)\b|(?:^|[\s;{])(?:left|right|top|bottom)\s*:|(?:^|[\s;{])text-align\s*:\s*(?:left|right)\b|(?:^|[\s;{])(?:float|clear)\s*:/
   const physical = []
   for (const file of [...cssFiles, ...(await walk(join(ROOT, 'src'), (n) => n.endsWith('.astro')))]) {
     const name = relative(ROOT, file)
@@ -1921,6 +2118,99 @@ if (FULL) {
         await internalLinks(onPages)
         await redirectsAndRobots()
         await feedSection(onPages)
+      }
+
+      await writeFile(configPath, original)
+      await clearContentStores(ROOT)
+    }
+  }
+
+  /**
+   * The fourth config rewrite, and the only thing that can prove the direction
+   * feature is *symmetric* rather than merely working.
+   *
+   * `dir` is flipped rather than set to `rtl`, so this is honest for a forker
+   * whose site already is RTL. Flipping is what makes the assertion below
+   * meaningful either way: whatever language the demo vault is mostly written
+   * in becomes the minority, so every block of it must now be marked with the
+   * direction the site used to have. On the committed config that reads
+   * "an English paragraph carrying `dir='ltr'` on an RTL site", which is the
+   * exact mirror of the main pass and the case that catches an implementation
+   * able to emit only `rtl`.
+   *
+   * Turning `dir: 'rtl'` on in the committed `jotter.config.ts` is the wrong
+   * way to get this: the demo garden is written in English, and a right-to-left
+   * English site is not a thing anyone should fork. A throwaway rebuild costs
+   * one `astro build`.
+   */
+  section('The mirror: an RTL rebuild marks the other half')
+  {
+    const configPath = join(ROOT, 'jotter.config.ts')
+    const original = await readFile(configPath, 'utf8')
+
+    const was = /\bdir:\s*'(ltr|rtl)'/.exec(original)?.[1] ?? 'ltr'
+    const flipped = was === 'ltr' ? 'rtl' : 'ltr'
+    const on = /\bdir:\s*'(?:ltr|rtl)'/.test(original)
+      ? original.replace(/\bdir:\s*'(?:ltr|rtl)'/, `dir: '${flipped}'`)
+      : original.replace(CALL, `export default defineConfig({\n  dir: '${flipped}',`)
+
+    if (!new RegExp(`dir:\\s*'${flipped}'`).test(on)) {
+      fail(
+        'the direction rewrite reached jotter.config.ts',
+        'no dir key was written; the checks below would be vacuous',
+      )
+    } else {
+      await writeFile(configPath, on)
+      await clearContentStores(ROOT)
+
+      const { code, out } = await run(['astro', 'build'])
+      if (code !== 0) {
+        fail(`build succeeds with dir: '${flipped}'`, out.slice(-800))
+      } else {
+        const flippedPages = await Promise.all(
+          (await walk(DIST, (n) => n.endsWith('.html'))).map(async (file) => ({
+            file: relative(DIST, file),
+            html: await readFile(file, 'utf8'),
+          })),
+        )
+        const flippedOutputs = await Promise.all(
+          (await walk(DIST, (n) => TEXT_OUTPUT.test(n) || n === '_redirects')).map(async (file) => ({
+            file: relative(DIST, file),
+            text: await readFile(file, 'utf8'),
+          })),
+        )
+
+        /**
+         * Every assertion the main pass makes, run again with the site the
+         * other way round. `directionSection` is stated against each page's own
+         * `<html dir>` rather than against a literal, which is what lets it run
+         * here unchanged — and what makes "no block repeats what it inherits"
+         * mean the opposite thing in the right way.
+         */
+        directionSection(flippedPages, flippedOutputs)
+
+        const wrongRoot = flippedPages.filter(
+          ({ html }) => !new RegExp(`<html[^>]+\\bdir="${flipped}"`).test(html),
+        )
+        check(
+          wrongRoot.length === 0,
+          `every page declares dir="${flipped}" when the config says so`,
+          wrongRoot.map((p) => p.file).join(', '),
+        )
+
+        /**
+         * The mirror itself, stated positively. Nothing else in this file can
+         * see the difference between "marks the minority language" and "marks
+         * right-to-left text".
+         */
+        const mirrored = flippedPages.filter(({ html }) =>
+          new RegExp(`<p dir="${was}">`).test(html),
+        )
+        check(
+          mirrored.length > 0,
+          `a prose block still running ${was} is marked dir="${was}"`,
+          `no <p dir="${was}"> on any page — the feature only emits one direction`,
+        )
       }
 
       await writeFile(configPath, original)
