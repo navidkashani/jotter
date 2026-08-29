@@ -78,6 +78,8 @@ every component in `src/`. Nothing in this pipeline touches them.
 | Obsidian | jotter |
 | --- | --- |
 | `title` | `title` |
+| `locale` | `locale` — a BCP-47 tag, region-qualified: `fa-IR`, not `fa` |
+| `dir` | `dir` — carried across, never re-derived here |
 | `noIndex` | `noIndex` — `robots.txt` disallows everything, no sitemap, and `X-Robots-Tag` on every page |
 | `strictLineBreaks` | `strictLineBreaks` |
 | `showThemeToggle` | `features.themeToggle` |
@@ -107,10 +109,23 @@ has given that note the slug `index` — which is what `/` is served from. Copyi
 it into jotter's `homepage`, which takes a *slug*, would be a second answer to a
 settled question.
 
+**The language decides the direction, in Obsidian.** `dir` is not a control
+anybody sets: the plugin derives it from `locale` through a closed table of the
+tags it will publish, and jotter carries the answer across rather than working
+it out again. One table in one place is one answer — and a starter with no
+direction concept of its own still receives the right one instead of guessing.
+
+Chrome text is a separate question from layout. An `fa-IR` site gets `<html
+lang="fa-IR" dir="rtl">` and a right-to-left layout immediately, but its
+buttons and labels stay English until someone adds `src/i18n/fa.json` and
+registers it in `src/i18n/index.ts`. The lookup tries the whole tag before the
+language alone, so either `fa-IR.json` or `fa.json` is found. That directory is
+yours and survives every rebuild.
+
 A site option this repository has never heard of is reported in the build log
-and ignored, which is how you find out to update from the template. Four jotter
+and ignored, which is how you find out to update from the template. Two jotter
 settings have no equivalent in a snapshot and stay at their defaults:
-`locale`, `dir`, `features.hoverPreview` and `features.rss`.
+`features.hoverPreview` and `features.rss`.
 
 ---
 
