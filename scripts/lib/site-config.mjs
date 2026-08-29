@@ -41,6 +41,10 @@ export const DEFAULT_SITE = {
   title: '',
   /** A vault path. Applied by the plugin, which gives that note the slug `index`. */
   homepage: '',
+  /** BCP-47 tag. The plugin sends region-qualified tags, e.g. `fa-IR`. */
+  locale: 'en',
+  /** Derived by the plugin from `locale`, never set on its own there. */
+  dir: 'ltr',
   noIndex: false,
   showThemeToggle: true,
   strictLineBreaks: false,
@@ -125,6 +129,15 @@ export function mapSite(rawSite, { url } = {}) {
 
     noIndex: !!site.noIndex,
     strictLineBreaks: !!site.strictLineBreaks,
+
+    /**
+     * The two that map straight across: jotter's config already has exactly
+     * these fields, with these names and these types. `dir` is stored rather
+     * than derived here on purpose, so that the plugin stays the one place that
+     * decides which languages read right to left.
+     */
+    locale: String(site.locale),
+    dir: site.dir === 'rtl' ? 'rtl' : 'ltr',
 
     layout: graph ? 'panels' : 'column',
     nav: site.showNavigation ? 'tree' : 'none',

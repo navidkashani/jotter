@@ -2603,6 +2603,11 @@ if (FULL) {
       site: {
         title: 'Fixture Garden',
         homepage: 'Notes/Home.md',
+        // Persian, because the language and the direction derived from it are
+        // the two site options whose only visible effect is on `<html>`, and
+        // nothing short of a real build can show they got there.
+        locale: 'fa-IR',
+        dir: 'rtl',
         noIndex: false,
         showThemeToggle: true,
         strictLineBreaks: false,
@@ -2708,6 +2713,15 @@ if (FULL) {
 
         const generated = await readFile(configPath, 'utf8')
         check(/"slugs": "preserve"/.test(generated), 'the generated config preserves the plugin’s slugs')
+        check(
+          /"locale": "fa-IR"/.test(generated) && /"dir": "rtl"/.test(generated),
+          'the language and its direction reached the generated config',
+        )
+        check(
+          !fetched.out.includes('ignoring site option'),
+          'and neither was reported as an option this version does not understand',
+          fetched.out.slice(-400),
+        )
 
         await clearContentStores(ROOT)
         const { code, out } = await run(['astro', 'build'], { env })
@@ -2738,6 +2752,21 @@ if (FULL) {
               `no page at ${relative(DIST, page)}`,
             )
           }
+
+          // The whole point of carrying `dir` in the snapshot rather than
+          // leaving each starter to re-derive it: the answer arrives, and the
+          // page says it.
+          const [{ html: anyPage }] = onPages
+          check(
+            /<html lang="fa-IR"/.test(anyPage),
+            'the published language reaches <html lang>',
+            anyPage.slice(0, 120),
+          )
+          check(
+            /<html [^>]*dir="rtl"/.test(anyPage),
+            'and the direction derived from it reaches <html dir>',
+            anyPage.slice(0, 120),
+          )
 
           const netlify = await readFile(join(DIST, '_redirects'), 'utf8').catch(() => '')
 

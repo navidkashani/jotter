@@ -18,7 +18,20 @@ const locales: Record<string, Strings> = { en }
  * registering it here. Kept explicit rather than a glob import so an unused
  * translation never reaches the bundle.
  */
-const strings: Strings = { ...en, ...(locales[config.locale] ?? {}) }
+/**
+ * The translation for a tag, trying the whole tag before its language alone.
+ *
+ * `config.locale` is a BCP-47 tag and the Open Publish plugin sends
+ * region-qualified ones: `fa-IR`, not `fa`. An exact-match lookup would miss a
+ * `fa.json` sitting right there, so a Persian site would silently render
+ * English chrome. Region-specific files still win when one exists, which is
+ * what `pt-BR` beside a general `pt` is for.
+ */
+function stringsFor(locale: string): Strings {
+  return locales[locale] ?? locales[locale.split('-')[0]] ?? {}
+}
+
+const strings: Strings = { ...en, ...stringsFor(config.locale) }
 
 /** Look up a string, interpolating `{name}` placeholders. */
 export function t(key: keyof typeof en | string, values?: Record<string, string | number>): string {

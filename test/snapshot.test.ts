@@ -359,6 +359,8 @@ describe('site options become a jotter config', () => {
   const site = {
     title: 'My Notes',
     homepage: 'Notes/Home.md',
+    locale: 'en-US',
+    dir: 'ltr',
     noIndex: false,
     showThemeToggle: true,
     strictLineBreaks: false,
@@ -387,6 +389,25 @@ describe('site options become a jotter config', () => {
 
   it('always preserves the addresses the plugin published', () => {
     expect(mapSite(site).options.slugs).toBe('preserve')
+  })
+
+  /**
+   * The pair that makes a Persian vault publishable at all. Both are carried
+   * across rather than re-derived: the plugin decides which languages read
+   * right to left, and a second opinion here is a second answer to a settled
+   * question.
+   */
+  it('carries the language and its direction straight across', () => {
+    const { options } = mapSite({ ...site, locale: 'fa-IR', dir: 'rtl' })
+    expect(options.locale).toBe('fa-IR')
+    expect(options.dir).toBe('rtl')
+  })
+
+  it('refuses a direction that is not one of the two, rather than passing it on', () => {
+    // `config.dir` is a zod enum, so anything else fails the *build*, which is
+    // the one thing a site option is never allowed to do.
+    expect(mapSite({ ...site, dir: 'sideways' }).options.dir).toBe('ltr')
+    expect(mapSite({ ...site, dir: undefined }).options.dir).toBe('ltr')
   })
 
   /**
@@ -469,6 +490,10 @@ describe('site options become a jotter config', () => {
     expect(options.features?.search).toBe(true)
     expect(options.features?.backlinks).toBe(true)
     expect(options.nav).toBe('tree')
+    // Language and direction arrived after the first snapshots did, and a
+    // manifest that predates them builds the site it always built.
+    expect(options.locale).toBe('en')
+    expect(options.dir).toBe('ltr')
   })
 
   it('reports a key it does not understand rather than guessing', () => {
