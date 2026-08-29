@@ -19,7 +19,6 @@
   "note.contents": "Contents",
   "note.backlinks": "Linked from",
   "note.noBacklinks": "Nothing links here yet.",
-  "note.links": "Links to",
   "note.graph": "Local graph",
   "note.expandGraph": "Expand the graph",
   "note.closeGraph": "Close the graph",

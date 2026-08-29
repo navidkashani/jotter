@@ -62,12 +62,17 @@ describe('nothing in src/lib is written for nobody', () => {
    * Kept deliberately, and each one has to say why. An exemption with no
    * reason attached is how the next `calloutIcon` survives a decade.
    *
-   * `outgoingFor` is one half of an outgoing-links section — the other half is
-   * the `note.links` string below — that is a design decision still open:
-   * whether a note should list what it links *to* beside what links to it.
-   * Delete both, or build it; do not leave this entry here indefinitely.
+   * **Empty, and that is the resting state.** Its only two entries were
+   * `outgoingFor` here and the `note.links` string below — the two halves of
+   * an outgoing-links section that was designed and never built. The decision
+   * went to deleting them: a note's outgoing links are already in the prose
+   * the reader has just scrolled past, as links, so listing them again repeats
+   * the page to itself — where backlinks earn their place precisely because
+   * they are invisible otherwise, and the local graph answers "what does this
+   * connect to" better than a list can. Add an entry here only with the reason
+   * *and* the condition that retires it.
    */
-  const PENDING = new Map([['outgoingFor', 'half of the undecided outgoing-links section']])
+  const PENDING = new Map<string, string>()
 
   const libs = sources(join('src', 'lib'))
 
@@ -119,8 +124,8 @@ describe('nothing in en.json is translated for nobody', () => {
    */
   const BUILT = DISPLAYED_FIELDS.map((field) => `note.field.${field}`)
 
-  /** Kept for the reason `outgoingFor` is. Both go, or both get built. */
-  const PENDING = new Set(['note.links'])
+  /** Empty for the reason the list above is: both halves were deleted, not built. */
+  const PENDING = new Set<string>()
 
   it('has more than a handful of strings to check', () => {
     expect(strings.length).toBeGreaterThan(20)

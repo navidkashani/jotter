@@ -86,4 +86,3 @@ export const notesByTag = (() => {
 export const homepage: VaultNote | undefined = notes.find((n) => n.slug === 'index')
 
 export const backlinksFor = (slug: string) => graph.backlinks.get(slug) ?? []
-export const outgoingFor = (slug: string) => graph.outgoing.get(slug) ?? []
