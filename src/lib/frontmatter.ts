@@ -110,10 +110,16 @@ export const noteFrontmatterSchema = z
      * Hugo's `url`. The note's derived slug 301s to it.
      *
      * A *list* is accepted, and that is the contract above rather than a
-     * flourish: the Open Publish starter writes a note's `legacyUrls` into
-     * this key, `legacyUrls` is a list, and a future one may hand over more
-     * than one old address. The first value is the slug; the rest become
-     * redirects. See `applyPermalinks` in `src/lib/vault.ts`.
+     * flourish: the Open Publish **Quartz** starter writes a note's
+     * `legacyUrls` into this key, `legacyUrls` is a list, and a vault it
+     * prepared has to keep working here. The first value is the slug; the rest
+     * become redirects. See `applyPermalinks` in `src/lib/vault.ts`.
+     *
+     * jotter's own snapshot layer does **not** write this key.
+     * `scripts/fetch-content.mjs` puts old addresses in `aliases:` instead,
+     * which 301s to the published slug *without moving the note* — the choice
+     * Quartz cannot make, because it slugifies every alias and honours only
+     * `permalink` character for character. See `docs/open-publish.md`.
      */
     permalink: z.union([textish, z.array(textish)]).optional(),
 

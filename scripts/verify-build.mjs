@@ -14,6 +14,8 @@
  */
 import { readFile, readdir, stat, mkdir, writeFile, rm } from 'node:fs/promises'
 import { gunzipSync } from 'node:zlib'
+import { createHash } from 'node:crypto'
+import { createServer } from 'node:http'
 import { join, relative, extname, sep } from 'node:path'
 import { spawn } from 'node:child_process'
 import { tmpdir } from 'node:os'
@@ -1782,14 +1784,19 @@ await socialCards(pages)
 
 /* ------------------------------------------------------------ full mode */
 
-const run = (args, options = {}) =>
+const spawned = (command, args, options = {}) =>
   new Promise((resolve) => {
-    const child = spawn('npx', args, { cwd: ROOT, stdio: 'pipe', ...options })
+    const child = spawn(command, args, { cwd: ROOT, stdio: 'pipe', ...options })
     let out = ''
     child.stdout?.on('data', (d) => (out += d))
     child.stderr?.on('data', (d) => (out += d))
     child.on('exit', (code) => resolve({ code, out }))
   })
+
+const run = (args, options = {}) => spawned('npx', args, options)
+
+/** The Open Publish scripts, which are plain Node rather than a bin on PATH. */
+const runNode = (args, options = {}) => spawned(process.execPath, args, options)
 
 /**
  * `--full` rebuilds twice, and both rebuilds clear the content-collection
@@ -2513,6 +2520,296 @@ if (FULL) {
 
       await rm(URLS, { recursive: true, force: true })
       await writeFile(configPath, original)
+      await clearContentStores(ROOT)
+    }
+  }
+
+  /**
+   * The sixth rebuild, and the only one whose config is not rewritten but
+   * *generated*: `scripts/fetch-content.mjs` writes `jotter.config.ts` from the
+   * snapshot's site options, the way it does on a real deploy. Everything it
+   * touches is restored below, including that file.
+   *
+   * This is the acceptance test for building from Open Publish, end to end,
+   * against a synthetic bucket served over loopback. `test/snapshot.test.ts`
+   * covers the script's own behaviour — the signing, the checks, the mapping —
+   * and what only a real `dist/` can answer is here: that a note is served at
+   * the slug the plugin published it at, that the address it used to have 301s
+   * to that slug **without moving the note**, that a link to something
+   * unpublished is inert, and that the marker the plugin polls carries the
+   * snapshot id `current.json` named.
+   *
+   * The bucket ignores the request signature. SigV4 has its own tests, and a
+   * fixture that verified it would only be testing them.
+   */
+  section('An Open Publish snapshot is served at the addresses it was published at')
+  {
+    const configPath = join(ROOT, 'jotter.config.ts')
+    const original = await readFile(configPath, 'utf8')
+    const statePath = join(ROOT, '.op-build-state.json')
+    const VAULT = join(tmpdir(), `jotter-op-${process.pid}`)
+
+    const sha256 = (data) => createHash('sha256').update(data).digest('hex')
+
+    /**
+     * A vault as the plugin publishes one: clean slugs, one note carrying the
+     * Obsidian Publish address it used to answer at, one rename, one attachment
+     * whose name would not survive slugification, and one link to a note that
+     * was never published.
+     */
+    const FILES = {
+      'Notes/Home.md': {
+        body:
+          '# Home\n\nSee [[Critical Thinking]], [[Plain]] and [[Draft Note]].\n\n' +
+          '![[My Diagram.svg]]\n',
+        entry: { slug: 'index', title: 'Home' },
+      },
+      'Wisdom & Approaches/Critical Thinking.md': {
+        body: '# Critical Thinking\n\nA note that kept the address it was published at.\n',
+        entry: {
+          slug: 'wisdom-approaches/critical-thinking',
+          title: 'Critical Thinking',
+          legacyUrls: ['Wisdom+&+Approaches/Critical+Thinking'],
+        },
+      },
+      'Notes/Plain.md': {
+        body: '# Plain\n\nNothing special about this one.\n',
+        entry: { slug: 'notes/plain', title: 'Plain' },
+      },
+      'attachments/My Diagram.svg': {
+        body: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4"/></svg>\n',
+        entry: { slug: 'attachments/my-diagram.svg' },
+      },
+    }
+
+    const LEGACY = '/Wisdom+%26+Approaches/Critical+Thinking'
+    const SLUG = '/wisdom-approaches/critical-thinking'
+
+    const files = {}
+    const objects = new Map()
+    for (const [path, { body, entry }] of Object.entries(FILES)) {
+      const buffer = Buffer.from(body, 'utf8')
+      const hash = sha256(buffer)
+      files[path] = { hash, size: buffer.length, mtime: 0, ...entry }
+      objects.set(`objects/${hash.slice(0, 2)}/${hash}`, buffer)
+    }
+
+    const snapshot = {
+      version: 1,
+      id: '2026-08-29T09-00-00Z-verify',
+      parent: null,
+      createdAt: 0,
+      generator: { plugin: 'open-publish', version: 'verify' },
+      site: {
+        title: 'Fixture Garden',
+        homepage: 'Notes/Home.md',
+        noIndex: false,
+        showThemeToggle: true,
+        strictLineBreaks: false,
+        showNavigation: true,
+        showSearch: false,
+        showGraph: false,
+        showOutline: true,
+        showBacklinks: true,
+        showTags: true,
+        analytics: { provider: 'none', id: '' },
+      },
+      files,
+      links: {
+        'Notes/Home.md': [
+          {
+            raw: 'Critical Thinking',
+            target: 'Wisdom & Approaches/Critical Thinking.md',
+            status: 'published',
+            slug: 'wisdom-approaches/critical-thinking',
+          },
+          { raw: 'Plain', target: 'Notes/Plain.md', status: 'published', slug: 'notes/plain' },
+          { raw: 'Draft Note', target: 'Drafts/Draft Note.md', status: 'unpublished' },
+          {
+            raw: 'My Diagram.svg',
+            target: 'attachments/My Diagram.svg',
+            status: 'published',
+            slug: 'attachments/my-diagram.svg',
+            embed: true,
+          },
+        ],
+      },
+      redirects: [{ from: 'notes/home', to: 'index' }],
+    }
+
+    const keys = new Map([
+      ...objects,
+      ['current.json', Buffer.from(JSON.stringify({ version: 1, snapshot: snapshot.id, updatedAt: 0 }))],
+      [`snapshots/${snapshot.id}.json`, Buffer.from(JSON.stringify(snapshot))],
+    ])
+
+    const server = createServer((req, res) => {
+      const key = decodeURIComponent((req.url ?? '').replace(/^\/fixture\//, '').split('?')[0])
+      const body = keys.get(key)
+      if (!body) {
+        res.statusCode = 404
+        return res.end('not found')
+      }
+      res.end(body)
+    })
+    await new Promise((done) => server.listen(0, '127.0.0.1', done))
+    const port = server.address().port
+
+    const env = {
+      ...process.env,
+      OP_ENDPOINT: `http://127.0.0.1:${port}`,
+      OP_BUCKET: 'fixture',
+      OP_ACCESS_KEY_ID: 'key',
+      OP_SECRET_ACCESS_KEY: 'secret',
+      JOTTER_VAULT_OVERRIDE: VAULT,
+    }
+
+    try {
+      await rm(VAULT, { recursive: true, force: true })
+      await clearContentStores(ROOT)
+
+      const fetched = await runNode([join(ROOT, 'scripts', 'fetch-content.mjs')], { env })
+      if (fetched.code !== 0) {
+        fail('fetch-content turns a snapshot into a vault', fetched.out.slice(-800))
+      } else {
+        check(
+          fetched.out.includes('REGENERATED'),
+          'the build says out loud that it overwrote jotter.config.ts',
+        )
+
+        /**
+         * The headline claim, checked on disk before anything renders: the note
+         * body is byte for byte what its author wrote. The Quartz starter has
+         * to rewrite every wikilink into a resolved `[label](/slug)` because
+         * Quartz cannot be told the answers; jotter is told, in
+         * `.jotter/links.json`, and so touches nothing but the frontmatter.
+         */
+        const home = await readFile(join(VAULT, 'index.md'), 'utf8')
+        check(
+          home.includes('[[Critical Thinking]]') && home.includes('![[My Diagram.svg]]'),
+          'no wikilink in a note body was rewritten',
+        )
+        check(home.includes('title: "Home"'), 'the snapshot’s resolved title reached the note')
+
+        const critical = await readFile(
+          join(VAULT, 'wisdom-approaches', 'critical-thinking.md'),
+          'utf8',
+        )
+        check(
+          critical.includes('aliases: ["Wisdom+&+Approaches/Critical+Thinking"]'),
+          'an old address arrived as an alias, not as a permalink',
+          critical.split('\n').slice(0, 5).join(' | '),
+        )
+
+        check(
+          (await stat(join(VAULT, 'attachments', 'My Diagram.svg')).catch(() => null)) !== null,
+          'an attachment kept its vault path rather than taking its slug',
+        )
+
+        const generated = await readFile(configPath, 'utf8')
+        check(/"slugs": "preserve"/.test(generated), 'the generated config preserves the plugin’s slugs')
+
+        await clearContentStores(ROOT)
+        const { code, out } = await run(['astro', 'build'], { env })
+
+        if (code !== 0) {
+          fail('the fetched vault builds', out.slice(-800))
+        } else {
+          const finalized = await runNode([join(ROOT, 'scripts', 'finalize.mjs')], { env })
+          check(finalized.code === 0, 'finalize writes the marker the plugin polls', finalized.out.slice(-400))
+
+          const onPages = await Promise.all(
+            (await walk(DIST, (n) => n.endsWith('.html'))).map(async (file) => ({
+              file: relative(DIST, file),
+              html: await readFile(file, 'utf8'),
+            })),
+          )
+
+          /** Every note at the slug the plugin gave it, and the homepage at `/`. */
+          for (const [path, { entry }] of Object.entries(FILES)) {
+            if (!path.endsWith('.md')) continue
+            const page =
+              entry.slug === 'index'
+                ? join(DIST, 'index.html')
+                : join(DIST, ...entry.slug.split('/'), 'index.html')
+            check(
+              (await stat(page).catch(() => null)) !== null,
+              `${path} is served at /${entry.slug === 'index' ? '' : entry.slug}`,
+              `no page at ${relative(DIST, page)}`,
+            )
+          }
+
+          const netlify = await readFile(join(DIST, '_redirects'), 'utf8').catch(() => '')
+
+          /**
+           * The acceptance criterion, in one line: the URL Obsidian Publish
+           * served this note at 301s to the slug the plugin published it at.
+           * `aliases:` -> `sourceFor(alias, 'preserve')` -> the single
+           * `encodeSlug` in `src/lib/redirects.ts`, so `&` is percent-encoded
+           * exactly once and `+` is left alone.
+           */
+          check(
+            netlify.includes(`${LEGACY} ${SLUG} 301`),
+            `${LEGACY} 301s to ${SLUG}`,
+            netlify.trim().split('\n').join(' | '),
+          )
+          check(
+            netlify.includes('/notes/home / 301'),
+            'a note renamed into the homepage still answers at its old slug',
+            netlify.trim().split('\n').join(' | '),
+          )
+
+          /**
+           * And the other half of that criterion, which is the half a permalink
+           * would have broken: the note did not move. Nothing redirects away
+           * from the slug it is served at.
+           */
+          check(
+            !new RegExp(`^${SLUG} `, 'm').test(netlify),
+            'and the note itself did not move',
+            netlify.trim().split('\n').join(' | '),
+          )
+
+          const homePage = onPages.find((p) => p.file === 'index.html')?.html ?? ''
+          check(
+            homePage.includes(`href="${SLUG}"`),
+            'the link index resolved a wikilink to the published slug',
+          )
+          check(
+            /<span class="dead-link">Draft Note<\/span>/.test(homePage),
+            'a link to an unpublished note is an inert span, labelled with what the author typed',
+          )
+          check(
+            !/href="[^"]*[Dd]raft/.test(homePage),
+            'and nothing on the page links to it',
+          )
+          check(
+            homePage.includes('/_vault/attachments/My%20Diagram.svg'),
+            'an embed resolved to the attachment at its vault path',
+          )
+
+          const marker = JSON.parse(await readFile(join(DIST, '_publish.json'), 'utf8'))
+          check(
+            marker.snapshot === snapshot.id,
+            'dist/_publish.json carries the snapshot current.json named',
+            `${marker.snapshot} != ${snapshot.id}`,
+          )
+          const headers = await readFile(join(DIST, '_headers'), 'utf8').catch(() => '')
+          check(
+            /\/_publish\.json[\s\S]*Cache-Control: no-store/.test(headers),
+            'and a CDN is told not to cache it',
+            headers.trim().split('\n').join(' | '),
+          )
+
+          await internalLinks(onPages)
+          await redirectsAndRobots()
+        }
+      }
+    } finally {
+      await new Promise((done) => server.close(done))
+      await writeFile(configPath, original)
+      await rm(statePath, { force: true })
+      await rm(VAULT, { recursive: true, force: true })
       await clearContentStores(ROOT)
     }
   }

@@ -7,3 +7,6 @@ node_modules/
 .env.production
 .vercel
 .netlify
+
+# Written by scripts/fetch-content.mjs, read by scripts/finalize.mjs.
+.op-build-state.json

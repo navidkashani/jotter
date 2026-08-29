@@ -161,21 +161,36 @@ stops the build instead, naming the note.
 
 ---
 
-## Open Publish writes this key already
+## Open Publish, and the two answers to an old URL
 
-The Open Publish Quartz starter records each note's old Obsidian URL in
+The Open Publish **Quartz** starter records each note's old Obsidian URL in
 frontmatter as `permalink:`
 (`starters/quartz/scripts/lib/frontmatter.mjs`), percent-decoded, because
 Quartz runs every `aliases` entry through `slugifyFilePath` — which maps `&` to
 `-and-` and `%` to `-percent` — and `permalink` is the one key it honours
 character for character.
 
-jotter reading the same key needs no plugin change, and gives a better result
-than the Quartz starter does: on Quartz, `permalink` emits a `noindex`
-meta-refresh bounce page and the note stays at its derived slug. On jotter the
-old Obsidian URL becomes the real, canonical URL — no bounce page, no
-meta-refresh, no `noindex`. Which is what "keep your existing URLs" was supposed
-to mean. See [migrating-from-quartz.md](migrating-from-quartz.md).
+jotter reads the same key, so a vault that starter prepared needs no change, and
+it gives a better result than Quartz does: there, `permalink` emits a `noindex`
+meta-refresh bounce page and the note stays at its derived slug. Here the old
+Obsidian URL becomes the real, canonical URL — no bounce page, no meta-refresh,
+no `noindex`. Which is what "keep your existing URLs" was supposed to mean. See
+[migrating-from-quartz.md](migrating-from-quartz.md).
+
+**jotter's own snapshot layer chooses the other answer.**
+`scripts/fetch-content.mjs`, which builds this repository straight from an Open
+Publish bucket, writes old addresses to `aliases:` rather than `permalink:` —
+because jotter honours both character for character and can therefore pick the
+one that leaves the note where the plugin put it.
+
+| the old URL written as | `/Wisdom+%26+Approaches/Critical+Thinking` becomes | the note is served at |
+| --- | --- | --- |
+| `permalink:` | the note's own address | the old URL, and its slug 301s to it |
+| `aliases:` | a 301 to the note | the slug the plugin published |
+
+The second row is what a site moving *onto* clean slugs wants: the old address
+keeps answering, and every new link, canonical and sitemap entry spells the
+address the plugin published. See [open-publish.md](open-publish.md).
 
 ---
 

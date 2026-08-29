@@ -302,6 +302,12 @@ Links the file does not name fall back to `linkResolution`. A malformed file is
 a warning, not a failed build, and an entry naming a slug this build does not
 have falls back rather than emitting a link to a page that will not exist.
 
+[Open Publish](https://github.com/navidkashani/open-publish) writes exactly this
+file. `npm run build` can pull a published snapshot straight out of its bucket —
+notes, attachments, resolved links and site options — with four environment
+variables and no code change. It no-ops when they are not set.
+See [`docs/open-publish.md`](docs/open-publish.md).
+
 ---
 
 ## Routes
@@ -385,6 +391,10 @@ and its derived slug 301s to it. A list gives one page and a redirect from each
 of the rest. This is the same key the Open Publish Quartz starter already writes
 a note's old Obsidian URL into, so a vault it prepared needs no changes.
 
+Building straight from an Open Publish bucket instead? That path uses `aliases:`
+rather than `permalink:`, so an old URL 301s to the note without moving it. See
+[`docs/open-publish.md`](docs/open-publish.md).
+
 One caveat before you deploy: **Netlify 301s mixed-case paths to lowercase**,
 with no opt-out, so `/Company/About+us` will not survive there. Cloudflare Pages,
 Vercel and GitHub Pages serve them as written, and the build warns whenever it
@@ -399,10 +409,10 @@ Full detail, including the slug/URL split and what the build asserts about it:
 
 ```bash
 npm run dev          # http://localhost:4321
-npm run build        # astro build, then the build assertions
+npm run build        # fetch (if configured), astro build, the build assertions, then finalize
 npm run verify       # the assertions alone, against the current dist/
-npm run verify:full  # also rebuilds with features off, analytics on, RSS on, a homepage set, and at 1,000 notes
-npm test             # 309 unit tests
+npm run verify:full  # also rebuilds with features off, analytics on, RSS on, a homepage set, from an Open Publish snapshot, and at 1,000 notes
+npm test             # 512 unit tests
 npm run check        # astro check
 npm run clean        # see the note below
 ```
