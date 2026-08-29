@@ -12,11 +12,31 @@
 import Base from '../../layouts/Base.astro'
 import NoteList from '../../components/NoteList.astro'
 import { byUpdated } from '../../lib/site.js'
+import { noteHref } from '../../lib/href.js'
 import { CALLOUT_TYPES } from '../../lib/callout.js'
 
 export function getStaticPaths() {
   return process.env.JOTTER_DEMO ? [{ params: { slug: undefined } }] : []
 }
+
+/**
+ * A real note to point the prose samples at, rather than a slug typed in by
+ * hand.
+ *
+ * Two hardcoded `/zettelkasten` links used to live below, and both were wrong
+ * the moment the page was built against anything but the demo garden: dead on
+ * a vault with no such note, and stale under `homepage: 'Zettelkasten'`, which
+ * moves that note to `/`. Neither shows up locally — `/library` only exists
+ * with `JOTTER_DEMO=1`, which is CI — so `verify:full` found them on the
+ * runner and nowhere else.
+ *
+ * Derived, like every other URL in the build. `noteHref` is the one answer to
+ * what a link looks like, and the fallback keeps a vault of one note from
+ * emitting an empty href.
+ */
+const sample = byUpdated[0]
+const sampleHref = sample ? noteHref(sample.slug) : '/'
+const sampleTitle = sample?.title ?? 'A note'
 
 const SURFACES = ['--paper', '--surface']
 const INKS = ['--ink-strong', '--ink', '--ink-muted', '--ink-faint']
@@ -144,14 +164,14 @@ const calloutKeys = Object.keys(CALLOUT_TYPES)
     <section class="stack prose">
       <h2 class="section-heading">Prose</h2>
       <p>
-        Body copy at a 66ch measure, with an <a href="/zettelkasten">internal link</a>, a
+        Body copy at a 66ch measure, with an <a href={sampleHref}>internal link</a>, a
         <span class="dead-link">dead link</span>, <em>emphasis</em>, <strong>strong</strong>,
         <mark>a highlight</mark> and <code>inline code</code>.
       </p>
       <blockquote>An ordinary blockquote, which a callout must never be mistaken for.</blockquote>
       <aside class="transclusion" data-transclusion>
         <p>A transcluded note is visibly borrowed, and always links back.</p>
-        <a class="transclusion-source" href="/zettelkasten">Zettelkasten</a>
+        <a class="transclusion-source" href={sampleHref}>{sampleTitle}</a>
       </aside>
     </section>
 
