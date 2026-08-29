@@ -16,7 +16,7 @@ export default defineConfig({
   locale: 'en',
   dir: 'ltr',
 
-  layout: 'column',
+  layout: 'panels',
   nav: 'tree',
 
   // Obsidian's own default. Change only if your vault was written for another tool.
@@ -28,5 +28,8 @@ export default defineConfig({
     backlinks: true,
     tags: true,
     themeToggle: true,
+    graph: true,
+    hoverPreview: true,
+    search: true,
   },
 })
