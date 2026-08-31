@@ -429,7 +429,7 @@ npm run clean        # see the note below
 merge from upstream needs `--allow-unrelated-histories`:
 
 ```bash
-git remote add upstream https://github.com/<owner>/jotter.git
+git remote add upstream https://github.com/navidkashani/jotter.git
 git fetch upstream
 git merge upstream/main --allow-unrelated-histories
 ```

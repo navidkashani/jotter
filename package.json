@@ -1,8 +1,28 @@
 {
   "name": "jotter",
   "version": "0.1.0",
-  "type": "module",
   "private": true,
+  "description": "An Astro theme for publishing an Obsidian vault, designed rather than merely generated.",
+  "keywords": [
+    "astro",
+    "astro-theme",
+    "obsidian",
+    "digital-garden",
+    "zettelkasten",
+    "wikilinks",
+    "static-site",
+    "notes",
+    "open-publish"
+  ],
+  "homepage": "https://github.com/navidkashani/jotter#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/navidkashani/jotter.git"
+  },
+  "bugs": {
+    "url": "https://github.com/navidkashani/jotter/issues"
+  },
+  "type": "module",
   "license": "MIT",
   "engines": {
     "node": ">=22.12"
