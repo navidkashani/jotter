@@ -597,6 +597,44 @@ refuses your feed, check the header your host is actually sending.
 `noIndex: true` does not suppress the feed. `noIndex` is about crawlers, and a
 subscription is something you opted into twice — the flag and a `url`.
 
+And **the URLs you already published**, which is less a feature than a promise.
+`slugs:` takes `'derive'` — lowercase and dashed, what every jotter site has
+been built at and the default forever — or `'preserve'` and `'obsidian'`, which
+carry a vault path to the URL untouched. `obsidian` reproduces Obsidian
+Publish's own addresses, space to `+` and all, so a site moving onto the domain
+those URLs were served from keeps every inbound link and every search ranking it
+had. One note overrides all three with `permalink:` in its frontmatter, and its
+derived slug 301s to it.
+
+The idea holding that up is that **a slug is not a URL**: the path in `dist/`
+carries a literal `&`, and every link, canonical, sitemap entry and search
+result spells it `%26`. jotter has four producers of a page's URL and they must
+agree byte for byte or Google splits one page into duplicates, so there is one
+encoder, in a module that imports nothing, and `verify:full` compares all four
+against each other. `obsidianPath` is byte-identical to open-publish's own
+`obsidianPublishUrl` — asserted in the tests rather than claimed in a comment.
+One caveat before you deploy: Netlify 301s mixed-case paths to lowercase with no
+opt-out, so these styles do not survive there, and the build says so by name.
+See [`docs/url-styles.md`](docs/url-styles.md).
+
+And **building from an Open Publish snapshot**, which makes this repository a
+deploy target for the Obsidian plugin of that name rather than only a folder of
+markdown. Set four environment variables on your host and `npm run build` pulls
+the published snapshot out of object storage — notes, attachments, resolved
+links and site options — verifying every file against the hash the snapshot
+recorded. Set none of them and the two scripts exit having touched nothing, so
+a plain vault builds exactly as before. No new dependency: SigV4 is hand-rolled
+over `node:crypto`, because some hosts install with `npm ci --omit=dev`.
+
+Two things it deliberately does not do. It **never rewrites a link in a note
+body** — the plugin resolved every wikilink inside Obsidian against the whole
+vault, and those answers go to `.jotter/links.json`, which jotter has read since
+v1, so the markdown on disk is what its author wrote. And it writes **no
+redirects**, because an old address arrives as `aliases:` and jotter already
+turns an alias into a 301 — to the note, without moving it, which is the half a
+`permalink:` would have got backwards. See
+[`docs/open-publish.md`](docs/open-publish.md).
+
 ### What "no network" means now
 
 It used to mean *nothing jotter ships reaches the network*. Search ended that
@@ -627,6 +665,12 @@ Each bullet below is true on its own; none of them is retracted by the next.
   not jotter's and is not in `dist/`. What jotter asserts about analytics is
   which origin the tag points at, not what the vendor does once it is running.
   Nobody can assert the second; saying so is better than implying otherwise.
+  One thing jotter wrote *does* make requests, and it is worth naming rather
+  than leaving to the scoping above: `scripts/fetch-content.mjs` reads a bucket
+  over HTTPS. That runs on the build machine, only when you have configured
+  Open Publish, and nothing it downloads is a script — it is your own notes,
+  verified against the hashes the snapshot recorded. No byte of it reaches a
+  reader's browser as code.
 
 Two things jotter cannot detect, and does not pretend to. A site proxied through
 Cloudflare with Web Analytics enabled at the dashboard already has the beacon
@@ -635,8 +679,8 @@ preview deploy is a production build, so the tag ships there too — Plausible a
 Fathom simply will not count a domain you have not registered, and GA4 will.
 
 **Still to come:** *generated* OG images — a card drawn from the note's own
-title and description for the notes that declare no `image:` — and the Open
-Publish `scripts/` layer. Declared ones work today; see “Link previews”.
+title and description for the notes that declare no `image:`. Declared ones work
+today; see “Link previews”.
 
 ## License
 
