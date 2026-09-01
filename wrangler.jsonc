@@ -5,6 +5,31 @@
 // local development only, so shipping this changes nothing for a site already
 // deployed there. Netlify and Vercel never look at it.
 //
+// Pages does not ignore it quietly, though. Every Pages build of a site made
+// from this theme now logs:
+//
+//   Found wrangler.json file. Reading build configuration...
+//   A Wrangler configuration file was found but it does not appear to be valid.
+//   Did you mean to use wrangler.toml to configure Pages? If so, then make sure
+//   the file is valid and contains the `pages_build_output_dir` property.
+//   Skipping file and continuing.
+//
+// That is expected and harmless. "Skipping file and continuing" is Pages doing
+// exactly what the paragraph above says it does, and the build then succeeds.
+// It is written down here because somebody debugging an unrelated Pages failure
+// will otherwise spend an hour on a line that says "does not appear to be
+// valid".
+//
+// Adding `pages_build_output_dir` to silence it is not the fix, and that was
+// tested rather than assumed. With the key present, `wrangler deploy` warns
+// "It seems that you have run `wrangler deploy` on a Pages project ...
+// Proceeding will likely produce unwanted results" and stops for a confirmation
+// that only a non-interactive fallback answers. Worse, the key is what turns
+// this file from local-development-only into the source of truth for a Pages
+// project's configuration, which would silently override the dashboard settings
+// of every Pages site already deployed from this theme. A log line is much the
+// cheaper of the two.
+//
 // The two values below that fail *silently* when they are wrong are checked
 // against the build by `test/wrangler.test.ts`.
 {

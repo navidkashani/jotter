@@ -79,6 +79,59 @@ to Cloudflare Pages: a Wrangler file without that key is used for local
 development only, so a site already deployed from Pages is untouched by it.
 Netlify and Vercel never read it at all.
 
+### The line Cloudflare Pages prints about `wrangler.jsonc`
+
+Invisible is not the same as silent. Every Pages build of a site made from this
+theme logs this, and then succeeds:
+
+```
+Found wrangler.json file. Reading build configuration...
+A Wrangler configuration file was found but it does not appear to be valid.
+Did you mean to use wrangler.toml to configure Pages? If so, then make sure
+the file is valid and contains the `pages_build_output_dir` property.
+Skipping file and continuing.
+```
+
+**Expected, and harmless.** "Skipping file and continuing" is Pages declining to
+read a file that was never addressed to it, which is exactly the arrangement
+that lets one repository deploy to both Pages and Workers Builds. Nothing about
+your site is misconfigured, and no build has ever failed because of it. It is
+documented here because "does not appear to be valid" is the kind of line
+somebody debugging an unrelated failure will chase for an hour.
+
+Adding `pages_build_output_dir` to make it stop is not the fix. That was tested
+rather than assumed, and it fails in both directions:
+
+- `wrangler deploy` starts warning that this "is a Pages project" and that
+  "proceeding will likely produce unwanted results", then stops for a
+  confirmation that only a non-interactive fallback answers. A Workers Builds
+  deploy would be riding on that fallback.
+- The key is precisely what promotes the file from local-development-only to
+  the source of truth for a Pages project's configuration. Adding it would
+  silently take over the dashboard build settings of every Pages site already
+  deployed from this theme.
+
+So the warning stays, and this section is the whole fix.
+
+### The Node version is pinned
+
+`.node-version` in the repository root says `24.20.0`, and `engines.node` agrees
+with it. Cloudflare Pages and Workers Builds both read that file, and so do
+Netlify, `fnm` and `nodenv`. Vercel reads `engines.node` instead, which is the
+other half of why both say the same thing. CI reads the file directly rather
+than naming a version of its own, so a green run means the theme built on the
+version your host will use.
+
+It is pinned rather than floating because unpinned means the host chooses. On a
+real build, Pages picked 22.16.0 while development was happening on 24.x and
+`undici` warned that it wanted 22.19.0 or newer: three different answers, none
+of them chosen, and a warning today is a broken build on a version you cannot
+reproduce locally tomorrow.
+
+`24.20.0` is the current Node LTS, and moving it is a decision somebody makes.
+When you do move it, change `.node-version` and `engines.node` together, and
+run `npm test` and `npm run verify:full` on the new version before trusting it.
+
 ---
 
 ## What the fetch does to this repository

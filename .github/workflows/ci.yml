@@ -25,15 +25,6 @@ jobs:
   verify:
     runs-on: ubuntu-latest
 
-    strategy:
-      # Both versions' results are worth having; stopping at the first failure
-      # hides whether a break is version-specific.
-      fail-fast: false
-      matrix:
-        # 22.12 is the floor `engines` promises, so it is the one that makes
-        # the promise true. 24 is what the theme is developed on.
-        node: ['22.12', '24']
-
     steps:
       - uses: actions/checkout@v7
         with:
@@ -45,7 +36,14 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: ${{ matrix.node }}
+          # `.node-version`, rather than a version written here, and rather than
+          # a matrix over several. Cloudflare Pages and Workers Builds both read
+          # that same file, so this line is what makes a green run mean "on the
+          # version the deploy will actually use". A matrix proved the theme ran
+          # on versions no host had been told to pick, which is the thing that
+          # went wrong: Pages chose 22.16.0 on its own and `undici` warned it
+          # wanted 22.19.0 or newer.
+          node-version-file: .node-version
           cache: npm
 
       - run: npm ci

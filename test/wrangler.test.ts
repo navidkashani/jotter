@@ -108,7 +108,10 @@ describe('the Workers Builds config matches the build', () => {
     // Without `pages_build_output_dir` a Wrangler file is used for local
     // development only, which is what lets one repository serve both hosts.
     // Adding that key would silently take over the build settings of every
-    // Pages project already deployed from this theme.
+    // Pages project already deployed from this theme, and `wrangler deploy`
+    // would start warning that this is a Pages project and asking whether to
+    // proceed. The price of leaving it out is a warning in the Pages build log,
+    // which `wrangler.jsonc` quotes and `docs/open-publish.md` explains.
     expect('pages_build_output_dir' in config).toBe(false)
   })
 })
