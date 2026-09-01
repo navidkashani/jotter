@@ -27,8 +27,9 @@ report a broken deploy as the live one.
 ## Set these on your host
 
 Four are required, and they are the read-only storage token the plugin issues.
-On Cloudflare Pages they go in Settings → Environment variables; on Netlify and
-Vercel, in the site's build settings.
+On Cloudflare Pages they go in Settings → Environment variables; on Cloudflare
+Workers Builds, in Settings → Build → Build Variables and Secrets; on Netlify
+and Vercel, in the site's build settings.
 
 | Variable | |
 | --- | --- |
@@ -39,7 +40,7 @@ Vercel, in the site's build settings.
 | `OP_REGION` | Optional. Defaults to `auto`, which is right for R2 |
 | `OP_PREFIX` | Optional. A prefix inside the bucket, when one bucket holds several sites |
 | `OP_FORCE_PATH_STYLE` | Optional. `false` for virtual-host addressing |
-| `OP_SITE_URL` | Optional. Your own address, overriding whatever the host injects |
+| `OP_SITE_URL` | Your own address, overriding whatever the host injects. Optional everywhere except Workers Builds, which injects none |
 
 **Set all four, or none of the eight.** Any `OP_*` variable in the table turns
 the fetch on; with some of the required four then missing, the build stops and
@@ -52,6 +53,31 @@ none of them set, jotter emits no sitemap and no canonical links — a smaller
 site, not a wrong one — so it is a warning rather than a failure. Cloudflare
 Workers Builds injects no address at all, and is the one host where you have to
 set `OP_SITE_URL` yourself.
+
+### Cloudflare Workers Builds
+
+There is no configuration to write by hand any more.
+[`wrangler.jsonc`](../wrangler.jsonc) ships in the repository root, so
+connecting the repository to a Worker is the whole setup: the deploy reads the
+output directory, the 404 page and the trailing-slash rule out of that file.
+Each of the three carries a comment saying why it holds the value it does, and
+`test/wrangler.test.ts` keeps the output directory in step with the build,
+because a directory that has drifted deploys an empty site and still reports
+success.
+
+One line in it is yours. `name` has to match the Worker you created in the
+dashboard, and Workers Builds fails the build when the two disagree, so change
+that line rather than renaming the Worker.
+
+`OP_SITE_URL` is still required here, and this is the only host where that is
+true. Workers Builds tells the build nothing about where the site will be
+served, so with the variable unset the build warns and the site goes out with no
+sitemap and no canonical links.
+
+The file carries no `pages_build_output_dir`, which is what keeps it invisible
+to Cloudflare Pages: a Wrangler file without that key is used for local
+development only, so a site already deployed from Pages is untouched by it.
+Netlify and Vercel never read it at all.
 
 ---
 

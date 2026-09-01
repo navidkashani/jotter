@@ -412,7 +412,7 @@ npm run dev          # http://localhost:4321
 npm run build        # fetch (if configured), astro build, the build assertions, then finalize
 npm run verify       # the assertions alone, against the current dist/
 npm run verify:full  # also rebuilds with features off, analytics on, RSS on, a homepage set, from an Open Publish snapshot, and at 1,000 notes
-npm test             # 512 unit tests
+npm test             # 520 unit tests
 npm run check        # astro check
 npm run clean        # see the note below
 ```

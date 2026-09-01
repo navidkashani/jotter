@@ -1,0 +1,52 @@
+// Cloudflare Workers Builds.
+//
+// Only read when this repository is connected to a Worker. Cloudflare Pages
+// ignores a Wrangler file that has no `pages_build_output_dir`, using it for
+// local development only, so shipping this changes nothing for a site already
+// deployed there. Netlify and Vercel never look at it.
+//
+// The two values below that fail *silently* when they are wrong are checked
+// against the build by `test/wrangler.test.ts`.
+{
+  // This has to match the Worker's name in the Cloudflare dashboard. Workers
+  // Builds fails the build when the two disagree, so if you named your Worker
+  // something else, change this line rather than renaming the Worker.
+  "name": "jotter-site",
+
+  // Pinned, not "today". A compatibility date is how a Worker keeps the runtime
+  // behaviour it was built against, so moving it should be a decision somebody
+  // makes, never something that happens because a rebuild ran on a later date.
+  "compatibility_date": "2026-08-25",
+
+  // No "main" on purpose. This site has no Worker code of its own, and an
+  // assets-only Worker is Cloudflare's own static-site pattern. A script here
+  // would also stop the `_headers` that `scripts/finalize.mjs` writes applying
+  // to anything that script answered: Cloudflare does not add those headers to
+  // a response Worker code generated, so `_publish.json` would lose its
+  // `Cache-Control: no-store` and a `noIndex` site its `X-Robots-Tag`.
+  "assets": {
+    // Where `npm run build` puts the site. Astro's default `outDir`, which
+    // `astro.config.ts` does not override, and the directory that
+    // `scripts/verify-build.mjs` and `scripts/finalize.mjs` both go on to read.
+    // Kept in step with the build by a test, because the failure mode when
+    // these drift is an empty site rather than an error.
+    "directory": "./dist",
+
+    // `src/pages/404.astro` is a real page, so every build writes `dist/404.html`
+    // and a miss serves it: the "offers a way forward" page with recent notes on
+    // it, rather than a bare status code. "none" would send an empty 404 to a
+    // reader who mistyped a note name.
+    "not_found_handling": "404-page",
+
+    // Not the default, and the one line here that differs from the Quartz
+    // starter's, because the two sites emit different URLs. Astro's default
+    // `build.format` writes folder index files (`dist/notes/index.html`) while
+    // `trailingSlash: 'never'` makes all four producers of a URL in this build
+    // (links, canonical, sitemap, search) spell that page `/notes`.
+    // "drop-trailing-slash" is the mode that serves the first from the second.
+    // The default "auto-trailing-slash" would 307 every internal link on the
+    // site to `/notes/`, an address none of those four agrees with, and "none"
+    // would 404 them.
+    "html_handling": "drop-trailing-slash"
+  }
+}
