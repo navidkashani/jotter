@@ -61,15 +61,26 @@ const pageDescription = description || config.description
 /**
  * The canonical URL, spelled the way every `<a href>` on the site spells it.
  *
- * `Astro.url.pathname` is the WHATWG form, which leaves `&` and `+` literal, so
- * on a site whose slugs carry either one this used to disagree with the links
- * pointing at the very same page, and RFC 3986 §6.2.2.2 keeps `/a&b` and
- * `/a%26b` formally distinct, so Google reads that as two URLs for one page.
- * The round trip is the whole fix, and it covers the pages with no slug at all
+ * Two things have to be undone, and both are cases of `Astro.url.pathname`
+ * describing the *file* rather than the address.
+ *
+ * `build.format: 'file'` writes `dist/welcome.html`, and the pathname carries
+ * that extension: `/welcome.html`, where every link, sitemap entry and search
+ * result on the site says `/welcome`. Both spellings resolve, which is what
+ * makes it quiet, and quiet is the problem: Google reads them as two URLs for
+ * one page and splits the ranking between them. The homepage is the case that
+ * makes this more than a `replace`, because its pathname is `/index.html` and
+ * the address is `/`.
+ *
+ * And the pathname is the WHATWG form, which leaves `&` and `+` literal, so on
+ * a site whose slugs carry either one this disagreed with the links pointing at
+ * the very same page; RFC 3986 §6.2.2.2 keeps `/a&b` and `/a%26b` formally
+ * distinct. The round trip fixes that, and covers the pages with no slug at all
  * (tags, `/notes`, the 404) for free.
  */
+const route = Astro.url.pathname.replace(/\.html$/i, '').replace(/^\/index$/i, '/')
 const canonical = config.url
-  ? new URL(encodeSlug(decodeSlug(Astro.url.pathname)), config.url).href
+  ? new URL(encodeSlug(decodeSlug(route)), config.url).href
   : undefined
 
 /**

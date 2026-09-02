@@ -468,9 +468,27 @@ async function producersAgree(pages) {
   const proseOffenders = []
   const counted = { href: 0, canonical: 0, ogUrl: 0, sitemap: 0, search: 0 }
 
-  const compare = (kind, route, spelling, where, mine = true) => {
+  /**
+   * `mustBeAPage` is what turns "I could not find that route" from a skip into
+   * a failure, and it exists because the skip hid a live defect.
+   *
+   * For an `<a href>`, a route this build did not emit is not this check's
+   * business: `internalLinks` owns dead links, and a note may link anywhere.
+   * For a canonical or an `og:url` it is the *whole* business. Those name the
+   * page they are on, jotter writes them, and one naming a route that is not a
+   * page cannot be compared against anything, so it silently counted as fine.
+   *
+   * That is exactly how `build.format: 'file'` shipped a canonical of
+   * `/welcome.html` on a site whose every link says `/welcome`: the lookup
+   * missed, the comparison never ran, and four green producers were three.
+   */
+  const compare = (kind, route, spelling, where, { mine = true, mustBeAPage = false } = {}) => {
     const want = expected.get(route)
-    if (want === undefined) return // Not a page; `internalLinks` owns that half.
+    if (want === undefined) {
+      if (!mustBeAPage) return
+      offenders.push(`${kind} ${where}: ${spelling} names no page this build emitted`)
+      return
+    }
     counted[kind]++
     if (spelling !== want) (mine ? offenders : proseOffenders).push(`${kind} ${where}: ${spelling} != ${want}`)
   }
@@ -490,20 +508,20 @@ async function producersAgree(pages) {
         if (!href.startsWith('/') || href.startsWith('//')) continue
         const path = href.split('#')[0].split('?')[0]
         const route = decodePath(path.length > 1 ? path.replace(/\/$/, '') : path)
-        compare('href', route, path, file, jotters)
+        compare('href', route, path, file, { mine: jotters })
       }
     }
 
     const canonical = /<link rel="canonical" href="([^"]*)"/.exec(html)
     if (canonical) {
       const path = pathOf(canonical[1])
-      compare('canonical', decodePath(path), path, file)
+      compare('canonical', decodePath(path), path, file, { mustBeAPage: true })
     }
 
     const ogUrl = /<meta property="og:url" content="([^"]*)"/.exec(html)
     if (ogUrl) {
       const path = pathOf(ogUrl[1])
-      compare('ogUrl', decodePath(path), path, file)
+      compare('ogUrl', decodePath(path), path, file, { mustBeAPage: true })
     }
   }
 
@@ -513,16 +531,24 @@ async function producersAgree(pages) {
       // The sitemap index lists the sitemaps, not the pages.
       if (/sitemap.*\.xml$/.test(loc)) continue
       const path = pathOf(loc.replace(/&amp;/g, '&'))
-      compare('sitemap', decodePath(path), path, relative(DIST, sitemapFile))
+      // Same rule as the canonical: a sitemap entry jotter wrote for a URL it
+      // did not build is an entry a crawler will follow to a 404.
+      compare('sitemap', decodePath(path), path, relative(DIST, sitemapFile), { mustBeAPage: true })
     }
   }
 
   /**
    * Pagefind's fragments are gzip after a `pagefind_dcd` marker, and the `url`
-   * in each is the **file path** it indexed: `/atomic-notes/`, with the
-   * trailing slash `trailingSlash: 'never'` does not use. So the two moves
+   * in each is the **file path** it indexed, not the address: under
+   * `build.format: 'file'` that is `/atomic-notes.html`, and under the
+   * `directory` format it was `/atomic-notes/`. So the moves
    * `normalizeResultUrl()` makes at runtime are made here too, and the result
    * is what a reader clicking a search result actually gets.
+   *
+   * Written out rather than imported, like `encodePath` above it and for the
+   * same reason: this has to be an *independent* statement of what a stored
+   * result must reduce to, or it would agree with the runtime on the day the
+   * runtime started getting it wrong.
    */
   for (const fragment of await walk(DIST, (n) => n.endsWith('.pf_fragment'))) {
     const raw = await readFile(fragment)
@@ -535,9 +561,14 @@ async function producersAgree(pages) {
     }
     const url = /"url":"([^"]*)"/.exec(json)
     if (!url) continue
-    const trimmed = url[1].replace(/\/+$/, '')
+    const trimmed = url[1]
+      .replace(/\/+$/, '')
+      .replace(/\.html$/i, '')
+      .replace(/^\/index$/i, '')
     const spelling = encodePath(decodePath(trimmed)) || '/'
-    compare('search', decodePath(trimmed) || '/', spelling, relative(DIST, fragment))
+    compare('search', decodePath(trimmed) || '/', spelling, relative(DIST, fragment), {
+      mustBeAPage: true,
+    })
   }
 
   check(
