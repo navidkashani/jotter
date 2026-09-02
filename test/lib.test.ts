@@ -22,7 +22,7 @@ import type { VaultNote } from '../src/lib/vault.js'
 import { parseCallout } from '../src/lib/callout.js'
 import { analyticsTag } from '../src/lib/analytics.js'
 import { analyticsProviders } from '../src/lib/config.js'
-import { parseEmbedPipe, isMediaTarget } from '../src/lib/embed.js'
+import { parseEmbedPipe, parseEmbedFragment, isMediaTarget, mediaKind, fileName } from '../src/lib/embed.js'
 import {
   excerptParts,
   headingJumps,
@@ -501,6 +501,80 @@ describe('parseEmbedPipe: Obsidian size-vs-caption rule', () => {
     expect(isMediaTarget('clip.mp4')).toBe(true)
     expect(isMediaTarget('Note#Section')).toBe(false)
     expect(isMediaTarget('Some Note')).toBe(false)
+  })
+})
+
+describe('mediaKind: what an embed target actually is', () => {
+  it('names each family Obsidian dispatches on', () => {
+    expect(mediaKind('diagram.png')).toBe('image')
+    expect(mediaKind('logo.SVG')).toBe('image')
+    expect(mediaKind('clip.mp4')).toBe('video')
+    expect(mediaKind('sound.mp3')).toBe('audio')
+    expect(mediaKind('Integrity.pdf')).toBe('document')
+  })
+
+  it('answers nothing for a note, which is a transclusion rather than a file', () => {
+    expect(mediaKind('Some Note')).toBeUndefined()
+    expect(mediaKind('Note#Section')).toBeUndefined()
+  })
+
+  /**
+   * A query string must not defeat the extension test. This is the difference
+   * between rendering a CDN image and rendering a broken-image icon, and a
+   * `#`-only split would have missed every one of them.
+   */
+  it('reads through a query string and a fragment', () => {
+    expect(mediaKind('https://cdn.example.com/photo.png?v=2')).toBe('image')
+    expect(mediaKind('https://cdn.example.com/photo.png?v=2&w=800')).toBe('image')
+    expect(mediaKind('Doc.pdf#page=3')).toBe('document')
+    expect(mediaKind('Doc.pdf?v=2#page=3')).toBe('document')
+    expect(mediaKind('  clip.mp4?t=10  ')).toBe('video')
+  })
+
+  /** Nothing about `https://twitter.com/user/status/123` says picture. */
+  it('answers nothing for a URL that names no file at all', () => {
+    expect(mediaKind('https://twitter.com/someone/status/1834417901081694320?s=4')).toBeUndefined()
+  })
+
+  it('labels a file by its own name, without the query or the fragment', () => {
+    expect(fileName('attachments/Integrity.pdf')).toBe('Integrity.pdf')
+    expect(fileName('attachments/Integrity.pdf#page=3')).toBe('Integrity.pdf')
+    expect(fileName('https://cdn.example.com/a/photo.png?v=2')).toBe('photo.png')
+    expect(fileName('attachments/My%20Paper.pdf')).toBe('My Paper.pdf')
+  })
+})
+
+/**
+ * Obsidian's `#` options for an embed, which are not the `|` pipe above:
+ * `![[Doc.pdf#page=3]]` and `![[Doc.pdf#height=400]]`.
+ */
+describe('parseEmbedFragment: Obsidian embed options', () => {
+  it('returns nothing when there is no fragment', () => {
+    expect(parseEmbedFragment('Doc.pdf')).toEqual({})
+    expect(parseEmbedFragment('Doc.pdf#')).toEqual({})
+  })
+
+  it('keeps #page for the URL, where the browser viewer reads it', () => {
+    expect(parseEmbedFragment('Doc.pdf#page=3')).toEqual({ fragment: '#page=3' })
+  })
+
+  it('takes #height for itself, because it sizes the frame rather than the file', () => {
+    expect(parseEmbedFragment('Doc.pdf#height=400')).toEqual({ height: 400 })
+  })
+
+  it('splits the two apart when an author gives both', () => {
+    expect(parseEmbedFragment('Doc.pdf#page=3&height=400')).toEqual({
+      height: 400,
+      fragment: '#page=3',
+    })
+  })
+
+  it('passes an option it does not know straight through', () => {
+    expect(parseEmbedFragment('Doc.pdf#page=3&zoom=150')).toEqual({ fragment: '#page=3&zoom=150' })
+  })
+
+  it('ignores a height that is not a plain number', () => {
+    expect(parseEmbedFragment('Doc.pdf#height=400px')).toEqual({ fragment: '#height=400px' })
   })
 })
 

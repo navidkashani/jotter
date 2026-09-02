@@ -80,10 +80,12 @@ describe('embeds', () => {
     expect(html).toContain('<figcaption>A caption here</figcaption>')
   })
 
-  it('never puts a figure inside a paragraph', () => {
-    // An open <p> with no </p> before the <figure> would be invalid nesting,
-    // which Astro 7's compiler no longer silently repairs.
-    expect(html).not.toMatch(/<p>(?:(?!<\/p>)[\s\S])*?<figure/)
+  it('never puts a block element inside a paragraph', () => {
+    // An open <p> with no </p> before it would be invalid nesting, which Astro
+    // 7's compiler no longer silently repairs. The document embed is why <div>
+    // is on the list beside <figure>: it wraps two phrasing-content children
+    // and is a <span> for exactly this reason.
+    expect(html).not.toMatch(/<p>(?:(?!<\/p>)[\s\S])*?<(?:figure|div)[\s>]/)
   })
 
   /**
@@ -92,24 +94,70 @@ describe('embeds', () => {
    * what let the build assertion "the demo actually renders images" pass while
    * the page showed nothing.
    */
-  it('renders a PDF embed as a named file card, not an <img>', () => {
+  it('embeds a PDF in a frame with a link beside it', () => {
     expect(html).toContain(
-      '<a class="file-embed" href="/_vault/attachments/paper.pdf" data-file="pdf">paper.pdf</a>',
+      '<span class="doc-embed"><iframe class="doc-frame" src="/_vault/attachments/paper.pdf"' +
+        ' title="paper.pdf" loading="lazy"></iframe>' +
+        '<a class="file-embed" href="/_vault/attachments/paper.pdf" data-file="pdf">paper.pdf</a></span>',
     )
     expect(html).not.toMatch(/<img[^>]+\.pdf/)
   })
 
+  /**
+   * The bang is the author's own answer to embed-or-link, and it is the whole
+   * reason both of these exist: `![[…]]` is an inline viewer in Obsidian and
+   * `[[…]]` is a link, so jotter must not collapse them into one.
+   */
+  it('links a PDF written without the bang, and frames nothing', () => {
+    const link = html.split('\n').find((line) => line.includes('<a href="/_vault/attachments/paper.pdf"'))
+    expect(link).toBe(
+      '<p><a href="/_vault/attachments/paper.pdf" class="file-embed" data-file="pdf">paper.pdf</a></p>',
+    )
+    expect(link).not.toContain('<iframe')
+  })
+
+  it('passes an Obsidian #page fragment through to the frame src', () => {
+    expect(html).toContain('<iframe class="doc-frame" src="/_vault/attachments/paper.pdf#page=3"')
+  })
+
+  it('reads an Obsidian #height fragment as the frame height, not as part of the src', () => {
+    expect(html).toContain(
+      '<iframe class="doc-frame" src="/_vault/attachments/paper.pdf" title="paper.pdf"' +
+        ' loading="lazy" height="400">',
+    )
+    expect(html).not.toContain('paper.pdf#height')
+  })
+
   it('gives a captioned PDF its own name on the card and the caption below', () => {
     expect(html).toContain(
-      '<figure class="embed-figure"><a class="file-embed" href="/_vault/attachments/paper.pdf"' +
-        ' data-file="pdf">paper.pdf</a><figcaption>The paper itself</figcaption></figure>',
+      '<figure class="embed-figure"><span class="doc-embed"><iframe class="doc-frame"' +
+        ' src="/_vault/attachments/paper.pdf" title="paper.pdf" loading="lazy"></iframe>' +
+        '<a class="file-embed" href="/_vault/attachments/paper.pdf" data-file="pdf">paper.pdf</a>' +
+        '</span><figcaption>The paper itself</figcaption></figure>',
     )
+  })
+
+  /** Every embedded document ships the link that a blank frame needs. */
+  it('never emits a frame without a link to the same file beside it', () => {
+    const frames = [...html.matchAll(/<iframe[^>]+src="([^"#?]+)/g)].map(([, src]) => src)
+    expect(frames.length).toBeGreaterThan(0)
+    for (const src of frames) expect(html).toContain(`<a class="file-embed" href="${src}"`)
   })
 
   it('gives video and audio their own players, preloading only metadata', () => {
     expect(html).toContain('<video src="/_vault/attachments/clip.mp4" controls preload="metadata">')
     expect(html).toContain('<audio src="/_vault/attachments/sound.mp3" controls preload="metadata">')
     expect(html).not.toMatch(/<img[^>]+\.(?:mp4|mp3)/)
+  })
+
+  /**
+   * The regression the rest of this block is about, stated once over the whole
+   * page rather than per format: whatever an `<img>` points at, it is a picture.
+   */
+  it('points no <img> at a target that is not an image', () => {
+    for (const [, src] of html.matchAll(/<img\b[^>]*\bsrc="([^"]*)"/g)) {
+      expect(src).not.toMatch(/\.(?:pdf|mp4|webm|mov|ogv|mp3|wav|m4a|ogg|flac)(?:[?#]|$)/i)
+    }
   })
 
   it('links a remote embed that names no image, rather than fetching it', () => {

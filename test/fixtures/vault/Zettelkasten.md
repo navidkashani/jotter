@@ -32,6 +32,12 @@ Inline `[[AlsoLiteral]]` too.
 
 ![[paper.pdf]]
 
+[[paper.pdf]]
+
+![[paper.pdf#page=3]]
+
+![[paper.pdf#height=400]]
+
 ![[clip.mp4]] and ![[sound.mp3]]
 
 ![[paper.pdf|The paper itself]]

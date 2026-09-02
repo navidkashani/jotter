@@ -28,6 +28,50 @@ export function parseEmbedPipe(pipe: string | undefined | null): EmbedPipe {
 }
 
 /**
+ * Obsidian's *other* embed modifier, and the one the pipe above does not reach:
+ * `![[Doc.pdf#page=3]]` and `![[Doc.pdf#height=400]]`, both documented at
+ * obsidian.md/help/embeds. They are `#` fragment options, so they arrive inside
+ * the target rather than beside it, and `parseEmbedPipe` never sees them.
+ *
+ * `height` is jotter's to apply, because it sizes the frame. Everything else is
+ * handed on as the URL's own fragment, where the browser's PDF viewer already
+ * reads `page` and means by it exactly what Obsidian means: honouring it costs
+ * a string concatenation.
+ */
+export interface EmbedFragment {
+  height?: number
+  /** Ready to concatenate onto a URL: `#page=3`, or absent if nothing is left. */
+  fragment?: string
+}
+
+const HEIGHT = /^height=(\d+)$/i
+
+export function parseEmbedFragment(target: string): EmbedFragment {
+  const hash = target.indexOf('#')
+  if (hash === -1) return {}
+
+  let height: number | undefined
+  // `&` because that is how the PDF viewer's own parameters combine, which is
+  // what the leftovers are about to become.
+  const rest = target
+    .slice(hash + 1)
+    .split('&')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .filter((part) => {
+      const match = HEIGHT.exec(part)
+      if (!match) return true
+      height = Number(match[1])
+      return false
+    })
+
+  return {
+    ...(height ? { height } : {}),
+    ...(rest.length ? { fragment: `#${rest.join('&')}` } : {}),
+  }
+}
+
+/**
  * What kind of thing an embed target is, by its extension.
  *
  * Obsidian dispatches on exactly this: `![[x.png]]` is a picture, `![[x.mp4]]`

@@ -268,12 +268,13 @@
 }
 
 /**
- * A PDF, or any embed whose target is a file rather than a picture.
+ * The card an embed gets when its target is a file rather than a picture: a
+ * `[[Doc.pdf]]` link, a remote URL that names no image, and the link that sits
+ * under every embedded document.
  *
- * A card rather than a viewer (see `embedNode` in `src/markdown/wikilinks.ts`)
- * for why a published PDF is a link. The extension rides in `data-file` and is
- * drawn as the card's own label, so a reader knows what they are about to open
- * before they open it, and nothing here needs an icon font to say so.
+ * The extension rides in `data-file` and is drawn as the card's own label, so a
+ * reader knows what they are about to open before they open it, and nothing
+ * here needs an icon font to say so.
  */
 .prose .file-embed {
   display: flex;
@@ -304,11 +305,41 @@
   color: var(--accent);
 }
 
-.prose .embed-figure {
+/**
+ * One column for both, because a document embed is the same shape of thing as a
+ * captioned figure and a second layout for it would only be a second thing to
+ * keep in step. A captioned `![[Doc.pdf|…]]` nests one inside the other, and
+ * there the figure owns the spacing.
+ */
+.prose :is(.embed-figure, .doc-embed) {
   margin-block: 2em;
   display: flex;
   flex-direction: column;
   gap: 9px;
+}
+
+.prose .embed-figure .doc-embed {
+  margin-block: 0;
+}
+
+/**
+ * The frame `![[Doc.pdf]]` asks for. The height is the author's `#height=400`
+ * when they gave one, and a document-shaped default when they did not; the
+ * attribute has to win, so the default is scoped to its absence rather than
+ * overriding it.
+ *
+ * The frame carries `loading="lazy"`, which Chrome does not honour on an
+ * iframe. See `embedNode` in `src/markdown/wikilinks.ts` for the measurement.
+ */
+.prose .doc-frame {
+  inline-size: 100%;
+  border: var(--hairline) solid var(--rule);
+  border-radius: var(--radius-l);
+  background: var(--surface);
+}
+
+.prose .doc-frame:not([height]) {
+  block-size: min(70dvh, 40rem);
 }
 
 /* Mono, so a caption reads as apparatus rather than as another paragraph. */

@@ -580,6 +580,9 @@ section('Links')
 
 section('Images')
 {
+  /** Extensions that are a file rather than a picture, however they are dressed. */
+  const NOT_AN_IMAGE = /\.(pdf|mp4|webm|mov|ogv|mp3|wav|m4a|ogg|flac)(?:[?#]|$)/i
+
   /**
    * Reserved space, so nothing below the image moves when it arrives.
    *
@@ -612,18 +615,52 @@ section('Images')
   demo(total > 0, 'the demo actually renders images')
 
   /**
-   * And that they are pictures. This used to pass on a build whose only
-   * `<img>` tags were two PDFs and a tweet URL. `<img src="Integrity.pdf">`
-   * renders in no browser, so the guard above it was satisfied by exactly the
-   * bug the width and height check was reporting.
+   * And that they are pictures.
+   *
+   * A `check()` and not a `demo()`, because the element is jotter's choice and
+   * never the author's: an author writes `![[Integrity.pdf]]` and this theme
+   * decides what to emit for it. When that decision is wrong the reader gets a
+   * broken-image icon on every browser there is, and for a long while nothing
+   * here noticed: the two PDFs and a tweet URL that were the *only* `<img>`
+   * tags on a page satisfied "the demo actually renders images" above, and the
+   * width and height check reported the bug as a missing attribute.
+   *
+   * Whole-page rather than split by region, unlike the sweep above it, and the
+   * closed list is why. This does not ask whether jotter recognises the
+   * extension; it names nine that are certainly not pictures. A GIF, a remote
+   * URL and `scan.tiff` all pass it, which is to say the three content cases
+   * that make the check above an `observe()` cannot fail this one.
    */
-  demo(
-    authored.every(({ html }) =>
-      [...html.matchAll(/<img\b[^>]*\bsrc="([^"]*)"/g)].every(
-        ([, src]) => !/\.(pdf|mp4|webm|mov|mp3|wav|m4a|ogg|flac)(?:[?#]|$)/i.test(src),
-      ),
-    ),
+  const notPictures = authored.flatMap(({ file, html }) =>
+    [...html.matchAll(/<img\b[^>]*\bsrc="([^"]*)"/g)]
+      .filter(([, src]) => NOT_AN_IMAGE.test(src))
+      .map(([tag]) => `${file}: ${tag.slice(0, 120)}`),
+  )
+  check(
+    notPictures.length === 0,
     'no <img> points at something that is not an image',
+    notPictures.join('\n        '),
+  )
+
+  /**
+   * And that an embedded document is reachable without the frame.
+   *
+   * `<iframe>` has no fallback content in static markup, so a phone that
+   * refuses the PDF shows a blank box. The link beside it is the only way
+   * forward from there, which makes "there is one" an invariant rather than a
+   * nicety. Matched on the file rather than on the class, so the check still
+   * holds if the card is ever restyled or renamed.
+   */
+  const framesWithoutLink = authored.flatMap(({ file, html }) =>
+    [...html.matchAll(/<iframe\b[^>]*\bsrc="([^"?#]+)[^"]*"/g)]
+      .map(([, src]) => src)
+      .filter((src) => /\.pdf$/i.test(src) && !html.includes(`<a class="file-embed" href="${src}"`))
+      .map((src) => `${file}: ${src}`),
+  )
+  check(
+    framesWithoutLink.length === 0,
+    'every embedded document ships a link to itself beside the frame',
+    framesWithoutLink.join('\n        '),
   )
 
   const optimized = authored.some(({ html }) => /<img[^>]+src="\/_astro\/[^"]+\.(webp|avif)"/.test(html))
@@ -3376,19 +3413,36 @@ if (FULL) {
           .slice(0, 900),
       )
       /**
-       * And the PDF embeds are file cards. Without this the check above would
+       * And the PDF embeds are documents. Without this the check above would
        * still pass on the `<img src="Integrity.pdf">` this section was written
        * for: no browser renders it, and no assertion here would have noticed
        * once the width and height claim stopped being fatal.
+       *
+       * Three claims, because `![[Integrity.pdf]]` makes three promises: the
+       * frame the author asked for, lazily, with a way out of it if the frame
+       * comes up blank.
        */
       const integrity = await readFile(
         join(DIST, 'wisdom-approaches', 'integrity', 'index.html'),
         'utf8',
       ).catch(() => '')
       check(
-        /<a class="file-embed"[^>]+\.pdf"/.test(integrity) && !/<img[^>]+\.pdf/.test(integrity),
-        'a PDF embed is a file card rather than an <img> no browser can draw',
+        /<iframe[^>]+src="[^"]+\.pdf"/.test(integrity) && !/<img[^>]+\.pdf/.test(integrity),
+        'a PDF embed is a frame rather than an <img> no browser can draw',
         integrity ? '' : 'no page was built for the note that embeds them',
+      )
+      /**
+       * The attribute, and only the attribute. Chrome 152 fetches the whole
+       * file anyway, measured against a logging server; this asserts that
+       * jotter still declares the intent, not that any byte was saved.
+       */
+      check(
+        [...integrity.matchAll(/<iframe\b[^>]*>/g)].every(([tag]) => /loading="lazy"/.test(tag)),
+        'and declares loading="lazy", which Chrome does not yet honour on a frame',
+      )
+      check(
+        /<a class="file-embed"[^>]+\.pdf"/.test(integrity),
+        'and carries the link a blank frame on a phone would otherwise leave no way past',
       )
     }
 

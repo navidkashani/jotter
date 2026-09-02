@@ -14,7 +14,15 @@
  * basename of the target they typed. `My Very Private Title` stays in the vault.
  */
 import { resolveLink, resolveAsset, displayFor, liveLabel, splitTarget } from '../lib/resolve.js'
-import { parseEmbedPipe, isMediaTarget, isOptimizable, mediaKind, fileName, type MediaKind } from '../lib/embed.js'
+import {
+  parseEmbedPipe,
+  parseEmbedFragment,
+  isMediaTarget,
+  isOptimizable,
+  mediaKind,
+  fileName,
+  type MediaKind,
+} from '../lib/embed.js'
 import { noteHref, assetHref, relativeAssetPath } from '../lib/href.js'
 import { decodeSlug } from '../lib/url.js'
 import { anchorFor } from '../lib/protected.js'
@@ -188,19 +196,69 @@ export function wikilinks(doc: DocumentContext) {
     (embed.wiki ? '' : embed.alt) ||
     (embed.remote ? embed.target : fileName(embed.assetPath ?? embed.target))
 
+  /** The extension a file card wears as its own label; `link` for a bare URL. */
+  const fileKind = (name: string): string => name.split('.').slice(1).pop()?.toLowerCase() ?? 'link'
+
+  /**
+   * The card: a named row that says what the file is before a reader opens it.
+   * `data-file` carries the extension and the stylesheet draws it, so nothing
+   * here needs an icon font to say "PDF".
+   */
+  const fileCard = (href: string, name: string, label: string, remote = false) => ({
+    type: 'fileEmbed',
+    data: {
+      hName: 'a',
+      hProperties: {
+        className: ['file-embed'],
+        href,
+        'data-file': fileKind(name),
+        // A remote embed is a link off the site, and gets what every other
+        // link off the site gets.
+        ...(remote ? { rel: 'noopener' } : {}),
+      },
+    },
+    children: [{ type: 'text', value: label }],
+  })
+
   /**
    * The element an embed becomes, for every kind except a picture: an `image`
    * node is left alone so Astro's pipeline still sees one.
    *
-   * **A PDF is a link, not an `<object>` or an `<iframe>`.** Obsidian shows an
-   * inline viewer, and three things make that the wrong translation to a
-   * published page: an embedded PDF downloads the whole file on page load,
-   * which is megabytes charged to a reader who was skimming; mobile browsers
-   * render it as a blank box or a first page with no way to turn it; and the
-   * browser's own full-window viewer, which a link opens, is better than a
-   * 400px pane in every way that matters to somebody who actually wants to read
-   * the document. The author's intent, *put this document here*, is served by
-   * a named, clickable card that says what the file is.
+   * **A document is embedded, and carries a link.** Obsidian already encodes
+   * which one the author wanted, in the bang: `![[Doc.pdf]]` is an inline
+   * viewer and `[[Doc.pdf]]` is a link. Both are honoured rather than
+   * flattened into the link. Three things make an embedded PDF expensive; the
+   * markup answers two of them, and the first is an open cost, stated here so
+   * that nobody has to rediscover it:
+   *
+   *   - it downloads the whole file on page load, and **`loading="lazy"` does
+   *     not stop it**. Measured, not assumed: Chrome 152, a frame 15,000px
+   *     below the fold, a logging server counting what it actually wrote. All
+   *     519,123 bytes of the PDF went over the wire before the reader had
+   *     scrolled once. `<img loading="lazy">` on the same page deferred
+   *     correctly, so the attribute works and frames are the exception; a
+   *     closed `<details>` and `display: none` defer nothing either. Only
+   *     withholding `src` does, and that is JavaScript, which the README
+   *     promises a feature-off build does not ship. The attribute stays
+   *     because it is the correct declaration and costs nothing, but nothing
+   *     here should be read as a claim that the bytes are deferred today: the
+   *     page that reported this carries 456 KB of PDF against a 32 KB
+   *     per-page JavaScript cap whose heaviest real page spends 28 KB.
+   *   - mobile browsers render it as a blank box. `<iframe>` has no fallback
+   *     content in static markup, so the link beside it is *always* visible
+   *     rather than fallback: a phone that refuses the document would otherwise
+   *     leave a reader with a blank box and no way forward.
+   *   - the browser's own full-window viewer beats a pane in the page, for
+   *     anybody who actually wants to read the thing. That is what the link
+   *     opens.
+   *
+   * `#page=3` and `#height=400` are Obsidian's documented options for exactly
+   * this embed. The height sizes the frame; the rest rides through to the URL
+   * fragment, which the browser's viewer reads by itself.
+   *
+   * A *remote* document stays a card. An `<iframe>` of somebody else's origin
+   * is a third party in the reader's page, which is the same reason a remote
+   * embed naming no image is a link and not a frame.
    *
    * Video and audio keep their players, because those elements exist, cost no
    * JavaScript and stream rather than download. `preload="metadata"` is what
@@ -230,21 +288,40 @@ export function wikilinks(doc: DocumentContext) {
 
     if (embed.kind === 'image') return undefined
 
-    return {
-      type: 'fileEmbed',
-      data: {
-        hName: 'a',
-        hProperties: {
-          className: ['file-embed'],
-          href: src,
-          'data-file': fileName(embed.target).split('.').slice(1).pop()?.toLowerCase() ?? 'link',
-          // A remote embed is a link off the site, and gets what every other
-          // link off the site gets.
-          ...(embed.remote ? { rel: 'noopener' } : {}),
-        },
-      },
-      children: [{ type: 'text', value: embedLabel(embed) }],
+    if (embed.kind === 'document' && !embed.remote) {
+      const { height, fragment } = parseEmbedFragment(embed.target)
+      const name = fileName(embed.assetPath ?? embed.target)
+      return {
+        type: 'documentEmbed',
+        // A `<span>`, not a `<div>`: an embed that is not alone in its
+        // paragraph stays inside the `<p>`, and a `<div>` there is invalid
+        // nesting that Astro 7's compiler no longer quietly repairs. Both
+        // children are phrasing content, so the wrapper is the only thing that
+        // had to give, and it gives it in `display` rather than in markup.
+        data: { hName: 'span', hProperties: { className: ['doc-embed'] } },
+        children: [
+          {
+            type: 'documentFrame',
+            data: {
+              hName: 'iframe',
+              hProperties: {
+                className: ['doc-frame'],
+                src: fragment ? `${src}${fragment}` : src,
+                // An `<iframe>` with no accessible name is announced as
+                // "frame", which is the one thing a reader already knows.
+                title: name,
+                loading: 'lazy',
+                ...(height ? { height } : {}),
+              },
+            },
+            children: [],
+          },
+          fileCard(src, name, name),
+        ],
+      }
     }
+
+    return fileCard(src, fileName(embed.target), embedLabel(embed), embed.remote)
   }
 
   return {
@@ -278,13 +355,38 @@ export function wikilinks(doc: DocumentContext) {
         return
       }
 
-      // A relative markdown link may point at an attachment rather than a note.
-      if (!wiki) {
-        const asset = resolveAsset(node.url, fromPath, vault)
-        if (asset) {
-          ctx.setProperty(node, 'url', assetHref(asset))
-          return
+      /**
+       * A link may point at an attachment rather than a note. `[[Doc.pdf]]` is
+       * how Obsidian spells *link to this, do not embed it*, so it has to land
+       * somewhere better than the dead-link span an unresolved note gets, and a
+       * relative `[the paper](attachments/Doc.pdf)` says the same thing.
+       *
+       * `#page=3` survives into the href, where the browser's own PDF viewer
+       * reads it. `#height=` does not: it sizes a frame, and there is no frame.
+       */
+      const asset = resolveAsset(node.url, fromPath, vault)
+      if (asset) {
+        const { fragment } = parseEmbedFragment(node.url)
+        const href = assetHref(asset)
+        ctx.setProperty(node, 'url', fragment ? `${href}${fragment}` : href)
+        // A markdown link came with the words the author chose and keeps them.
+        // A wikilink has none of its own: Satteri labelled it with the raw
+        // target, so it gets the same card an unbanged embed would have got,
+        // naming the file and its kind.
+        if (wiki) {
+          ctx.setProperty(node, 'data', {
+            ...node.data,
+            hProperties: {
+              ...node.data?.hProperties,
+              className: ['file-embed'],
+              'data-file': fileKind(fileName(asset)),
+            },
+          })
+          if (alias === undefined) {
+            ctx.setProperty(node, 'children', [{ type: 'text', value: fileName(asset) }])
+          }
         }
+        return
       }
 
       // Dead. Relabel only when the author gave no alias: with a pipe, the
