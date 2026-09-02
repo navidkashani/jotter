@@ -9,7 +9,7 @@
  * over plain HTTP GETs as you type, which is what makes a 1,000-note vault
  * searchable without shipping one enormous file. jotter's build asserts that
  * nothing it ships reaches the network, so `scripts/verify-build.mjs` exempts
- * `dist/pagefind/**` *by path* — a named exemption rather than a loosened rule.
+ * `dist/pagefind/**` *by path*: a named exemption rather than a loosened rule.
  * Everything jotter authors still fails on `fetch(`, which is what keeps the
  * hover-preview decision enforced.
  */
@@ -39,7 +39,7 @@ const MIME: Record<string, string> = {
  *
  * Pagefind ships its own `<pagefind-*>` web components and a prebuilt search
  * UI, and writes all of them beside the index whether or not anything
- * references them. jotter references none of it — `src/scripts/search.ts`
+ * references them. jotter references none of it: `src/scripts/search.ts`
  * draws its own chrome in jotter's own tokens, the same reason
  * `local-graph.ts` hand-rolls pan and zoom rather than taking `d3-zoom`.
  *
@@ -67,12 +67,12 @@ export interface SearchIntegrationOptions {
  * Two things are going on, and both are load-bearing.
  *
  * *Lazy*, because a top-level `import 'pagefind'` would make a missing install
- * a module-resolution stack trace thrown while **the Astro config loads** —
+ * a module-resolution stack trace thrown while **the Astro config loads**:
  * before any of jotter's code has run, and with nothing in it naming the fix.
  *
  * *Through `new Function`*, because this file is transformed by Vite as part
  * of loading that config, and Vite rewrites every `import()` it can see into a
- * request to its own module runner — including one whose specifier is a
+ * request to its own module runner: including one whose specifier is a
  * variable, and `/* @vite-ignore *​/` does not opt out of the rewrite. That
  * runner is **already closed** by the time `astro:build:done` fires, so the
  * rewritten import fails with `Vite module runner has been closed` and gets
@@ -88,8 +88,8 @@ async function loadPagefind(logger: AstroIntegrationLogger) {
     /**
      * The message names the likely cause but prints the real one underneath,
      * because "not installed" is only the *commonest* reason this throws. A
-     * corrupt install, a permission error, or — the one that actually happens
-     * on other people's machines — a missing platform binary after
+     * corrupt install, a permission error, or (the one that actually happens
+     * on other people's machines) a missing platform binary after
      * `npm ci --omit=optional` all land here, and a confident wrong diagnosis
      * with the true error swallowed is worse than no diagnosis at all.
      */
@@ -153,7 +153,7 @@ export function jotterSearch({ locale, slugs }: SearchIntegrationOptions): Astro
           const file = join(indexDir, rel.split('/').join(sep))
 
           /**
-           * Never let a request climb out of the index directory — checked on
+           * Never let a request climb out of the index directory: checked on
            * the *resolved* path rather than on the segments of the URL.
            *
            * Splitting on `/` and looking for `..` is the obvious guard and it
@@ -187,14 +187,14 @@ export function jotterSearch({ locale, slugs }: SearchIntegrationOptions): Astro
           /**
            * Pagefind wants ISO 639-1 and `locale` may carry a region (`en-GB`).
            * Forcing one language is right for a single-locale theme, and it
-           * stops one stray foreign-language note splitting the index in two —
+           * stops one stray foreign-language note splitting the index in two,
            * where half the vault would silently stop being searchable.
            */
           forceLanguage: locale.split('-')[0],
           /**
            * Pinned, not left to its default. The playground is an HTML page
            * under `/pagefind/playground/`, and `verify-build.mjs` walks *every*
-           * `.html` in `dist/` — that page has no skip link, no `<main>`, no
+           * `.html` in `dist/`: that page has no skip link, no `<main>`, no
            * `lang` and no `<title>`, so it would fail four assertions at once.
            */
           writePlayground: false,
@@ -207,8 +207,8 @@ export function jotterSearch({ locale, slugs }: SearchIntegrationOptions): Astro
 
         /**
          * The whole of `dist/`, filtered by `data-pagefind-body`. That
-         * attribute is site-wide sticky — once it appears on any page, every
-         * page without it is dropped — so pointing this at the output root
+         * attribute is site-wide sticky (once it appears on any page, every
+         * page without it is dropped), so pointing this at the output root
          * indexes the notes and nothing else. See `Note.astro`.
          *
          * `dist/pagefind/` does not exist yet at this point, so there is
@@ -225,7 +225,7 @@ export function jotterSearch({ locale, slugs }: SearchIntegrationOptions): Astro
          * Read once, and everything below works from this list rather than
          * from the directory.
          *
-         * A build was seen — once, and never reproduced in eleven attempts —
+         * A build was seen (once, and never reproduced in eleven attempts)
          * where this directory was read back mid-write: three CSS files were
          * missing, so the prune reported 346 KB instead of 408 and quietly left
          * the rest behind, and the entry file read below came back empty and
@@ -244,8 +244,8 @@ export function jotterSearch({ locale, slugs }: SearchIntegrationOptions): Astro
          * **Recursive**, and that is the point rather than a detail.
          *
          * The runtime and the entry file sit at the top level, but the index
-         * *data* — every `.pf_fragment` and `.pf_index`, which is most of the
-         * files and all of the content — lives one directory down. A
+         * *data* (every `.pf_fragment` and `.pf_index`, which is most of the
+         * files and all of the content) lives one directory down. A
          * top-level-only listing would leave the emptiness check below covering
          * six files out of sixteen, and a half-written index of exactly the kind
          * it exists to catch would sail through it.
@@ -269,7 +269,7 @@ export function jotterSearch({ locale, slugs }: SearchIntegrationOptions): Astro
          * This is the check that would have caught the corruption above on its
          * own: `pagefind.js` came out 0 bytes alongside the entry file, and an
          * index whose *runtime* is empty fails at `import()` in the reader's
-         * browser — a failure that reaches production and looks like "search is
+         * browser: a failure that reaches production and looks like "search is
          * broken on your site" rather than like a bad build.
          */
         const empty = [...sizes].filter(([, size]) => size === 0).map(([file]) => relative(indexDir, file))
@@ -307,7 +307,7 @@ export function jotterSearch({ locale, slugs }: SearchIntegrationOptions): Astro
          * Every WebAssembly module the entry file does not name.
          *
          * Pagefind writes one per language it might need plus `unknown` as a
-         * fallback — 68 KB of the 234 KB index here, for a language the browser
+         * fallback: 68 KB of the 234 KB index here, for a language the browser
          * will never ask for, because `forceLanguage` above means the manifest
          * names exactly one. Same dead weight as the UI bundles, and the same
          * argument for removing it.
@@ -342,7 +342,7 @@ export function jotterSearch({ locale, slugs }: SearchIntegrationOptions): Astro
          * the garden is actually searchable rather than only that it ran.
          *
          * And counted from the *entry file*, not from `page_count` on the
-         * response above — that one is how many HTML files were read, which on
+         * response above: that one is how many HTML files were read, which on
          * this demo is 22 against 9 genuinely indexed. Reporting the larger
          * number would have quietly claimed the tag pages and the 404 were
          * searchable when `data-pagefind-body` had already dropped them.

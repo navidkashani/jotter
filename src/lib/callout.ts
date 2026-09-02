@@ -9,8 +9,8 @@
 /**
  * Obsidian's callout types, mapped to the title jotter gives an untitled one.
  *
- * A label and nothing else. Each entry used to carry an `icon` name too —
- * `pencil`, `flame`, `check-circle` and ten others — feeding a `calloutIcon()`
+ * A label and nothing else. Each entry used to carry an `icon` name too
+ * (`pencil`, `flame`, `check-circle` and ten others) feeding a `calloutIcon()`
  * that no component ever called, naming SVGs that were never in the repository.
  * `prose.css` states the design those leftovers predate: *"One rule set, one
  * hue variable. A callout type is a hue and nothing else."*

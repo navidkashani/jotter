@@ -1,8 +1,8 @@
 /**
  * The snapshot's `site` block, as a `jotter.config.ts`.
  *
- * Open Publish's site options are deliberately generator-agnostic *intent* —
- * "show a graph", not "render `LocalGraph.astro` in the right panel" — so the
+ * Open Publish's site options are deliberately generator-agnostic *intent*
+ * ("show a graph", not "render `LocalGraph.astro` in the right panel"), so the
  * mapping to any one generator is where the intent either lands or quietly
  * does nothing. Three of the twelve keys are traps in exactly that way, and
  * each is handled below with the reason attached:
@@ -13,7 +13,7 @@
  *   for a graph therefore also asks for `layout: 'panels'`.
  * - **`analytics`** is build-breaking. The plugin defaults `id` to `''`, and
  *   `src/lib/config.ts` refines `id` as *required* unless the provider is
- *   `none` — so a provider chosen and an id left blank in Obsidian would fail
+ *   `none`, so a provider chosen and an id left blank in Obsidian would fail
  *   the whole build on a config error, which is the wrong place for that
  *   sentence to appear. It falls back to `none`, loudly.
  * - **`showNavigation`** is a boolean here and a three-valued enum in jotter
@@ -25,7 +25,7 @@
  * `index`, which `src/lib/site.ts` picks up on its own. Re-deriving it here
  * would be a second answer to a question that already has one.
  *
- * A key jotter does not understand is reported rather than guessed at — that
+ * A key jotter does not understand is reported rather than guessed at: that
  * is how somebody finds out to update this repository from the template.
  */
 
@@ -61,7 +61,7 @@ export const DEFAULT_SITE = {
  * `analyticsProviders` from `src/lib/config.ts`, which this script cannot
  * import: it is TypeScript, and this runs under plain Node before any bundler
  * exists. `test/snapshot.test.ts` asserts the two lists are identical rather
- * than trusting this comment — a provider added there and missed here would
+ * than trusting this comment: a provider added there and missed here would
  * otherwise be a build that dies on a zod enum error naming a key the person
  * never typed.
  */
@@ -80,7 +80,7 @@ export const ANALYTICS_PROVIDERS = [
  *
  * The return type is jotter's own `JotterConfigInput`, so `astro check` compares
  * this mapping against `src/lib/config.ts` rather than leaving the two to agree
- * by hand — a key renamed there is an error here.
+ * by hand: a key renamed there is an error here.
  *
  * @param rawSite  the snapshot's `site`, or anything at all
  * @param options  `{ url }` from `resolveSiteUrl`
@@ -194,7 +194,7 @@ function analyticsFor(analytics, warnings) {
  * `JSON.stringify` rather than a hand-rolled printer: JSON is a subset of the
  * object literal syntax TypeScript accepts, quoted keys and all, and a
  * generated file has nothing to gain from looking hand-written. The banner is
- * the part that matters — this file is a build artifact that happens to live at
+ * the part that matters: this file is a build artifact that happens to live at
  * a path a forker owns, and the next person to open it needs to know that
  * before they edit it.
  */

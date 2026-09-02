@@ -19,7 +19,7 @@ describe('splitTarget', () => {
   })
 })
 
-describe('resolveLink — shortest (Obsidian default)', () => {
+describe('resolveLink: shortest (Obsidian default)', () => {
   const v = vault()
 
   it('matches a bare filename anywhere in the vault', () => {
@@ -84,7 +84,7 @@ describe('resolveLink — shortest (Obsidian default)', () => {
   })
 })
 
-describe('resolveLink — absolute and relative', () => {
+describe('resolveLink: absolute and relative', () => {
   const v = vault()
 
   it('absolute reads a path from the vault root', () => {

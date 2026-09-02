@@ -3,10 +3,10 @@
  *
  * Scoped under `.prose` so it applies to article content and nothing else, and
  * this is the one place that runs at `--step-body` (17/1.72) rather than the
- * chrome's 16/1.65. The measure is held here and only here — the column can
+ * chrome's 16/1.65. The measure is held here and only here: the column can
  * grow, the line length does not.
  *
- * Raised things — code, callouts, transclusions — sit on `--surface` with a
+ * Raised things (code, callouts, transclusions) sit on `--surface` with a
  * hairline `--rule` around them. Tints are `--soft`, the accent at 11%. There
  * is no shadow anywhere in this file, by design.
  */
@@ -342,8 +342,8 @@
  * One rule set, one hue variable. A callout type is a hue and nothing else,
  * which is why adding one is a line in tokens.css rather than a new block here.
  *
- * The card is the same raised surface as a code block — hairline border, 7px
- * radius — with a 3px edge and a 10px uppercase label carrying the type's hue.
+ * The card is the same raised surface as a code block (hairline border, 7px
+ * radius) with a 3px edge and a 10px uppercase label carrying the type's hue.
  * Colour is confined to those two marks rather than washed over the body, so a
  * callout stays as readable as the prose around it.
  */

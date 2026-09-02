@@ -225,7 +225,7 @@ function compile(markdown: string, overrides: JotterConfigInput = {}): string {
 
 /**
  * The build-time half is unit-tested in `lib.test.ts`; this is the half that
- * only shows up in finished HTML — which anchors get the attributes, and which
+ * only shows up in finished HTML, which anchors get the attributes, and which
  * emphatically do not.
  */
 describe('hover previews', () => {
@@ -294,7 +294,7 @@ describe('hover previews', () => {
    * An inline transclusion is a `link` an earlier plugin already dressed, so
    * the attributes have to merge rather than overwrite. Its sibling, the
    * `.transclusion-source` back-link, is raw HTML and never reaches a visitor
-   * at all — that asymmetry is a consequence of how each is built, and it is
+   * at all: that asymmetry is a consequence of how each is built, and it is
    * recorded here rather than discovered later.
    */
   it('merges into an inline transclusion without stripping its class', () => {
@@ -307,7 +307,7 @@ describe('hover previews', () => {
 /**
  * Per-block direction, through the real pipeline rather than against
  * `firstStrong` directly. `test/bidi.test.ts` owns the rule; what is asserted
- * here is everything the rule cannot say on its own — which nodes get asked,
+ * here is everything the rule cannot say on its own, which nodes get asked,
  * what each one inherits, and that a block agreeing with its page emits
  * nothing at all.
  */
@@ -326,7 +326,7 @@ describe('text direction', () => {
 
   /**
    * The claim the whole feature rests on. Not "the English blocks are marked
-   * `ltr`" — they carry no `dir` at all, which is what makes a monolingual
+   * `ltr`": they carry no `dir` at all, which is what makes a monolingual
    * vault byte-identical to a build without any of this.
    */
   it('leaves every English block on an English site completely unmarked', () => {
@@ -358,7 +358,7 @@ describe('text direction', () => {
 
   /**
    * The mirror. An RTL site marks the *English*, and its own script goes
-   * untouched — one rule, no second code path.
+   * untouched: one rule, no second code path.
    */
   it('marks the English and leaves the Persian alone on an RTL site', () => {
     expect(rtl).toMatch(/<p dir="ltr">An English paragraph/)
@@ -368,8 +368,8 @@ describe('text direction', () => {
   })
 
   /**
-   * `pre` resolves to `ltr` — code is left-to-right and must not be re-ordered
-   * — but it is emitted under the same rule as everything else, so it costs an
+   * `pre` resolves to `ltr` (code is left-to-right and must not be re-ordered)
+   * but it is emitted under the same rule as everything else, so it costs an
    * LTR site nothing. Forcing it unconditionally was defect 3 of the plan's
    * scenario pass.
    */

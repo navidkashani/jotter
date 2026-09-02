@@ -27,7 +27,7 @@ const asDate = (value: unknown): Date | undefined => {
  * Five spellings each, because five is what real vaults contain.
  *
  * Exported so a test can assert that every one of them is declared in
- * `src/lib/frontmatter.ts` — the same reason `analyticsProviders` is exported
+ * `src/lib/frontmatter.ts`: the same reason `analyticsProviders` is exported
  * from `src/lib/config.ts`. A spelling read here but undeclared there worked
  * only by accident of `.passthrough()`, which is not the same thing as working
  * on purpose.

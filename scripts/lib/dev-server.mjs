@@ -2,11 +2,11 @@
  * Is a dev server running against *this* checkout?
  *
  * Asked before anything deletes the content-collection stores. The one a live
- * server is reading is `.astro/data-store.json` — *not* `node_modules/.astro`,
+ * server is reading is `.astro/data-store.json`: *not* `node_modules/.astro`,
  * which is the build store and which a dev server never opens. Astro picks
  * between them on `isDev`; `lib/astro-cache.mjs` has the citation.
  *
- * `data-store.json` is not a cache a running server rebuilds lazily — it *is*
+ * `data-store.json` is not a cache a running server rebuilds lazily: it *is*
  * what `getCollection()` reads. Remove it underneath a live `astro dev` and the
  * next request for a note throws `[jotter] No collection entry for …` from
  * `src/pages/[...slug].astro`. That throw is working as designed; the data
@@ -19,7 +19,7 @@
  * Astro version daemonises by default.
  *
  * The match is scoped to this project's own `astro.mjs`, so a dev server for a
- * different repository is correctly ignored — it reads its own `.astro`, which
+ * different repository is correctly ignored: it reads its own `.astro`, which
  * nothing here touches.
  */
 import { execFileSync } from 'node:child_process'
@@ -28,7 +28,7 @@ import { join } from 'node:path'
 /**
  * @param {string} root Absolute path to the project root.
  * @returns {{ pid: number, command: string }[]} Empty when none, and empty on
- *   any platform where `ps` is unavailable — a missing guard must never be the
+ *   any platform where `ps` is unavailable: a missing guard must never be the
  *   reason a clean fails.
  */
 export function runningDevServers(root) {

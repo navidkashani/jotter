@@ -38,7 +38,7 @@ export interface LinkEdge {
 export interface VaultNote extends ResolvableNote {
   /**
    * Every value of `permalink:`, normalised, in the order the note wrote them.
-   * The first is this note's slug — unless a collision displaced it — and the
+   * The first is this note's slug (unless a collision displaced it), and the
    * rest are redirect sources. Empty for a note that declares none, which is
    * every note in a vault that has never heard of the key.
    */
@@ -95,7 +95,7 @@ export interface ScanOptions {
    */
   image?: string
   /**
-   * `config.slugs`: how a vault path becomes a slug — `derive` (the default,
+   * `config.slugs`: how a vault path becomes a slug: `derive` (the default,
    * and what every jotter site has always done), `preserve` or `obsidian`.
    *
    * The same memo-key caveat as `homepage` and `image` above, and it bites
@@ -319,7 +319,7 @@ export function scanVault(options: ScanOptions): Vault {
  *
  * The bug being fixed is silence: `image:` was declared in the collection
  * schema and read by nothing, so a vault pointing at a file that had been
- * renamed — or at an SVG, which no unfurler draws — built clean and shipped a
+ * renamed (or at an SVG, which no unfurler draws) built clean and shipped a
  * text card. A layout cannot report this, because a layout only sees the note
  * it is rendering and prints nothing anyone reads. This runs where the alias
  * and slug collisions are already found, and prints beside them.
@@ -367,7 +367,7 @@ function warnSocialImages(
  * reason: a key that jotter cannot read must say so somewhere a person will
  * see it. `direction: right` or `direction: RTL-x` silently falls back to the
  * site's direction, and the only symptom is a paragraph still aligned the way
- * the author was trying to change — which is exactly the failure that sends
+ * the author was trying to change, which is exactly the failure that sends
  * somebody hunting through CSS.
  *
  * Published notes only, like the image check: an excluded note renders nowhere.
@@ -484,12 +484,12 @@ function emptyVault(root: string, style: SlugStyle, warnings: string[]): Vault {
  * Beside `claimRoot` below, in the same seam and for the reason its docstring
  * already gives: `assignSlugs` runs on paths alone, before a single file has
  * been read, so anything frontmatter-driven has to happen after the note loop
- * and before `buildIndex()` — the last point before `bySlug` is built from
+ * and before `buildIndex()`: the last point before `bySlug` is built from
  * these slugs.
  *
  * The value is taken **verbatim** in every `slugs:` style: NFC and stripped of
  * leading and trailing slashes (see `normalizePermalinks`), and nothing else.
- * Slugifying it would defeat the entire point — this key exists so a note can
+ * Slugifying it would defeat the entire point: this key exists so a note can
  * keep an address somebody else already published, and `Wisdom+&+Approaches`
  * put through `slugifySegment` is not that address. It is the semantics
  * Obsidian Publish, Jekyll, Hugo (`url`) and 11ty all give the key. Quartz is
@@ -497,7 +497,7 @@ function emptyVault(root: string, style: SlugStyle, warnings: string[]): Vault {
  *
  * A note may name more than one. The first is the slug; the rest stay on the
  * note as redirect sources, which is what closes the gap the Open Publish
- * starter names in `frontmatter.mjs` — *"one old URL per note, because one is
+ * starter names in `frontmatter.mjs`: *"one old URL per note, because one is
  * all `permalink` holds … if that ever changes, the rest need `_redirects`."*
  * jotter writes `_redirects` anyway.
  *
@@ -519,7 +519,7 @@ function applyPermalinks(notes: VaultNote[], warnings: string[]): void {
   }
 
   const collide = (loser: VaultNote, winner: VaultNote, wanted: string, moved: string): void => {
-    // Renamed either way, so `bySlug` cannot hold two notes at one slug — but
+    // Renamed either way, so `bySlug` cannot hold two notes at one slug, but
     // only *reported* when the displaced note is published, because an
     // unpublished one is served nowhere and its slug is observable nowhere.
     if (!loser.published) return
@@ -531,7 +531,7 @@ function applyPermalinks(notes: VaultNote[], warnings: string[]): void {
   }
 
   // `notes` is in sorted path order, so which of two notes naming the same
-  // permalink wins does not depend on filesystem enumeration — the same rule
+  // permalink wins does not depend on filesystem enumeration: the same rule
   // `assignSlugs` and `claimRoot` already break their ties by.
   for (const note of notes) {
     const declared = normalizePermalinks(note.frontmatter.permalink)
@@ -551,7 +551,7 @@ function applyPermalinks(notes: VaultNote[], warnings: string[]): void {
     if (incumbent && explicit.has(incumbent)) {
       // Two notes name the same permalink. Neither is more explicit than the
       // other, so the one that already has it keeps it and this one is
-      // suffixed — the loser of a tie, not the loser of an argument.
+      // suffixed: the loser of a tie, not the loser of an argument.
       slug = suffixed(wanted)
       collide(note, incumbent, wanted, slug)
     } else if (incumbent) {
@@ -571,7 +571,7 @@ function applyPermalinks(notes: VaultNote[], warnings: string[]): void {
     claimed.set(slug, note)
     // Only when it got what it asked for. A note suffixed after losing a tie is
     // sitting on a slug it never named, so a later note that *does* name that
-    // slug should displace it — same rule, one level down.
+    // slug should displace it: same rule, one level down.
     if (slug === wanted) explicit.add(note)
   }
 }
@@ -584,8 +584,8 @@ function applyPermalinks(notes: VaultNote[], warnings: string[]): void {
  * whole of "the homepage note is linked as `/`" falls out of renaming one
  * field: every `noteHref` call site, the graph and backlinks (keyed by slug),
  * the redirect `taken` list, the search index and the feed are then correct for
- * the same reason a root `index.md` already was. The alternative — teaching
- * seventeen call sites about a homepage — means either a parameter threaded
+ * the same reason a root `index.md` already was. The alternative (teaching
+ * seventeen call sites about a homepage) means either a parameter threaded
  * through all of them or module state in `src/lib/href.ts`, whose whole point
  * is that there is one stateless answer to what a link looks like.
  *
@@ -612,7 +612,7 @@ function claimRoot(notes: VaultNote[], homepage: string | undefined, warnings: s
 
   if (!claimant) {
     // `notes` is in sorted path order, so the winner does not depend on
-    // filesystem enumeration — the same rule `assignSlugs` breaks ties by.
+    // filesystem enumeration: the same rule `assignSlugs` breaks ties by.
     const flagged = published.filter((n) => n.frontmatter.homepage === true)
     if (flagged.length > 1) {
       warnings.push(
@@ -629,7 +629,7 @@ function claimRoot(notes: VaultNote[], homepage: string | undefined, warnings: s
 
   /**
    * Two notes claim `/` and only one can have it. Config wins, and the other
-   * keeps a page under a suffixed slug — the same choice, for the same reason,
+   * keeps a page under a suffixed slug: the same choice, for the same reason,
    * as `src/pages/[...slug].astro` making a note beat a folder of the same
    * name: silently dropping either would be worse than either choice.
    */
@@ -640,7 +640,7 @@ function claimRoot(notes: VaultNote[], homepage: string | undefined, warnings: s
     let slug = `index-${n}`
     while (taken.has(slug)) slug = `index-${++n}`
     incumbent.slug = slug
-    // Renamed either way, so `bySlug` cannot hold two notes at `index` — but
+    // Renamed either way, so `bySlug` cannot hold two notes at `index`, but
     // only *reported* when the displaced note is published, because an
     // unpublished one never claimed `/` and its slug is observable nowhere.
     if (incumbent.published) {

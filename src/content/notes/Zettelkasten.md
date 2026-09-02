@@ -21,7 +21,7 @@ decide up front what the categories are, because you never need to.
 ## Why it survives
 
 Because it scales in the one direction that matters. A folder hierarchy gets
-worse as it grows — every new note forces a decision about where it belongs. A
+worse as it grows: every new note forces a decision about where it belongs. A
 slipbox gets *better*, because every new note is another possible connection
 for the notes already there.
 

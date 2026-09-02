@@ -7,7 +7,7 @@
  * jotter's previews are **embedded, not fetched**. Quartz's `popover.inline.ts`
  * calls `fetchCanonical(targetUrl)` on every hover, parses the response with
  * `DOMParser` and lifts out its `.popover-hint` elements; Obsidian Publish does
- * the same against its own API. jotter does not, and says so out loud —
+ * the same against its own API. jotter does not, and says so out loud:
  * `scripts/verify-build.mjs` fails the build on `fetch(` anywhere in an inline
  * block or a bundled chunk. So the excerpt travels in the HTML instead and the
  * browser never asks for anything.
@@ -15,7 +15,7 @@
  * That assertion has exactly one exemption, added when search shipped:
  * `dist/pagefind/**`, by path. Pagefind fetches because fetching *is* how it
  * scales, and there was no embed-it-at-build-time way out the way there was
- * here. Everything jotter authors — this feature included — still fails on
+ * here. Everything jotter authors (this feature included) still fails on
  * `fetch(`, which is what keeps the decision below enforced rather than merely
  * remembered.
  *
@@ -45,7 +45,7 @@ export interface Preview {
  *
  * Keyed on the note *object* rather than on `path + subpath`, so a re-scanned
  * vault gets fresh answers by construction instead of by anyone remembering to
- * clear a cache — and so the entries go when the vault does.
+ * clear a cache, and so the entries go when the vault does.
  */
 const memo = new WeakMap<VaultNote, Map<string, Preview | undefined>>()
 

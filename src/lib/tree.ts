@@ -44,7 +44,7 @@ const compare = (a: TreeEntry, b: TreeEntry) => {
  * `style` is not optional in practice, and `contains()` at the bottom of this
  * file is why: it tests `slug.startsWith(folder.slug + '/')`, so a folder
  * slugged `wisdom-approaches` above a note slugged `Wisdom+&+Approaches/…`
- * matches nothing — the sidebar's `<details open>` and the current-page
+ * matches nothing: the sidebar's `<details open>` and the current-page
  * highlight both go quiet, with no error anywhere. Both callers pass
  * `vault.slugs`.
  *

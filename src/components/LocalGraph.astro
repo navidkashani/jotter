@@ -3,7 +3,7 @@
  * The local graph.
  *
  * Two renderings of one neighbourhood, in DOM order: an empty mount carrying
- * the data, and the readable list of relationships underneath it — outgoing
+ * the data, and the readable list of relationships underneath it: outgoing
  * above, incoming below.
  *
  * `src/scripts/local-graph.ts` inserts a canvas and an expand button into the
@@ -15,7 +15,7 @@
  * visible. It is the fallback rather than a placeholder.
  *
  * The neighbourhood travels in a `data-` attribute rather than through
- * `define:vars`, which forces the script inline — and an inline script is
+ * `define:vars`, which forces the script inline, and an inline script is
  * neither bundled nor shared between pages, which is most of the point of
  * spending 17 KB on `d3-force` once.
  *
@@ -36,7 +36,7 @@ const { neighbourhood, current } = Astro.props
 /**
  * Outgoing first. `neighbourhood()` happens to return them in that order
  * today, as a side effect of walking outgoing links before backlinks, but that
- * is a property of its traversal rather than a promise it makes — so the order
+ * is a property of its traversal rather than a promise it makes, so the order
  * is taken from the edges here, where the claim is made.
  */
 const linkedTo = new Set(

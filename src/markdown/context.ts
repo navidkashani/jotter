@@ -3,13 +3,13 @@
  * the two facts about Satteri that the whole markdown layer rests on.
  *
  * **Wikilinks are not their own node type.** Satteri parses `[[Target]]` into an
- * ordinary `link` and `![[image.png]]` into an ordinary `image` — the same nodes
+ * ordinary `link` and `![[image.png]]` into an ordinary `image`: the same nodes
  * `[Target](Target)` and `![](image.png)` produce. Nothing on the node says
  * which syntax wrote it, and the two must resolve by different rules: a
  * wikilink resolves against the whole vault by shortest path, a markdown link
  * is a path. The discriminator is the source itself: with `options.position`
  * set, every node carries byte offsets, so slicing `ctx.source` at the node's
- * start and testing for `[[` is exact. It is not a regex over prose — the
+ * start and testing for `[[` is exact. It is not a regex over prose: the
  * parser already found the boundaries; we only ask what it read.
  *
  * **The pipe lands in `alt`.** `![[img.png|300]]` arrives as `alt: "300"`, and

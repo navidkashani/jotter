@@ -1,8 +1,8 @@
 ---
 /**
- * A note, with — or without — its rail.
+ * A note, with (or without) its rail.
  *
- * Two shapes, and the DOM differs between them — which it did not use to, and
+ * Two shapes, and the DOM differs between them, which it did not use to, and
  * the reason is worth recording.
  *
  * `column` is head, outline, body, rail: the outline is a collapsible
@@ -17,8 +17,8 @@
  *
  * The cost is that in `panels` the graph and backlinks are read before the
  * prose rather than after it. That is the trade the wrapper forces, and it is
- * softened by the rail being a complementary landmark — skippable in one
- * keystroke — with `<main>` and the skip link already in place.
+ * softened by the rail being a complementary landmark (skippable in one
+ * keystroke) with `<main>` and the skip link already in place.
  *
  * `config.layout` is build-time, so exactly one of these branches is ever
  * emitted. Nothing is duplicated in the output, nothing is hidden with CSS.
@@ -59,12 +59,12 @@ const description =
 
 /**
  * The note's own card image, beside the description it already reads off
- * frontmatter — this is the layout that can see frontmatter at all, and the
+ * frontmatter: this is the layout that can see frontmatter at all, and the
  * existing precedent for a declared key reaching `<head>` through a prop.
  *
  * Resolved against the vault the way an embed is, so `attachments/x.png`, a
  * bare `x.png` and `./x.png` all find the same file. A value that resolves to
- * nothing — or to a format no unfurler draws — is `undefined` here and the page
+ * nothing (or to a format no unfurler draws) is `undefined` here and the page
  * falls back to the site-wide default; the scan has already warned about it by
  * name, which is where a build warning can actually be read.
  */
@@ -77,8 +77,8 @@ const image = socialImageUrl(
  * `panels` only. The graph is a picture of where you are, and it needs a
  * column beside the prose to be one; dropped into the `column` stack it
  * becomes a square of dots between the article and its backlinks, which is
- * where the mockup never put it. `features.graph` is honoured, not overridden
- * — it simply has nowhere to render in the layout that has no rail.
+ * where the mockup never put it. `features.graph` is honoured, not overridden:
+ * it simply has nowhere to render in the layout that has no rail.
  *
  * The flag arrives as a literal from `astro.config.ts` rather than off
  * `config`, and the import is dynamic, so that with the graph off Rollup can
@@ -99,7 +99,7 @@ const HoverPreview = showHoverPreview
   : null
 
 /**
- * What Pagefind indexes, and — the part worth naming — what it therefore does
+ * What Pagefind indexes, and (the part worth naming) what it therefore does
  * *not*. `data-pagefind-body` is **site-wide sticky**: once it appears on any
  * page, every page without it is dropped. So putting it here quietly decides
  * that the tag pages, the folder listings, `/notes` and the 404 are all out of
@@ -113,7 +113,7 @@ const HoverPreview = showHoverPreview
  * the `<h1>` falls outside, and Pagefind loses every result's title.
  *
  * `.note-aside` and `.note-rail` are cut back out. All of it is navigation
- * whose text belongs to *other* notes — the outline aside, every note would
+ * whose text belongs to *other* notes: the outline aside, every note would
  * otherwise match on each of its neighbours' titles. `<PrevNext>` carries the
  * same attribute for the same reason.
  *

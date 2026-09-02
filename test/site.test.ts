@@ -98,7 +98,7 @@ describe('tree', () => {
   /**
    * Load-bearing, and silent when it breaks: `contains()` is a `startsWith`
    * over slugs, so a folder slugged one way above notes slugged another matches
-   * nothing — no error, just a sidebar that stops opening the right branch and
+   * nothing: no error, just a sidebar that stops opening the right branch and
    * stops marking the current page.
    */
   it('slugs a folder as a prefix of its notes under every style', () => {
@@ -114,7 +114,7 @@ describe('tree', () => {
 
   /**
    * And the other half of the same rule: a note a `permalink:` moved out of its
-   * folder stops matching, which is correct — it is no longer served from under
+   * folder stops matching, which is correct: it is no longer served from under
    * that folder's URL.
    */
   it('stops claiming a note a permalink moved out of the folder', () => {
@@ -287,7 +287,7 @@ describe('config', () => {
   })
 })
 
-describe('config — analytics', () => {
+describe('config: analytics', () => {
   it('leaves analytics off with nothing configured', () => {
     expect(defineConfig({}).analytics).toEqual({ provider: 'none' })
   })
@@ -338,7 +338,7 @@ describe('config — analytics', () => {
 
   /**
    * `custom` and its `src` are gone. Neither ever rendered anything, so no
-   * site's behaviour changes — but a config that used to parse now refuses to,
+   * site's behaviour changes, but a config that used to parse now refuses to,
    * and it should say which key to delete.
    */
   it('rejects the removed custom provider, naming the key', () => {
@@ -448,7 +448,7 @@ describe('feed', () => {
 
   /**
    * A revision re-enters the window, so revising old notes can push an unread
-   * new one out of a short feed before a subscriber polls — silent loss, since
+   * new one out of a short feed before a subscriber polls: silent loss, since
    * readers dedupe on guid and it never comes back. Hence 50 rather than
    * Quartz's 10.
    */
@@ -530,7 +530,7 @@ describe('feed', () => {
 
   /**
    * RSS's `<author>` requires an e-mail address and `config.author` is a name,
-   * so the profile's advice is `dc:creator` — and never both.
+   * so the profile's advice is `dc:creator`, and never both.
    */
   it('names an author only when one is configured', () => {
     expect(xml).not.toContain('<dc:creator>')
@@ -587,7 +587,7 @@ describe('feed', () => {
   })
 })
 
-describe('config — rss', () => {
+describe('config: rss', () => {
   it('leaves the feed off by default', () => {
     expect(defineConfig({}).features.rss).toBe(false)
   })
@@ -618,8 +618,8 @@ describe('config — rss', () => {
 
 /**
  * The two halves of `image:`, split so the scan can validate a value without
- * knowing the site URL. Built against the fixture vault's own `assets` index —
- * the real one, since resolution is the whole question — with a synthetic index
+ * knowing the site URL. Built against the fixture vault's own `assets` index
+ * (the real one, since resolution is the whole question) with a synthetic index
  * only where the fixture has no file of the shape being tested, the way the
  * feed tests use a synthetic `note()`.
  */
@@ -672,7 +672,7 @@ describe('social images', () => {
 
   /**
    * Facebook does not render SVG, so a card pointing at one is a fetch that
-   * draws nothing — indistinguishable from no card, and worse than one. A
+   * draws nothing: indistinguishable from no card, and worse than one. A
    * different question from `isOptimizable`, which is why it has its own list.
    */
   it('refuses a format no unfurler draws', () => {
@@ -689,7 +689,7 @@ describe('social images', () => {
   /**
    * The gate that makes the whole feature honest: an unfurler has no document
    * to resolve a relative URL against, so without `url` there is no card to
-   * emit — not a shorter one.
+   * emit: not a shorter one.
    */
   it('emits nothing at all without a site URL', () => {
     const resolved = resolveSocialImage('diagram.png', 'Home.md', v)
@@ -723,7 +723,7 @@ describe('social images', () => {
   })
 })
 
-describe('config — image', () => {
+describe('config: image', () => {
   it('leaves the site-wide card image unset by default', () => {
     expect(defineConfig({}).image).toBeUndefined()
   })

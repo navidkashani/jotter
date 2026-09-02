@@ -2,7 +2,7 @@
  * Print.
  *
  * A note is a document. Printing one should give the reader the note, its
- * metadata and its links as text they can actually follow — not a screenshot of
+ * metadata and its links as text they can actually follow: not a screenshot of
  * a website with a navigation column down the side.
  */
 @media print {

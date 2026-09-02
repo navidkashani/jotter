@@ -9,17 +9,17 @@
  * Colours are OKLCH: perceptually uniform, so a lightness step means the same
  * amount of visible change at every hue, and a palette can be shifted by
  * editing one hue angle without re-tuning every swatch. The whole palette,
- * light and dark, sits on hue 60 (neutrals) and hue 70 (accent) — a warm
+ * light and dark, sits on hue 60 (neutrals) and hue 70 (accent): a warm
  * grey-and-ochre set. Cool neutrals under a warm accent were the single
  * loudest wrong note in the first cut.
  *
  * The surface model is *raised*: `--surface` is lighter than `--paper` in the
  * light theme and lighter again in the dark one, and raised things carry a
- * hairline `--rule` rather than a shadow. There is deliberately no shadow token
- * — every edge in jotter is a 1px line or a `--soft` tint.
+ * hairline `--rule` rather than a shadow. There is deliberately no shadow token:
+ * every edge in jotter is a 1px line or a `--soft` tint.
  *
- * Dark mode is defined twice on purpose — under `[data-theme="dark"]` for an
- * explicit choice, and under `prefers-color-scheme` for the system default —
+ * Dark mode is defined twice on purpose (under `[data-theme="dark"]` for an
+ * explicit choice, and under `prefers-color-scheme` for the system default)
  * so the toggle wins in both directions and there is no "system says light,
  * user said dark" gap.
  */
@@ -43,8 +43,8 @@
   /**
    * `--accent-hover` is not only a hover state: it is the accent that stays
    * legible *on* `--soft`. Accent-on-soft measures 4.02:1, just under AA, so
-   * anywhere accent-coloured text sits on an accent tint — tag chips, the
-   * current nav row — it uses this one instead.
+   * anywhere accent-coloured text sits on an accent tint (tag chips, the
+   * current nav row) it uses this one instead.
    */
   --accent: oklch(55% 0.11 70);
   --accent-hover: oklch(45% 0.115 70);
@@ -88,20 +88,20 @@
    * prose runs at `--step-body` (17/1.72). Setting prose type on the whole
    * document is what made every label and nav row read two steps too large.
    */
-  --step-display: 2.375rem; /* 38px — the site's own title */
-  --step-title: 2.0625rem; /* 33px — note title */
-  --step-index: 1.8125rem; /* 29px — index and tag titles */
-  --step-section: 1.1875rem; /* 19px — section heading */
-  --step-lead: 1.15625rem; /* 18.5px — the standfirst under a title */
-  --step-body: 1.0625rem; /* 17px — prose */
-  --step-quote: 1.03125rem; /* 16.5px — blockquote */
-  --step-ui: 1rem; /* 16px — chrome, list rows, card titles */
-  --step-small: 0.96875rem; /* 15.5px — secondary prose, callout body */
-  --step-excerpt: 0.90625rem; /* 14.5px — list excerpts */
-  --step-nav: 0.84375rem; /* 13.5px — nav rows, outline, card excerpts */
-  --step-code: 0.8125rem; /* 13px — code blocks, figcaptions */
-  --step-meta: 0.71875rem; /* 11.5px — mono metadata */
-  --step-label: 0.625rem; /* 10px — uppercase mono section labels */
+  --step-display: 2.375rem; /* 38px: the site's own title */
+  --step-title: 2.0625rem; /* 33px: note title */
+  --step-index: 1.8125rem; /* 29px: index and tag titles */
+  --step-section: 1.1875rem; /* 19px: section heading */
+  --step-lead: 1.15625rem; /* 18.5px: the standfirst under a title */
+  --step-body: 1.0625rem; /* 17px: prose */
+  --step-quote: 1.03125rem; /* 16.5px: blockquote */
+  --step-ui: 1rem; /* 16px: chrome, list rows, card titles */
+  --step-small: 0.96875rem; /* 15.5px: secondary prose, callout body */
+  --step-excerpt: 0.90625rem; /* 14.5px: list excerpts */
+  --step-nav: 0.84375rem; /* 13.5px: nav rows, outline, card excerpts */
+  --step-code: 0.8125rem; /* 13px: code blocks, figcaptions */
+  --step-meta: 0.71875rem; /* 11.5px: mono metadata */
+  --step-label: 0.625rem; /* 10px: uppercase mono section labels */
 
   --leading-display: 1.15;
   --leading-title: 1.2;

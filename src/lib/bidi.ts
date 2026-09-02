@@ -1,8 +1,8 @@
 /**
  * Which way a piece of text runs, and whether that is worth saying out loud.
  *
- * jotter has always had exactly one direction for the whole site —
- * `config.dir`, spent in one place, on `<html>` — so a vault that mixes scripts
+ * jotter has always had exactly one direction for the whole site
+ * (`config.dir`, spent in one place, on `<html>`), so a vault that mixes scripts
  * has no correct setting. An English site with Persian paragraphs in it renders
  * them left-aligned with their terminal punctuation thrown to the wrong end of
  * every line, and an Arabic site with English notes in it has the mirror
@@ -12,7 +12,7 @@
  * **mark the blocks whose direction differs from the page's.** The majority
  * language is never marked, whichever one it is, which is what makes the
  * feature symmetric and what makes a single-script vault of *either* direction
- * pay exactly nothing — `textDir` returns `undefined`, Astro drops an
+ * pay exactly nothing: `textDir` returns `undefined`, Astro drops an
  * `undefined` attribute, and `ctx.setProperty` is never called.
  *
  * ## Why the answer is computed here rather than deferred to `dir="auto"`
@@ -20,7 +20,7 @@
  * Obsidian Publish sets `dir="auto"` on every block and lets the browser run
  * the algorithm, because Publish *is* a browser renderer. jotter renders ahead
  * of time, so it emits the answer it already knows. Three consequences decide
- * it: `dir="auto"` is unassertable — a Persian paragraph and an English one
+ * it: `dir="auto"` is unassertable: a Persian paragraph and an English one
  * produce byte-identical markup, so no build check can tell a right answer from
  * a shrug; a single-script vault pays nothing here and would pay an attribute
  * per block there; and an explicit `dir` keeps the three existing `[dir='rtl']`
@@ -28,15 +28,15 @@
  *
  * ## The rule
  *
- * Pure first-strong — UBA rules P2 and P3, the same rule `dir="auto"` runs and
+ * Pure first-strong: UBA rules P2 and P3, the same rule `dir="auto"` runs and
  * the same one Obsidian's editor has used per line since 1.6. Agreeing with the
  * editor matters more than being cleverer than it: the published page then
  * always looks like what the author saw while writing. A majority-of-characters
  * rule was tried, and rejected for diverging from the editor (it was also 7×
  * slower).
  *
- * It gets exactly one case wrong — a sentence opening with a word from the
- * other script, `Obsidian یک برنامه است` — and Obsidian gets that wrong too.
+ * It gets exactly one case wrong (a sentence opening with a word from the
+ * other script, `Obsidian یک برنامه است`), and Obsidian gets that wrong too.
  * The escape hatch is `direction:` in the note's frontmatter, below.
  *
  * Pure, DOM-free and `node:fs`-free, the rule `src/lib/social.ts`,
@@ -50,19 +50,19 @@ export type Direction = 'ltr' | 'rtl'
 
 /**
  * What a note's `direction:` frontmatter may say. `auto` is the esm7 RTL
- * plugin's third value and means "the default per-block behaviour" — i.e.
+ * plugin's third value and means "the default per-block behaviour": i.e.
  * exactly what not setting the key does.
  */
 export type DirectionSetting = Direction | 'auto'
 
 /**
- * The right-to-left scripts, enumerated — and everything else that is a letter
+ * The right-to-left scripts, enumerated, and everything else that is a letter
  * is left-to-right.
  *
  * This way round on purpose, and the way round an earlier draft had it was a
  * real bug. Enumerating the *LTR* scripts (Latin, Greek, Cyrillic) means
  * Chinese, Japanese, Korean, Devanagari and Thai match neither list, find no
- * strong character at all, and inherit — which on an RTL site renders a Chinese
+ * strong character at all, and inherit, which on an RTL site renders a Chinese
  * paragraph right-to-left. Enumerating the RTL side instead makes every script
  * jotter has never heard of correct by default.
  *
@@ -83,7 +83,7 @@ const RTL_SCRIPT =
  * letter-first and script-second rather than the other way round.
  *
  * Punctuation, symbols, emoji and combining marks are skipped for the same
- * reason, and so is ZWNJ (`U+200C`) — ubiquitous in Persian (`یادداشت‌ها`), and
+ * reason, and so is ZWNJ (`U+200C`): ubiquitous in Persian (`یادداشت‌ها`), and
  * `\p{Cf}` rather than a letter, so it matches neither class.
  */
 const LETTER = /\p{L}/u
@@ -103,7 +103,7 @@ const PDI = 0x2069
  * The base direction of a run of text, by UBA P2/P3: the first strong
  * character wins, and `undefined` when there is none.
  *
- * `undefined` is not a failure — it is the correct answer for a block of
+ * `undefined` is not a failure: it is the correct answer for a block of
  * digits, punctuation or emoji, which has no direction of its own and should
  * take the one it inherits.
  */
@@ -140,7 +140,7 @@ export function firstStrong(text: string): Direction | undefined {
  *
  * This one line is the whole zero-cost property of the feature: a block that
  * agrees with what it inherits is left exactly as it was, so a monolingual
- * vault — in either direction — produces byte-identical output to a build
+ * vault (in either direction) produces byte-identical output to a build
  * without any of this.
  */
 export function textDir(text: string, inherited: Direction): Direction | undefined {
@@ -156,8 +156,8 @@ export function textDir(text: string, inherited: Direction): Direction | undefin
  * accepted rather than warned about for exactly that reason: it is a value that
  * plugin writes, and it asks for the behaviour jotter does by default anyway.
  *
- * Returning `undefined` for a value it cannot read — rather than falling back
- * silently to `ltr` — is what lets `src/lib/vault.ts` tell "not set" from
+ * Returning `undefined` for a value it cannot read (rather than falling back
+ * silently to `ltr`) is what lets `src/lib/vault.ts` tell "not set" from
  * "set to something I do not understand" and warn about the second, naming the
  * note and the value.
  */

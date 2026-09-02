@@ -16,8 +16,8 @@
  *
  * Why any of this matters is the part that costs an afternoon if it is not
  * written down. The content layer invalidates a cached render on the *source
- * file's* digest. Change the markdown pipeline instead — a plugin, or a
- * `jotter.config.ts` feature flag that a plugin reads — and every digest is
+ * file's* digest. Change the markdown pipeline instead (a plugin, or a
+ * `jotter.config.ts` feature flag that a plugin reads), and every digest is
  * unchanged, so every note is served from cache and the change appears to have
  * done nothing. `astro dev --force` does not help; neither does restarting the
  * server. Only removing the store does.

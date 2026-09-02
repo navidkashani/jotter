@@ -15,7 +15,7 @@
  * first-write rule and the `taken` list from `astro.config.ts` all keep
  * comparing like with like, and encoded **once** at the end. Sources used to be
  * raw slugs while destinations came from `noteHref()`, which was already wrong
- * for any non-ASCII alias — and Netlify's own documentation requires paths in
+ * for any non-ASCII alias, and Netlify's own documentation requires paths in
  * `_redirects` to be URL-encoded.
  */
 import { noteHref } from './href.js'
@@ -39,7 +39,7 @@ export interface RedirectSources {
  * in for would have been. The other two carry it verbatim: under `preserve` and
  * `obsidian` the whole contract is that jotter does not invent spellings, and
  * an alias is a name the author typed. Slashes are trimmed and empty segments
- * dropped either way — a leading one would make `//host`, which is not a path
+ * dropped either way: a leading one would make `//host`, which is not a path
  * on this site at all.
  */
 const sourceFor = (name: string, style: SlugStyle): string =>
@@ -61,8 +61,8 @@ export function buildRedirects({
   const claim = (from: string, to: string): void => {
     // Skip a source that is empty, that is already where it points, that a real
     // page owns, or that something claimed first. `index` is never a source:
-    // `/` is a real page in every build — the note claiming it, or the
-    // generated landing page — and `/index` is not a URL this site serves.
+    // `/` is a real page in every build (the note claiming it, or the
+    // generated landing page), and `/index` is not a URL this site serves.
     if (!from || from === 'index' || from === to || owned.has(from) || out.has(from)) return
     out.set(from, to)
   }
@@ -74,14 +74,14 @@ export function buildRedirects({
    * One rule rather than the homepage-shaped special case this replaces, and it
    * covers all three ways a note moves: promotion to `/`, a `permalink:`, and a
    * change of `slugs:` style. Recomputed from the path rather than remembered
-   * on the note — `slugFor` is pure, and a `previousSlug` field would be one
+   * on the note: `slugFor` is pure, and a `previousSlug` field would be one
    * more thing to keep in step.
    *
    * A collision suffix is *not* covered, and correctly so: there the derived
    * slug is owned by the note that won it, and `owned.has(from)` skips it.
    *
    * Before the aliases, so a URL that actually served this note outranks a name
-   * that only ever pointed at another one — and an alias that was unreachable
+   * that only ever pointed at another one, and an alias that was unreachable
    * while the page existed does not become live by inheriting its vacated URL.
    */
   for (const note of notes) {
@@ -91,7 +91,7 @@ export function buildRedirects({
   /**
    * The second and later values of a `permalink:` list: old addresses the note
    * answers at without being served from. Ahead of the aliases for the same
-   * reason the vacated slugs are — these are URLs somebody published.
+   * reason the vacated slugs are: these are URLs somebody published.
    */
   for (const note of notes) {
     for (const permalink of note.permalinks.slice(1)) claim(permalink, note.slug)
@@ -139,7 +139,7 @@ export const toVercel = (redirects: Record<string, string>): string =>
  * A site that asked not to be indexed should say so where crawlers look.
  *
  * `/pagefind/` is disallowed unconditionally, whether or not search is built.
- * Those files are index chunks and a WebAssembly module — machine-readable
+ * Those files are index chunks and a WebAssembly module: machine-readable
  * fragments of pages a crawler can already read whole, at their own URLs. A
  * crawler has nothing to gain there and jotter has a budget to lose. The rule
  * is unconditional because a `robots.txt` that flips with a feature flag is a

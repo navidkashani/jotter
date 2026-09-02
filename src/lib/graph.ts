@@ -149,7 +149,7 @@ export function neighbourhood(graph: Graph, slug: string, depth = 1): Neighbourh
    * neighbours are what make the picture worth drawing.
    *
    * So walk the outgoing set once more and keep every edge whose ends are
-   * *both* already in the neighbourhood. Nothing new is admitted — this closes
+   * *both* already in the neighbourhood. Nothing new is admitted: this closes
    * rings between nodes BFS has already accepted, and at depth 0 there is
    * nothing to close because self-links are not edges.
    */

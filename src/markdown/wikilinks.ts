@@ -105,7 +105,7 @@ export function wikilinks(doc: DocumentContext) {
 
   /**
    * The two attributes `src/scripts/hover-preview.ts` reads. Same route
-   * `deadLink` above uses, minus the `hName` override — the node stays an `<a>`
+   * `deadLink` above uses, minus the `hName` override: the node stays an `<a>`
    * and simply gains attributes.
    *
    * Emitted only with the flag on, so the bytes are absent rather than hidden,
@@ -132,11 +132,11 @@ export function wikilinks(doc: DocumentContext) {
   /**
    * An internal absolute href, back to the note it points at.
    *
-   * Not a nicety — without it the feature looks broken on exactly the notes it
+   * Not a nicety: without it the feature looks broken on exactly the notes it
    * should look best on. `preresolveLinks` rewrites every wikilink inside
    * transcluded content into `[label](/slug#anchor)` *before* the host note is
    * parsed, so by the time this visitor sees one there is no `[[…]]` left and
-   * the `EXTERNAL` guard — whose pattern matches a leading `/` — would return
+   * the `EXTERNAL` guard (whose pattern matches a leading `/`) would return
    * without a second look. Hand-written `[x](/zettelkasten)` links get previews
    * out of the same branch, which is right rather than incidental.
    */

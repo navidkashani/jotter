@@ -8,7 +8,7 @@
  *
  * Dependency-free, and that is a live concern here rather than a preference.
  * jotter installs with `npm ci --omit=dev` on a host that has never heard of
- * this repository — it is why `pagefind` is a production dependency — and a
+ * this repository (it is why `pagefind` is a production dependency), and a
  * signing library added for one GET would be a fourth thing to keep in step
  * with the plugin's signer. Node's own `crypto` and global `fetch` are enough.
  */

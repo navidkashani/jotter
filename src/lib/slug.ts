@@ -2,7 +2,7 @@
  * Path → URL slug. Obsidian filenames are human text: spaces, emoji, Cyrillic,
  * ampersands. The slug must be a legal URL, stable across builds, and readable.
  *
- * Non-ASCII letters are *kept*, not transliterated away — a Cyrillic vault
+ * Non-ASCII letters are *kept*, not transliterated away: a Cyrillic vault
  * should not slug every note to `note-1`, `note-2`. Browsers percent-encode
  * them on the wire and display them decoded.
  *
@@ -12,16 +12,16 @@
  * a site moving onto a domain whose old addresses are already in other people's
  * bookmarks, links and search rankings. See `docs/url-styles.md`.
  *
- * A slug is not a URL — see `src/lib/url.ts` for the encoder that separates
- * them, and why. Everything in this file speaks slugs.
+ * A slug is not a URL (see `src/lib/url.ts` for the encoder that separates
+ * them, and why). Everything in this file speaks slugs.
  */
 
 /**
  * How a vault path becomes a slug.
  *
- * - `derive` — slugify: lowercase, dashes, ASCII-safe punctuation dropped.
- * - `preserve` — the path verbatim.
- * - `obsidian` — the path verbatim with space → `+`, which is the address
+ * - `derive`: slugify: lowercase, dashes, ASCII-safe punctuation dropped.
+ * - `preserve`: the path verbatim.
+ * - `obsidian`: the path verbatim with space → `+`, which is the address
  *   Obsidian Publish served the same file at.
  */
 export type SlugStyle = 'derive' | 'preserve' | 'obsidian'
@@ -59,7 +59,7 @@ export function slugifyPath(path: string): string {
  * **NFC on the slug, never on the path.** Astro NFC-normalises every route
  * param itself (`sanitizeParams`, `core/routing/generator.js`), so a slug left
  * decomposed would be *routed* at its composed path while every `Map` key, href
- * and redirect stayed decomposed — every link to that note 404s. The path must
+ * and redirect stayed decomposed: every link to that note 404s. The path must
  * stay byte-exact in the other direction, because `readFileSync` and the
  * collection's `generateId: ({ entry }) => entry` both depend on it. This is
  * live on exactly the vaults these styles are for: macOS Finder writes NFD, zsh
@@ -74,7 +74,7 @@ export function preservePath(path: string): string {
  * once the URL is percent-decoded, which is what a slug is.
  *
  * Deliberately byte-identical to `obsidianPublishUrl()` in open-publish's
- * `plugin/src/core/slug.ts` — the third function the two projects agree on
+ * `plugin/src/core/slug.ts`: the third function the two projects agree on
  * character for character, beside `protectedRanges()` and `anchorFor()`. That
  * parity is what lets a vault published by the plugin and a vault built by
  * jotter answer at the same addresses, and `test/lib.test.ts` asserts it rather
@@ -156,7 +156,7 @@ const escapesOutputDir = (slug: string): boolean =>
 
 /**
  * Everything about a set of slugs that a person needs to be told, once, at the
- * scan — reported without renaming anything.
+ * scan: reported without renaming anything.
  *
  * Renaming would be jotter inventing a slug it was explicitly told to carry
  * verbatim, and the whole point of `preserve`, `obsidian` and `permalink:` is
@@ -166,7 +166,7 @@ const escapesOutputDir = (slug: string): boolean =>
  *
  * - **Case-only collisions.** `Note.md` beside `note.md` are two files on Linux
  *   and one on macOS or Windows, so the build filesystem silently overwrites
- *   one before any host sees it. `derive` cannot hit this — it lowercases, so
+ *   one before any host sees it. `derive` cannot hit this: it lowercases, so
  *   the two collide earlier, in `assignSlugs`, and are suffixed and reported
  *   there.
  * - **Windows-illegal characters.** Legal on macOS and Linux, un-writable into
@@ -176,7 +176,7 @@ const escapesOutputDir = (slug: string): boolean =>
  * direction checks in `src/lib/vault.ts` follow: an excluded note has no page,
  * so nothing of it is ever written into `dist/` and neither hazard can bite.
  * The `throw` is not filtered, because a slug that escapes the output directory
- * is a mistake worth stopping for wherever it is written — and there is no
+ * is a mistake worth stopping for wherever it is written, and there is no
  * version of continuing that is better than stopping.
  */
 export function slugHazards(
@@ -194,14 +194,14 @@ export function slugHazards(
       )
     }
 
-    // `published` is optional so a caller holding plain slugs — a test, a
-    // future one — gets the checks rather than silence.
+    // `published` is optional so a caller holding plain slugs (a test, a
+    // future one) gets the checks rather than silence.
     if (note.published === false) continue
 
     const illegal = note.slug.match(WINDOWS_ILLEGAL)
     if (illegal) {
       warnings.push(
-        `"${note.path}" is served at "/${note.slug}", which contains ${illegal[0]} — a ` +
+        `"${note.path}" is served at "/${note.slug}", which contains ${illegal[0]}: a ` +
           `character Windows refuses in a filename. This builds on macOS and Linux and fails ` +
           `on a Windows build machine. Rename the file, or set a \`permalink:\` without it.`,
       )
@@ -226,8 +226,8 @@ export function slugHazards(
 /**
  * A `permalink:` value, or several, as slugs.
  *
- * Verbatim in every style — no slugification, no lowercasing, no substitutions
- * — because a permalink is an address somebody already published, and the one
+ * Verbatim in every style (no slugification, no lowercasing, no substitutions)
+ * because a permalink is an address somebody already published, and the one
  * thing it must not do is change. NFC for Astro's router (see `preservePath`),
  * and leading and trailing slashes are stripped so `/company/about` and
  * `company/about` mean the same thing, which is what Hugo does with `url:` and

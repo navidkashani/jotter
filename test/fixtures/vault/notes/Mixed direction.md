@@ -12,16 +12,16 @@ An English paragraph, on an English site: nothing should be marked here.
 - یک پیوند انگلیسی داخل جمله‌ی فارسی: [[Luhmann]]
 - An English item in the same list.
 
-Obsidian یک برنامه است — the known-wrong case: first-strong resolves this to
+Obsidian یک برنامه است: the known-wrong case: first-strong resolves this to
 LTR because the sentence opens with a Latin word, exactly as Obsidian does.
 
 ۱۳۹۹ سال خوبی بود، و ۲۰۲۶ هم همین‌طور.
 
-2026 مرور سال — Western digits are weak too, so this still resolves RTL.
+2026 مرور سال: Western digits are weak too, so this still resolves RTL.
 
 «اینجا» محلی هست که با نقطه‌گذاری شروع می‌شود.
 
-1234 5678 — 90% (!!) ✳️
+1234 5678: 90% (!!) ✳️
 
 这是一段中文，用来证明中日韩文字被当作强左向文字处理。
 

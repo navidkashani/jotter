@@ -7,8 +7,8 @@
  * as "this is the file's metadata" in a way a comma-separated byline never did.
  *
  * The keys are an **allow-list**, not a deny-list. Frontmatter is whatever its
- * owner typed — drafting notes to themselves, private URLs, a `publish: false`
- * they forgot to remove — so anything unrecognised stays off the page rather
+ * owner typed: drafting notes to themselves, private URLs, a `publish: false`
+ * they forgot to remove, so anything unrecognised stays off the page rather
  * than leaking by default.
  *
  * Created and updated are always shown (updated only when it differs), because
@@ -69,7 +69,7 @@ const rows: { key: string; label: string; value: string; datetime?: string }[] =
  * The dates leave the search index; everything else stays in it.
  *
  * Both rows sit inside `data-pagefind-body`, so “Created Jan 12, 2026 Updated
- * Apr 8, 2026” led every excerpt for every note — forty characters of the one
+ * Apr 8, 2026” led every excerpt for every note: forty characters of the one
  * thing nobody searches prose for. `aliases` is the reason this is a row-level
  * decision rather than a `<dl>`-level one: an alias is exactly what somebody
  * types when they cannot remember a note's real title, and dropping the whole

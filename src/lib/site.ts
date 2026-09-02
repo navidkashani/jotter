@@ -39,8 +39,8 @@ export const vault = scanVault({
  * Once, here, rather than per page in `Base.astro`: the answer cannot differ
  * between pages, and the module every page already imports is where the build
  * keeps things that are true of the whole site. `undefined` without
- * `config.url` — an `og:image` an unfurler cannot resolve is not a smaller
- * card, it is no card — and `undefined` when nothing is configured.
+ * `config.url` (an `og:image` an unfurler cannot resolve is not a smaller
+ * card, it is no card), and `undefined` when nothing is configured.
  */
 export const socialImage: string | undefined = socialImageUrl(
   resolveSocialImage(jotter.image, '', vault),
@@ -78,7 +78,7 @@ export const notesByTag = (() => {
 })()
 
 /**
- * The note claiming `/`, which is the note the scan gave the slug `index` —
+ * The note claiming `/`, which is the note the scan gave the slug `index`:
  * there is no second resolution path to keep in step with the first. Read off
  * the published list, so an unpublished `index.md` gets the generated landing
  * page rather than a page it opted out of.

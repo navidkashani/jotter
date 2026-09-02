@@ -234,7 +234,7 @@ describe('neighbourhood edges', () => {
   /**
    * A graph straight from a list of `source -> target` pairs. The fixture vault
    * has no triangle in it, and a triangle is the whole point of the
-   * ring-closing pass — so these build exactly the shape under test rather than
+   * ring-closing pass, so these build exactly the shape under test rather than
    * hunting for one in the demo content.
    */
   const graphOf = (pairs: [string, string][]): Graph => {
@@ -286,7 +286,7 @@ describe('neighbourhood edges', () => {
   })
 
   it('keeps a mutual pair as two directed edges, and only two', () => {
-    // The pair is enumerated four times over — outgoing, backlink, and once
+    // The pair is enumerated four times over: outgoing, backlink, and once
     // more by the closing pass from each end. Deduplication leaves both
     // directions exactly once; collapsing them into one line is the renderer's
     // job, not this function's.
@@ -322,7 +322,7 @@ describe('the note that claims /', () => {
   /**
    * The whole mechanism: the claimant is given the slug `index`, which
    * `noteHref` has always spelled `/`. Nothing downstream needs to know a
-   * homepage exists — every link to this note is `/` for the same reason a root
+   * homepage exists: every link to this note is `/` for the same reason a root
    * `index.md`'s always was.
    */
   it('gives the claimant the index slug, and so the / href', () => {
@@ -367,7 +367,7 @@ describe('the note that claims /', () => {
 
   /**
    * Two notes claim `/` and only one can have it. The other keeps a page rather
-   * than vanishing from a site that still lists it everywhere — and the warning
+   * than vanishing from a site that still lists it everywhere, and the warning
    * naming both files is the only way the author finds out.
    */
   it('suffixes the displaced index.md rather than dropping it, and names both files', () => {
@@ -381,7 +381,7 @@ describe('the note that claims /', () => {
   })
 
   /**
-   * Renamed all the same — two notes at `index` would put the collision back —
+   * Renamed all the same (two notes at `index` would put the collision back)
    * but not reported: a note that opted out of publication never claimed `/`,
    * and its slug is observable nowhere.
    */
@@ -429,7 +429,7 @@ describe('permalink: the address a note keeps', () => {
     }
   })
 
-  it('never slugifies it — no lowercasing, no dashes, no substitutions', () => {
+  it('never slugifies it: no lowercasing, no dashes, no substitutions', () => {
     const v = vaultWith({
       'Legacy Note.md': AT('title: Legacy\npermalink: Wisdom+&+Approaches/Critical+Thinking'),
     })
@@ -442,7 +442,7 @@ describe('permalink: the address a note keeps', () => {
   })
 
   /**
-   * The gap the Open Publish starter names and cannot close on Quartz — *"one
+   * The gap the Open Publish starter names and cannot close on Quartz: *"one
    * old URL per note, because one is all `permalink` holds"*. jotter writes
    * `_redirects` anyway, so the rest are kept on the note for the redirect
    * writer to pick up.
@@ -475,7 +475,7 @@ describe('permalink: the address a note keeps', () => {
 
   /**
    * A permalink beats a derived slug because it is the deliberate statement of
-   * the two — and the displaced note keeps a page rather than vanishing from a
+   * the two, and the displaced note keeps a page rather than vanishing from a
    * site that still lists it, which is the same choice `claimRoot` makes.
    */
   it('displaces a derived slug, suffixes the loser and names both files', () => {
@@ -500,7 +500,7 @@ describe('permalink: the address a note keeps', () => {
 
   /**
    * And a note suffixed after losing that tie is sitting on a slug it never
-   * named, so a note that *does* name it takes it — the same rule one level
+   * named, so a note that *does* name it takes it: the same rule one level
    * down, rather than a special case that stops applying after the first
    * collision.
    */
@@ -546,7 +546,7 @@ describe('slug styles, end to end', () => {
   /**
    * The failure this prevents is invisible: Astro NFC-normalises every route
    * param itself, so a decomposed slug would be *routed* at its composed path
-   * while `bySlug`, every href and every redirect stayed decomposed — and every
+   * while `bySlug`, every href and every redirect stayed decomposed, and every
    * link to that note would 404. The path must stay byte-exact the other way,
    * because the collection's `generateId` is the path.
    */
@@ -560,7 +560,7 @@ describe('slug styles, end to end', () => {
   })
 
   /**
-   * The scan forwards what `slugHazards` finds — reported, and nothing renamed,
+   * The scan forwards what `slugHazards` finds: reported, and nothing renamed,
    * because renaming would be jotter inventing a slug it was told to carry
    * verbatim. (The case-only collision the same pass catches cannot be *made*
    * here: on the macOS filesystem these tests run on, `Note.md` and `note.md`
@@ -582,8 +582,8 @@ describe('slug styles, end to end', () => {
 
 /**
  * The bug this closes is silence. `image:` was declared in the collection
- * schema and read by nothing, so a path that had gone stale — or one pointing
- * at an SVG, which no unfurler draws — built clean and shipped a text card.
+ * schema and read by nothing, so a path that had gone stale (or one pointing
+ * at an SVG, which no unfurler draws) built clean and shipped a text card.
  * Every warning names the note *and* the value, because "an image did not
  * resolve" sends you reading the whole vault.
  */
@@ -611,7 +611,7 @@ describe('declared card images', () => {
   })
 
   /**
-   * Quartz's own two spellings, so a migrated vault keeps the cards it had —
+   * Quartz's own two spellings, so a migrated vault keeps the cards it had,
    * and the warning quotes the key the author actually typed, because a message
    * naming `image:` sends them looking for a line that is not in the file.
    */
@@ -650,7 +650,7 @@ describe('declared card images', () => {
  * and its failure mode is the same silence `image:` had: a value jotter cannot
  * read falls back to the site's direction, and the only symptom is a paragraph
  * still aligned the way the author was trying to change. `auto` is not a
- * mistake — it is the third value the esm7 plugin writes, and it asks for the
+ * mistake: it is the third value the esm7 plugin writes, and it asks for the
  * behaviour jotter does by default.
  */
 describe('declared note direction', () => {
@@ -682,7 +682,7 @@ describe('declared note direction', () => {
  * says what jotter does with it, and for a long time they disagreed in the one
  * direction that is not survivable: the schema was *narrower*. `title: 2026` on
  * a yearly review note, `tags: [2026, reading]`, `aliases: [2026, Review]` and
- * `created: true` each failed the build outright — on a vault Obsidian opens
+ * `created: true` each failed the build outright: on a vault Obsidian opens
  * without comment, and against three pieces of coercion the scan had been
  * carrying, untested and unreachable, the whole time.
  *
@@ -712,7 +712,7 @@ describe('the frontmatter schema and the scan agree', () => {
   /**
    * `published: true` is a publish flag in a vault that used it as one, and a
    * *date* key to `dates.ts`. `asDate` declines it and the note takes its git
-   * date instead — a graceful fallback the schema must not turn into an error.
+   * date instead: a graceful fallback the schema must not turn into an error.
    */
   it('takes a date key the scan will decline and fall back from', () => {
     expect(frontmatterDate({ published: true }, ['published'])).toBeUndefined()
@@ -771,7 +771,7 @@ describe('the frontmatter schema and the scan agree', () => {
 
   /**
    * The deliberate exception. `publish: 'false'` coerced generously is a note
-   * the author meant to hide, published, in silence — the exact failure the
+   * the author meant to hide, published, in silence: the exact failure the
    * publish gate exists to prevent. Loud is right here in a way it is not for
    * a title, so these three keep refusing anything but a boolean.
    */

@@ -150,7 +150,7 @@ const pages = await Promise.all(
  * `pages` is `.html` and nothing else, which was invisible for as long as HTML
  * was all jotter emitted that carried a note's *words*. The feed ends that: it
  * carries titles and excerpts, it is published to the world, and a publish-gate
- * check that reads only `pages` would not read one byte of it — while claiming
+ * check that reads only `pages` would not read one byte of it, while claiming
  * to cover "anywhere in dist/". The feed's note list is also the one list in
  * the build that is not the route list, so a mistake in it is exactly what
  * nothing else would catch.
@@ -169,7 +169,7 @@ const outputs = await Promise.all(
 
 /**
  * The URL a built page is served at. `dist/index.html` is `/`, not `/index`,
- * and `dist/notes/index.html` is `/notes` — `trailingSlash: 'never'`, which is
+ * and `dist/notes/index.html` is `/notes`: `trailingSlash: 'never'`, which is
  * also how every href in the build spells them.
  */
 const routeOf = (file) =>
@@ -184,14 +184,14 @@ const routeOf = (file) =>
  * `src/lib/url.ts`, reimplemented in four lines.
  *
  * This script is plain Node and that module is TypeScript, so it cannot import
- * it — and it should not want to. The point of the assertions below is that the
+ * it, and it should not want to. The point of the assertions below is that the
  * four producers of a page's URL agree with an *independent* idea of how a slug
  * is spelled; comparing jotter's encoder against itself would pass on the day
  * it started emitting `-and-`. `test/lib.test.ts` is what keeps the real
  * function honest.
  *
  * `routeOf` above reads file names off disk, which is the **slug**. Everything
- * a page emits — hrefs, canonical, sitemap — is the **URL**. These two convert.
+ * a page emits (hrefs, canonical, sitemap) is the **URL**. These two convert.
  */
 const encodePath = (slug) =>
   slug.split('/').map((s) => encodeURIComponent(s).replace(/%2B/g, '+')).join('/')
@@ -204,7 +204,7 @@ const decodePath = (path) =>
         return decodeURIComponent(s)
       } catch {
         // A malformed escape is a broken URL, but the raw form is what should
-        // be reported — and every lookup below misses it either way.
+        // be reported, and every lookup below misses it either way.
         return s
       }
     })
@@ -331,8 +331,8 @@ console.log('')
 /**
  * Every internal `<a href>` points at something `dist/` actually serves.
  *
- * The section below this one was four assertions about link *markup* — empty
- * hrefs, dead links rendered as anchors, hrefs left on spans — and not one
+ * The section below this one was four assertions about link *markup* (empty
+ * hrefs, dead links rendered as anchors, hrefs left on spans), and not one
  * about link *destination*. A build in which every internal link 404s passed
  * `npm run verify` cleanly, which is the hole `config.homepage` breaking every
  * link to the promoted note lived in for as long as it did.
@@ -344,7 +344,7 @@ console.log('')
  * Three kinds of target count as resolving, because all three are things a
  * reader following the link would actually get: a built page, a real file in
  * `dist/` (`/_vault/x.pdf`, `/rss.xml`, `/pagefind/*`), and a redirect source
- * in `_redirects` — a 301 is a working link, and a note's vacated URL is
+ * in `_redirects`: a 301 is a working link, and a note's vacated URL is
  * exactly that.
  *
  * Written as a function, like `thirdPartyOrigins()` below and for the same
@@ -359,7 +359,7 @@ async function internalLinks(pages) {
 
   /**
    * Redirect sources are written in URL space and `served` is keyed in slug
-   * space, so they are decoded on the way in — the same conversion the `href`
+   * space, so they are decoded on the way in: the same conversion the `href`
    * lookup below already does. Without it every non-ASCII redirect looked
    * dangling to this check while working perfectly in production.
    */
@@ -414,7 +414,7 @@ async function internalLinks(pages) {
  * The four things that emit a page's URL spell it identically.
  *
  * `internalLinks()` above compares after decoding, so it passes on a site whose
- * links and canonical disagree — which is the duplicate-URL split Google's URL
+ * links and canonical disagree, which is the duplicate-URL split Google's URL
  * guidelines warn about, and RFC 3986 §6.2.2.2 is the reason it is a real
  * split: `/a&b` and `/a%26b` are formally different URLs, and percent-encoded
  * reserved characters are protected from normalisation. So "the link resolves"
@@ -423,7 +423,7 @@ async function internalLinks(pages) {
  *
  * The four producers are the `<a href>`, the canonical link and `og:url`, the
  * sitemap entry, and the Pagefind result. Each is compared against the spelling
- * `encodePath` derives from the page's own path in `dist/` — an independent
+ * `encodePath` derives from the page's own path in `dist/`: an independent
  * answer rather than jotter's, for the reason given at that function.
  *
  * Whichever of them this build has: canonical and the sitemap need `config.url`
@@ -502,7 +502,7 @@ async function producersAgree(pages) {
 
   /**
    * Pagefind's fragments are gzip after a `pagefind_dcd` marker, and the `url`
-   * in each is the **file path** it indexed — `/atomic-notes/`, with the
+   * in each is the **file path** it indexed: `/atomic-notes/`, with the
    * trailing slash `trailingSlash: 'never'` does not use. So the two moves
    * `normalizeResultUrl()` makes at runtime are made here too, and the result
    * is what a reader clicking a search result actually gets.
@@ -541,7 +541,7 @@ async function producersAgree(pages) {
 
   /**
    * Which producers this config actually has, said out loud rather than left to
-   * be inferred from a number — the same shape as `no feed in dist/` below.
+   * be inferred from a number: the same shape as `no feed in dist/` below.
    * Canonical, `og:url` and the sitemap need `url`; search needs
    * `features.search`. `npm run verify:full` sets both and covers all four.
    */
@@ -660,7 +660,7 @@ section('Publish gate')
 
   /**
    * Anchored on the ways a *URL* is written rather than on the slug alone. The
-   * name legitimately appears as text in the demo — `Kitchen sink.md` links to
+   * name legitimately appears as text in the demo: `Kitchen sink.md` links to
    * `[[Half-formed]]`, which renders as a dead-link span showing the filename
    * the author typed, which is the documented behaviour. What must never appear
    * is a link that resolves to it, and in a feed those are `<link>` and
@@ -762,15 +762,15 @@ section('Markup')
   /**
    * No page shows a reader an i18n *key*.
    *
-   * `t()` returns the key itself when it cannot find a string — deliberately,
-   * so a missing translation is loud rather than a blank label — which means a
+   * `t()` returns the key itself when it cannot find a string (deliberately,
+   * so a missing translation is loud rather than a blank label), which means a
    * component naming a key that `en.json` does not have renders a literal
    * `note.field.series` into the markup. That is the failure mode
    * `DISPLAYED_FIELDS` walked into: the list of rendered frontmatter fields and
    * the list of labels were two lists nothing compared.
    *
-   * `test/vault.test.ts` compares those two directly. This is the wider net —
-   * every key, every component, every page, against the built HTML — and it
+   * `test/vault.test.ts` compares those two directly. This is the wider net
+   * (every key, every component, every page, against the built HTML), and it
    * covers the labels a unit test cannot see because they are chosen inside an
    * `.astro` file.
    */
@@ -865,7 +865,7 @@ const elementText = (html, end, tag) => {
 /**
  * Every right-to-left script jotter claims to detect, as a second opinion.
  *
- * Deliberately *not* an import of `src/lib/bidi.ts` — this file is `.mjs` and
+ * Deliberately *not* an import of `src/lib/bidi.ts`: this file is `.mjs` and
  * could not import it anyway, but the point stands on its own: a check that
  * restates the implementation proves only that the implementation is
  * self-consistent. These are Unicode block ranges rather than script
@@ -880,7 +880,7 @@ const LATIN_LETTER = /[A-Za-z]/
  * Per-block text direction, over a real build.
  *
  * The unit tests own the rule; what only `dist/` can show is that the rule
- * reached the page — and, far more importantly, that it *stayed off* the
+ * reached the page, and, far more importantly, that it *stayed off* the
  * blocks that agree with it. Written as a function, like `internalLinks()`
  * above, because `--full` runs the whole thing again against a rebuild with
  * `dir: 'rtl'`. That mirror pass is the only thing that can prove the feature
@@ -964,7 +964,7 @@ function directionSection(pages, outputs) {
    * into marking every block the way Obsidian Publish does.
    *
    * Stated against each page's own `<html dir>` rather than against the
-   * literal `ltr`, so it is equally right on the `--full` RTL rebuild — where
+   * literal `ltr`, so it is equally right on the `--full` RTL rebuild, where
    * `dir="ltr"` on an English paragraph is the *correct* answer and marking
    * the Persian would be the bug.
    */
@@ -1040,8 +1040,8 @@ section('Design tokens')
    * `text-align`, `float` and `clear` joined the list alongside the per-block
    * direction work: they are the three that survive a `padding-left` sweep and
    * still pin content to one side of the page. The repo was clean on all three
-   * when this was widened, which is the cheapest possible moment to add a lint
-   * — it goes in green, so it can only ever fail on something new.
+   * when this was widened, which is the cheapest possible moment to add a lint:
+   * it goes in green, so it can only ever fail on something new.
    */
   const PHYSICAL =
     /(?:^|[\s;{])(?:padding|margin|border)-(?:left|right)\b|(?:^|[\s;{])(?:left|right|top|bottom)\s*:|(?:^|[\s;{])text-align\s*:\s*(?:left|right)\b|(?:^|[\s;{])(?:float|clear)\s*:/
@@ -1105,7 +1105,7 @@ section('Design tokens')
  * A function, and re-walking `dist/` rather than closing over `htmlFiles`, for
  * the same reason `internalLinks()` and `thirdPartyOrigins()` are: `--full`
  * runs it again against the homepage build, which is the only one that emits a
- * redirect from a note's own vacated slug — precisely the kind that could
+ * redirect from a note's own vacated slug: precisely the kind that could
  * dangle or shadow.
  */
 async function redirectsAndRobots() {
@@ -1138,8 +1138,8 @@ async function redirectsAndRobots() {
     )
 
     /**
-     * Both comparisons decode first. `routeOf` reads file names off disk — slug
-     * space — while a redirect's `source` and `destination` are URLs, so the
+     * Both comparisons decode first. `routeOf` reads file names off disk (slug
+     * space), while a redirect's `source` and `destination` are URLs, so the
      * two only matched by accident of every slug so far being ASCII. Every
      * non-ASCII redirect this build has ever written reported as dangling, and
      * every one that really did shadow a page reported as fine.
@@ -1189,7 +1189,7 @@ section('JavaScript payload')
    * Every emitted chunk, by the URL a page would reference it as.
    *
    * `imports` is what makes this survive contact with the future. There are no
-   * cross-chunk imports in `dist/` today — one chunk, zero specifiers — so the
+   * cross-chunk imports in `dist/` today (one chunk, zero specifiers), so the
    * closure below is a no-op right now. It stops being one the first time
    * Rollup hoists a shared vendor chunk out of two islands, which is exactly
    * the day a check that only read `<script src>` would start under-counting.
@@ -1226,7 +1226,7 @@ section('JavaScript payload')
    * `search.ts` reaches `/pagefind/pagefind.js` through a dynamic `import()`
    * behind a user action: nothing under here is downloaded until a reader opens
    * the search modal, so charging it to page load would repeat the mistake
-   * `750005b` fixed — billing one page for another's bytes.
+   * `750005b` fixed: billing one page for another's bytes.
    *
    * Written down because right now it also happens *by accident*: Rollup
    * minifies the specifier into a variable, so the `IMPORT` regex above never
@@ -1244,8 +1244,8 @@ section('JavaScript payload')
     const queue = [...entries]
     while (queue.length > 0) {
       const url = queue.pop()
-      // A specifier that resolves to nothing in `dist/` is not ours to explain
-      // — a bare module name, or a string that only looked like a path.
+      // A specifier that resolves to nothing in `dist/` is not ours to explain:
+      // a bare module name, or a string that only looked like a path.
       if (seen.has(url) || !chunks.has(url) || url.startsWith(ON_DEMAND)) continue
       seen.add(url)
       queue.push(...chunks.get(url).imports)
@@ -1270,15 +1270,15 @@ section('JavaScript payload')
    *
    * This used to total every `.js` in `dist/` and charge that total to all of
    * them, so 20 KB of `d3-force` was billed to the 404 page and every tag
-   * index. That was defensible while the graph was the only client code —
-   * over-charging is the safe direction — but it stopped being defensible once
+   * index. That was defensible while the graph was the only client code
+   * (over-charging is the safe direction), but it stopped being defensible once
    * a 1.2 KB feature's fate depended on a number that was mostly somebody
    * else's chunk. It also made "the worst page" useless as a diagnostic, which
    * is the part a budget is actually for.
    *
    * Fixing the metric deliberately does *not* move the ceiling, and the
    * headroom it appears to hand back is worth reading carefully. Most pages
-   * drop by around 20 KB — but the page this budget actually asserts against is
+   * drop by around 20 KB, but the page this budget actually asserts against is
    * whichever one loads the graph, and that page gains *nothing*: 23,205 of
    * 24,576 bytes, so 1,371 to spare. The 20 KB accrues to pages that were never
    * near the ceiling. Nothing was freed; something was only ever miscounted,
@@ -1303,7 +1303,7 @@ section('JavaScript payload')
    * 24 KB was set against the one page that could reach it: a `panels` note
    * with the graph on, 23,205 bytes of 24,576 with 1,371 to spare. Search is
    * the second feature heavy enough to become a real chunk, and unlike the
-   * graph it is mounted from `Base.astro` — so its 6,096 bytes land on *every*
+   * graph it is mounted from `Base.astro`, so its 6,096 bytes land on *every*
    * page, and on a note page they land on top of the graph's 20,824. That page
    * measures 29,301 bytes, and no amount of tightening either island closes a
    * 4,725-byte gap.
@@ -1312,12 +1312,12 @@ section('JavaScript payload')
    * worst case with comparable headroom: 32,768, leaving 3,467. It is still a
    * ceiling on **one page**, still counted per page, and turning a feature off
    * still removes its bytes entirely. What it is not any more is a claim that
-   * every jotter site fits in 24 KB — that was true of a build with one island
+   * every jotter site fits in 24 KB: that was true of a build with one island
    * and stopped being true of a build with two.
    *
    * Worth knowing while reading a number close to it: Astro inlines a script
    * chunk under **4096 bytes** into the page rather than emitting a `.js` file,
-   * so a small island never becomes a shared chunk at all — and an island that
+   * so a small island never becomes a shared chunk at all, and an island that
    * later crosses 4 KB flips to one, which is a discontinuous jump rather than
    * a gradual one.
    */
@@ -1330,7 +1330,7 @@ section('JavaScript payload')
    * the budget would never notice.
    *
    * The counts are reported rather than asserted. The assertion with real teeth
-   * is which *pages* may load which chunk — d3-force appearing on a tag index
+   * is which *pages* may load which chunk: d3-force appearing on a tag index
    * would be a bug the byte total cannot name, because 20 KB on a 1 KB page is
    * still under budget. That needs a per-chunk allowlist, which is not worth
    * hardcoding against a single chunk; revisit when there are two.
@@ -1354,7 +1354,7 @@ section('JavaScript payload')
    * `dist/` holds more `.js` than Rollup ever put there. `src/integrations/
    * vault.ts` copies *every* non-markdown file in the vault to `dist/_vault/`
    * with no extension allowlist, so a Templater or dataviewjs snippet living in
-   * an Obsidian vault — or a code sample a note links to — lands in the build.
+   * an Obsidian vault (or a code sample a note links to) lands in the build.
    * So does anything a user drops in `public/`. None of it is referenced by a
    * `<script src>`, all of it is perfectly correct, and failing over it would
    * be this check inventing a bug. Attribution still counts those files if a
@@ -1368,7 +1368,7 @@ section('JavaScript payload')
   check(orphans.length === 0, 'every chunk Astro emitted is referenced by a page', orphans.join(', '))
 
   /**
-   * Nothing here should be reaching the network at runtime — and that has to
+   * Nothing here should be reaching the network at runtime, and that has to
    * be asserted over the bundled files as well as the inline blocks. Until the
    * graph there were no `.js` files at all in `dist/`, so grepping inline
    * bodies covered everything; the moment client code moves into
@@ -1379,7 +1379,7 @@ section('JavaScript payload')
   /**
    * One exemption, by path, and it is named rather than a loosening.
    *
-   * Pagefind *fetches*, and that is not an implementation detail — loading
+   * Pagefind *fetches*, and that is not an implementation detail: loading
    * index chunks over plain GETs as you type is the entire design, and what
    * makes a 1,000-note vault searchable without shipping one enormous file.
    * There is no embed-it-at-build-time way out here the way there was for
@@ -1387,7 +1387,7 @@ section('JavaScript payload')
    * target the `--full` pass asserts two sections down.
    *
    * So `dist/pagefind/**` is allowed and **everything jotter authors still
-   * fails on `fetch(`** — which is the half with teeth, and the half that keeps
+   * fails on `fetch(`**, which is the half with teeth, and the half that keeps
    * the hover-preview decision enforced rather than merely documented. Delete
    * the filter and this check fails; that is the test that it is doing
    * anything.
@@ -1404,7 +1404,7 @@ section('JavaScript payload')
    * What this check does *not* cover, now that it is not the only one standing
    * behind the README's privacy claims: a `<script src>` pointing somewhere
    * else. An external tag has no body for `NETWORK` to read and is not a file
-   * in `dist/` for the chunk walk to find, so it is invisible here — and it was
+   * in `dist/` for the chunk walk to find, so it is invisible here, and it was
    * invisible here for as long as this was the only network assertion jotter
    * had. That ground now belongs to `section('Third-party origins')` below,
    * which asserts the *set* of origins a page talks to.
@@ -1429,7 +1429,7 @@ section('JavaScript payload')
  * have to. `Analytics.astro` marks its own tag with `data-jotter-analytics`,
  * the same idiom as `data-search` and `data-preview`, and the marker names the
  * provider. So the built HTML says what jotter meant to emit, and anything
- * external *without* a marker got there some other way — which is exactly what
+ * external *without* a marker got there some other way, which is exactly what
  * this is for. Parsing the config as text would be brittle in a way this is
  * not, and would break on a computed config besides.
  *
@@ -1441,7 +1441,7 @@ section('JavaScript payload')
 /**
  * Written as a function rather than inline, because `--full` re-runs every one
  * of these against a second build with analytics forced on. On the committed
- * config the set of origins is empty and every check below is vacuously true —
+ * config the set of origins is empty and every check below is vacuously true,
  * so without that second pass, deleting this whole section would change
  * nothing, and an assertion that cannot fail is not an assertion.
  */
@@ -1457,8 +1457,8 @@ function thirdPartyOrigins(pages) {
 
   /**
    * Only the attributes that actually *fetch*. `<a href>` is deliberately not
-   * here — a link to another site is not a request, and the demo garden is full
-   * of them — and neither is `<link rel="canonical">` or `<meta og:url>`, which
+   * here (a link to another site is not a request, and the demo garden is full
+   * of them), and neither is `<link rel="canonical">` or `<meta og:url>`, which
    * carry `config.url` as a declaration rather than a subresource. That is why
    * the `<link>` sweep is gated on `rel` instead of on `href`.
    */
@@ -1539,7 +1539,7 @@ function thirdPartyOrigins(pages) {
     pass('no third-party origin in dist/', 'analytics.provider is none')
     /**
      * The markup half, and the reason it is asserted separately: `provider:
-     * 'none'` must emit *nothing at all* — not an empty tag, not a disabled
+     * 'none'` must emit *nothing at all*: not an empty tag, not a disabled
      * one. This is the analytics counterpart of `search off writes no
      * dist/pagefind/`.
      */
@@ -1551,7 +1551,7 @@ function thirdPartyOrigins(pages) {
     const [provider] = providers
     /**
      * Which attribute carries the configured id, per provider. `includes` is
-     * not used and `=== id` is not possible — the verifier never reads the id —
+     * not used and `=== id` is not possible (the verifier never reads the id)
      * so what is asserted is that the attribute the vendor requires is present
      * and non-empty. A Plausible tag with no `data-domain` records nothing,
      * forever, silently; that is the failure this catches.
@@ -1626,7 +1626,7 @@ section('Search')
     /**
      * A cheap guard on `writePlayground` ever flipping. Pagefind's playground
      * is an HTML page under `/pagefind/playground/`, and the Markup section
-     * above walks *every* `.html` in `dist/` — so it would fail the skip-link,
+     * above walks *every* `.html` in `dist/`, so it would fail the skip-link,
      * `<main>`, `lang` and `<title>` assertions all at once, from a file
      * nobody in this repo wrote.
      */
@@ -1637,7 +1637,7 @@ section('Search')
      * Parsed, not merely present, and every file non-empty.
      *
      * A build was once seen where `pagefind-entry.json` and `pagefind.js` came
-     * out 0 bytes — the files existed, so a stat-only check would have passed
+     * out 0 bytes: the files existed, so a stat-only check would have passed
      * while the shipped site loaded a search box that found nothing.
      * `src/integrations/search.ts` fails the build on this too; this is the
      * backstop that catches an index which reached `dist/` some other way.
@@ -1664,7 +1664,7 @@ section('Search')
      * note titles and excerpts already indexed on the notes themselves, so
      * indexing them would return the same note twice under a URL that is not
      * its own. `data-pagefind-body` is site-wide sticky, so this is what
-     * enforces it — one stray attribute on a listing template and the whole
+     * enforces it: one stray attribute on a listing template and the whole
      * decision quietly reverses.
      *
      * Asked of the attribute's *position*, not the page's path. This used to
@@ -1694,8 +1694,8 @@ section('Search')
     /**
      * Reported, not asserted, because it is the number the byte budget
      * deliberately does not charge to a page: none of it is downloaded until a
-     * reader opens the modal. Reporting it is what keeps that exclusion honest
-     * — the weight is visible, it is just billed to the right event.
+     * reader opens the modal. Reporting it is what keeps that exclusion honest:
+     * the weight is visible, it is just billed to the right event.
      *
      * `pagefind-ui` and friends are pruned by `src/integrations/search.ts`;
      * this is what is left, so a jump here means either the vault grew or
@@ -1719,7 +1719,7 @@ section('Search')
  *
  * Node ships no XML parser and the feed takes no dependency to concatenate
  * forty lines of markup, so this is deliberately narrow: it is aimed at the two
- * ways a *generated* feed actually breaks — a tag that never closes, and an
+ * ways a *generated* feed actually breaks: a tag that never closes, and an
  * interpolated value that reached the file unescaped. Both are the failure
  * Quartz's CDATA has by construction, and both are what `escapeXml` in
  * `src/lib/feed.ts` exists to prevent.
@@ -1816,7 +1816,7 @@ async function feedSection(pages) {
   /**
    * Vault attachments are copied into `dist/_vault/` with no extension
    * allowlist, so an `.html` file a note links to is in `pages` and is not
-   * jotter's markup — the same exemption `thirdPartyOrigins` names, for the
+   * jotter's markup: the same exemption `thirdPartyOrigins` names, for the
    * same reason.
    */
   const authored = pages.filter(({ file }) => !file.startsWith(`_vault${sep}`))
@@ -1828,8 +1828,8 @@ async function feedSection(pages) {
 
   if (!xml) {
     /**
-     * Off means absent in *both* halves — no file, and no page advertising one
-     * — which is the pairing `search off writes no dist/pagefind/` already
+     * Off means absent in *both* halves (no file, and no page advertising one)
+     * which is the pairing `search off writes no dist/pagefind/` already
      * uses. A `rel="alternate"` pointing at a file that was never written is a
      * reader subscribing to a 404.
      */
@@ -1887,8 +1887,8 @@ async function feedSection(pages) {
     body.match(new RegExp(`<${element}(?:\\s[^>]*)?>([\\s\\S]*?)</${element}>`))?.[1] ?? ''
 
   /**
-   * A relative link in a feed resolves against nothing — the reader has no
-   * document to resolve it in — and an off-origin one is a leak or a mistake.
+   * A relative link in a feed resolves against nothing (the reader has no
+   * document to resolve it in), and an off-origin one is a leak or a mistake.
    * This is the check that `config.url` reached every URL the feed emits.
    */
   const offOrigin = []
@@ -1932,7 +1932,7 @@ async function feedSection(pages) {
    * It is also the cheapest signal available for a config problem that has
    * nothing to do with the feed: two notes both claiming `/`, which happens
    * when `homepage:` names a note *and* the vault has an `index.md`. jotter
-   * routes one of them and the other gets no page at all — a site-wide bug the
+   * routes one of them and the other gets no page at all: a site-wide bug the
    * feed does not cause and cannot fix, but can at least name.
    */
   const guids = items.map((body) => value(body, 'guid'))
@@ -1941,7 +1941,7 @@ async function feedSection(pages) {
     duplicated.length === 0,
     'every guid is unique, so no item is deduped away by a reader',
     duplicated.length
-      ? `${duplicated.join(', ')} — two notes claim the same URL; check whether \`homepage:\` names a note while the vault also has an index note`
+      ? `${duplicated.join(', ')}: two notes claim the same URL; check whether \`homepage:\` names a note while the vault also has an index note`
       : '',
   )
   check(guidless.length === 0, 'every guid states isPermaLink rather than trusting the default', guidless.join(', '))
@@ -1952,7 +1952,7 @@ async function feedSection(pages) {
    * The check that catches the two date elements being wired to the same value,
    * which no format test can see: both would still parse, and the feed would
    * still validate. The demo garden has notes with distinct `created:` and
-   * `updated:` frontmatter, so at least one item must differ — and if that ever
+   * `updated:` frontmatter, so at least one item must differ, and if that ever
    * stops being true, this fails and says so rather than passing vacuously.
    */
   const revised = items.filter(
@@ -1993,7 +1993,7 @@ await feedSection(pages)
  * The `<head>` assertion this file has never had.
  *
  * `section('Markup')` checks landmarks, `lang`, a non-empty `<title>` and `alt`
- * on every `<img>` — page *structure*. Until this, the only `<head>` assertion
+ * on every `<img>`: page *structure*. Until this, the only `<head>` assertion
  * in the file lived inside `feedSection` and was about `rel="alternate"`, so
  * the canonical link, every `og:*` tag and `twitter:card` were emitted by a
  * layout nothing checked. That is the same shape of hole the Links section had
@@ -2002,7 +2002,7 @@ await feedSection(pages)
  *
  * Written as a function, like `thirdPartyOrigins()` and `internalLinks()`,
  * because two passes call it. On the committed config `url` is unset, so no
- * card image can be absolute and none is emitted — the negative half below,
+ * card image can be absolute and none is emitted: the negative half below,
  * which is the half that bites here. `--full` re-runs it against the rss-on
  * rebuild, which already sets `url` and additionally sets `config.image`.
  */
@@ -2059,8 +2059,8 @@ async function socialCards(pages) {
   )
 
   /**
-   * Absolute, always. A relative `og:image` is not a degraded card — an
-   * unfurler has no document to resolve it against — it is one nobody draws,
+   * Absolute, always. A relative `og:image` is not a degraded card (an
+   * unfurler has no document to resolve it against) it is one nobody draws,
    * which is why the whole feature is gated on `config.url`.
    */
   const relative = cards.filter((c) => !/^https?:\/\//i.test(c.og[0] ?? ''))
@@ -2163,7 +2163,7 @@ const runNode = (args, options = {}) => spawned(process.execPath, args, options)
 
 /**
  * `--full` rebuilds twice, and both rebuilds clear the content-collection
- * stores — the rewritten `jotter.config.ts` below changes the markdown pipeline
+ * stores: the rewritten `jotter.config.ts` below changes the markdown pipeline
  * without changing a single source digest, which is the one thing the content
  * layer does not notice. See `lib/astro-cache.mjs`.
  *
@@ -2203,7 +2203,7 @@ if (FULL) {
        *
        * The `provider:` token rather than an `analytics:\s*\{[^}]*\}` block:
        * the block form stops at the first `}`, so a comment or a nested value
-       * inside the object would produce a syntax error — and a syntax error
+       * inside the object would produce a syntax error, and a syntax error
        * here surfaces as `fail('build succeeds with features off')`, a failure
        * whose real cause is this rewrite. `features` gets away with the block
        * form only because its schema forbids nesting.
@@ -2251,12 +2251,12 @@ if (FULL) {
       /**
        * The markup half of the guarantee the no-JavaScript check makes below.
        * With `hoverPreview` off the excerpts are *absent* from the anchors, not
-       * merely unread — the flag decides whether the bytes are emitted at all.
+       * merely unread: the flag decides whether the bytes are emitted at all.
        */
       check(previewAttrs.length === 0, 'hoverPreview off emits no data-preview attribute')
       /**
        * The same guarantee, both halves. With `search` off the integration is
-       * never registered — so there is no index directory — *and* the markup
+       * never registered (so there is no index directory) *and* the markup
        * that would have been indexed is unmarked, rather than marked and
        * unused.
        */
@@ -2264,7 +2264,7 @@ if (FULL) {
       check(searchAttrs.length === 0, 'search off emits no data-pagefind-body attribute')
       /**
        * The only place `provider: 'none'` emitting nothing is asserted against
-       * a real build — the main pass above cannot check it for a forker who
+       * a real build: the main pass above cannot check it for a forker who
        * does have a provider configured. The analytics counterpart of `search
        * off writes no dist/pagefind/`.
        */
@@ -2273,7 +2273,7 @@ if (FULL) {
 
       /**
        * Counted apart, because an external tag has an empty body and would
-       * otherwise be reported as an "inline block" — which is a true statement
+       * otherwise be reported as an "inline block", which is a true statement
        * about the regex and a misleading one about the page.
        */
       const externalTags = inline.filter((m) => /\bsrc=/.test(m[0]))
@@ -2294,8 +2294,8 @@ if (FULL) {
    *
    * On the committed config no provider is set, so every origin check up there
    * is vacuously true and deleting the section outright would change nothing.
-   * The alternative — turning analytics *on* in the committed
-   * `jotter.config.ts` the way `graph` and `search` are on — is the wrong way
+   * The alternative (turning analytics *on* in the committed
+   * `jotter.config.ts` the way `graph` and `search` are on) is the wrong way
    * to fix that: it is the one flag whose on state has an effect outside this
    * repo, and it would send real hits to a real vendor from anyone who runs
    * `npm run build`, which would make the README's "no tracking" false of the
@@ -2345,7 +2345,7 @@ if (FULL) {
    * something to bite.
    *
    * On the committed config `url` is commented out, so `features.rss` cannot
-   * even be turned on — the schema refuses the pair — and every check in that
+   * even be turned on (the schema refuses the pair), and every check in that
    * section is vacuously true. Turning the feed on in the committed
    * `jotter.config.ts` is the wrong way to fix that for the same reason
    * analytics is left off: `url` is a claim about where the site lives, and a
@@ -2354,13 +2354,13 @@ if (FULL) {
    * one `astro build` and touches nobody.
    *
    * `url` is the third top-level key these rewrites reach, and the first that
-   * is *commented out* rather than set — so turning the feed on means
+   * is *commented out* rather than set, so turning the feed on means
    * uncommenting a line, not replacing a value.
    */
   /**
    * `export default defineConfig({`, not `defineConfig({`. The docstring at the
    * top of `jotter.config.ts` contains the words *`defineConfig({})` builds a
-   * working site* — so the shorter anchor matches a **comment** first, and a
+   * working site*, so the shorter anchor matches a **comment** first, and a
    * non-global `replace` would insert the key there and nowhere else. Caught by
    * the `unrewritten` guards rather than shipped, but a guard firing on a
    * config nobody mistyped is a guard nobody trusts.
@@ -2371,20 +2371,20 @@ if (FULL) {
    * Turn the feed on in a config source: `url`, which the schema requires
    * before `features.rss` is even allowed, and the flag itself.
    *
-   * Shared by two rebuilds — the RSS section below, and the homepage one after
+   * Shared by two rebuilds: the RSS section below, and the homepage one after
    * it, which needs a feed in order to assert that the note claiming `/` is
    * linked as `/` in the feed too. That is the exact place the removed
    * `homepageSlug` option used to paper over.
    *
    * Three cases each: `url` is *commented out* in the committed config rather
-   * than set, and `features` is not a key every config has — the README
+   * than set, and `features` is not a key every config has: the README
    * documents `defineConfig({})` as a complete config, and one written that way
    * has no `features:` block to insert `rss` into.
    */
   const withFeedOn = (source) => {
     let on = source
     if (/^\s*url:\s*'/m.test(on)) {
-      // Already set — a forker's own URL is better than ours, and leaving it
+      // Already set: a forker's own URL is better than ours, and leaving it
       // means the origin assertions run against what they actually ship.
     } else if (/^\s*\/\/\s*url:\s*'/m.test(on)) {
       on = on.replace(/^(\s*)\/\/\s*(url:\s*'[^']*',)/m, '$1$2')
@@ -2414,14 +2414,14 @@ if (FULL) {
   /**
    * The site-wide card image, set on the same rebuild rather than on a fifth
    * one: `section('Social cards')` needs exactly one condition the committed
-   * config does not have — a `url` to make an `og:image` absolute — and this
+   * config does not have (a `url` to make an `og:image` absolute), and this
    * section already establishes it.
    *
    * Somebody else's host on purpose. The demo vault has one raster attachment
    * and `Kitchen sink.md` already claims it in frontmatter, so a site-wide
    * default resolved from the vault would be the *same* URL and the precedence
    * assertion would pass for no reason. A remote URL keeps the two apart, and
-   * exercises the pass-through case at the same time — an `og:image` is a
+   * exercises the pass-through case at the same time: an `og:image` is a
    * declaration rather than a subresource, so no origin check is affected.
    */
   const SITE_IMAGE = 'https://cdn.example.com/og.png'
@@ -2440,7 +2440,7 @@ if (FULL) {
     /**
      * The `unrewritten` guard, extended to a fourth key. It exists precisely so
      * a regex that misses fails loudly instead of running the feed assertions
-     * against a build with no feed in it — where every one of them would pass
+     * against a build with no feed in it, where every one of them would pass
      * for the wrong reason.
      */
     const unrewritten = [...FEED_ON_KEYS, [/^\s*image:\s*'/m, 'image']]
@@ -2501,14 +2501,14 @@ if (FULL) {
    * and nowhere else, `[...slug].astro` skipping it, every link to it spelled
    * `/`, the 301 from the URL it used to have, and a root `index.md` displaced
    * rather than dropped. Setting `homepage:` in the committed config is the
-   * wrong way to fix that — `index.md` is the front door the demo garden
+   * wrong way to fix that: `index.md` is the front door the demo garden
    * documents and the shape a forker starts from, and this is the one config
    * key whose whole purpose is to *change* that. A throwaway rebuild costs one
    * `astro build`.
    *
    * `Zettelkasten` rather than any other note because the demo vault also has a
-   * root `index.md`, so this rebuild exercises the collision — two notes
-   * claiming `/` — rather than the easy case.
+   * root `index.md`, so this rebuild exercises the collision (two notes
+   * claiming `/`) rather than the easy case.
    */
   section('A note claiming / is served there, and only there')
   {
@@ -2575,7 +2575,7 @@ if (FULL) {
 
         /**
          * The bug this section exists for. Every `noteHref` call site kept
-         * emitting the old slug while nothing served it — and `internalLinks()`
+         * emitting the old slug while nothing served it, and `internalLinks()`
          * alone would not catch the regression coming back, because the 301
          * below makes those links *resolve*. Working links to the wrong URL are
          * still the wrong URL.
@@ -2584,7 +2584,7 @@ if (FULL) {
          * and the sitemap too: those are the two that carry a note's URL
          * without being a page, and the feed is where the note claiming `/`
          * used to need an option of its own. `_redirects` and `vercel.json`
-         * are the one exemption — the old slug appears there on purpose, as
+         * are the one exemption: the old slug appears there on purpose, as
          * the redirect's *source*.
          */
         const REDIRECT_FILES = new Set(['_redirects', 'vercel.json'])
@@ -2592,8 +2592,8 @@ if (FULL) {
          * A whole URL, never a substring. The demo vault tags this very note
          * `method/zettelkasten`, so `/tags/method/zettelkasten` carries these
          * characters on every page that shows the tag and in every output that
-         * lists it. Anchored on the two ways a URL is written here — an `href`
-         * attribute and an absolute URL inside XML — and ended on the
+         * lists it. Anchored on the two ways a URL is written here (an `href`
+         * attribute and an absolute URL inside XML), and ended on the
          * delimiters a path can actually end at.
          */
         const STALE = new RegExp(
@@ -2624,8 +2624,8 @@ if (FULL) {
         )
 
         /**
-         * The feed's half of it, stated positively: an item — a `<guid>` is
-         * item-only, unlike `<link>`, which the channel also carries — points
+         * The feed's half of it, stated positively: an item (a `<guid>` is
+         * item-only, unlike `<link>`, which the channel also carries) points
          * at the site root. With `feedSection` below, this is the whole of what
          * `homepageSlug` used to buy, now bought by the `index` slug instead.
          */
@@ -2637,7 +2637,7 @@ if (FULL) {
 
         /**
          * The collision. The demo vault has a root `index.md` as well, config
-         * wins, and the displaced note keeps a page — a note that vanished from
+         * wins, and the displaced note keeps a page: a note that vanished from
          * the site while every listing, the nav tree, the graph and the feed
          * still named it would be the worse failure.
          */
@@ -2663,7 +2663,7 @@ if (FULL) {
    *
    * `slugs:` and `permalink:` exist for a vault whose addresses are already in
    * other people's bookmarks, and neither is exercised by the committed config
-   * by design — the default is `derive`, and it has to stay that way or every
+   * by design: the default is `derive`, and it has to stay that way or every
    * jotter site built so far moves. Turning them on in `jotter.config.ts` would
    * be the wrong fix twice over: the demo garden documents the default, and a
    * forker reading it would inherit a scheme they did not choose.
@@ -2686,7 +2686,7 @@ if (FULL) {
      *
      * The slug is what lands in `dist/`; the URL is what every link, the
      * canonical, the sitemap and a search result must spell. They differ by
-     * exactly one thing — percent-encoding — and the third row is where that
+     * exactly one thing (percent-encoding), and the third row is where that
      * stops being theoretical.
      */
     const ROWS = [
@@ -2790,7 +2790,7 @@ if (FULL) {
         /** Every row: the page is on disk at the slug, and the URL decodes to it. */
         const everyRow = [...ROWS, [PERMALINK.path, PERMALINK.slug, `/${PERMALINK.slug}`]]
         for (const [path, slug, url] of everyRow) {
-          // `index` is the site root, which is `dist/index.html` — the one
+          // `index` is the site root, which is `dist/index.html`: the one
           // slug that is not a directory of its own.
           const page =
             slug === 'index'
@@ -2842,7 +2842,7 @@ if (FULL) {
         /**
          * The Quartz failure, asserted against rather than described.
          * `slugifyFilePath` maps `&` to `-and-` and `%` to `-percent`, and
-         * `sluggify` lowercases nothing but jotter's own `derive` does — so
+         * `sluggify` lowercases nothing but jotter's own `derive` does, so
          * these three strings are exactly what "the slug scheme leaked" looks
          * like. Restricted to URL-shaped occurrences, because `-and-` is also
          * what a heading called "Emphasis and marks" anchors as, and that is
@@ -2895,7 +2895,7 @@ if (FULL) {
    *
    * This is the acceptance test for building from Open Publish, end to end,
    * against a synthetic bucket served over loopback. `test/snapshot.test.ts`
-   * covers the script's own behaviour — the signing, the checks, the mapping —
+   * covers the script's own behaviour (the signing, the checks, the mapping)
    * and what only a real `dist/` can answer is here: that a note is served at
    * the slug the plugin published it at, that the address it used to have 301s
    * to that slug **without moving the note**, that a link to something
@@ -3265,7 +3265,7 @@ if (FULL) {
          * Every assertion the main pass makes, run again with the site the
          * other way round. `directionSection` is stated against each page's own
          * `<html dir>` rather than against a literal, which is what lets it run
-         * here unchanged — and what makes "no block repeats what it inherits"
+         * here unchanged, and what makes "no block repeats what it inherits"
          * mean the opposite thing in the right way.
          */
         directionSection(flippedPages, flippedOutputs)
@@ -3290,7 +3290,7 @@ if (FULL) {
         check(
           mirrored.length > 0,
           `a prose block still running ${was} is marked dir="${was}"`,
-          `no <p dir="${was}"> on any page — the feature only emits one direction`,
+          `no <p dir="${was}"> on any page: the feature only emits one direction`,
         )
       }
 
@@ -3403,7 +3403,7 @@ if (FULL) {
    * On the committed default that means **search is off here**, so Pagefind's
    * indexing time is not in the 60s number below. Measured by hand once, at
    * this same 1,000-note vault: 597ms to index and 380ms to write, so about
-   * **1.0s**, against a 60s envelope — 1.7%, and it does not grow with the
+   * **1.0s**, against a 60s envelope: 1.7%, and it does not grow with the
    * number of *pages* so much as with the amount of prose. The index directory
    * lands at 4.2 MB, none of which a reader downloads until they search.
    *

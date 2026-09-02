@@ -9,7 +9,7 @@ updated: 2026-08-20
 This is a **slipbox**: a set of notes that link to each other, published as a
 site. It is also the demo garden for [[jotter]], the theme rendering it.
 
-Nothing here is finished. That is the point — a garden is tended, not shipped.
+Nothing here is finished. That is the point: a garden is tended, not shipped.
 
 ## Where to start
 
@@ -21,5 +21,5 @@ note-taking, [[Kitchen sink]] exercises every piece of syntax at once.
 
 A slipbox is not an archive. An archive answers *where did I put that*; a
 slipbox answers *what does this remind me of*. The difference is entirely in
-the links — which is why a published slipbox lives or dies on whether its
+the links, which is why a published slipbox lives or dies on whether its
 links survive the trip out of [[Obsidian]].

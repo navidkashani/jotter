@@ -1,6 +1,6 @@
 ---
 /**
- * The component library — the demo site only.
+ * The component library: the demo site only.
  *
  * A rest parameter whose `getStaticPaths` returns nothing unless `JOTTER_DEMO`
  * is set. That is how the page can live in the repository, be maintained
@@ -31,8 +31,8 @@ export function getStaticPaths() {
  * Two hardcoded `/zettelkasten` links used to live below, and both were wrong
  * the moment the page was built against anything but the demo garden: dead on
  * a vault with no such note, and stale under `homepage: 'Zettelkasten'`, which
- * moves that note to `/`. Neither shows up locally — `/library` only exists
- * with `JOTTER_DEMO=1`, which is CI — so `verify:full` found them on the
+ * moves that note to `/`. Neither shows up locally (`/library` only exists
+ * with `JOTTER_DEMO=1`, which is CI), so `verify:full` found them on the
  * runner and nowhere else.
  *
  * Derived, like every other URL in the build. `noteHref` is the one answer to
@@ -111,15 +111,15 @@ const calloutKeys = Object.keys(CALLOUT_TYPES)
               <span style={`font-size: var(${token}); line-height: 1.25; font-weight: 600; letter-spacing: var(--tracking-title); color: var(--ink-strong)`}>
                 {sample}
               </span>
-              <code class="meta">{token} — {spec}</code>
+              <code class="meta">{token} ({spec}</code>
             </li>
           ))
         }
         <li>
-          <span class="meta">--step-meta — mono data: dates, counts, frontmatter values</span>
+          <span class="meta">--step-meta) mono data: dates, counts, frontmatter values</span>
         </li>
         <li>
-          <span class="label">--step-label — mono section labels, 10 / .1em, uppercase</span>
+          <span class="label">--step-label: mono section labels, 10 / .1em, uppercase</span>
         </li>
       </ul>
     </section>
@@ -142,7 +142,7 @@ const calloutKeys = Object.keys(CALLOUT_TYPES)
       <h2 class="section-heading">Callouts</h2>
       <p>
         {calloutKeys.length} Obsidian callout types, {callouts.length} distinct labels, styled by
-        hue alone — a type is a <code>--hue-*</code> token and nothing else.
+        hue alone: a type is a <code>--hue-*</code> token and nothing else.
       </p>
       <div class="callout" data-callout="note">
         <div class="callout-title">Note</div>

@@ -6,7 +6,7 @@
  * incidental part of it: the markdown pipeline's rendered output is cached
  * there and invalidated on the *source file's* digest, so a plugin or config
  * edit can appear to do nothing until they are gone. There are two of them and
- * they are not interchangeable — `astro dev` uses `.astro/`, `astro build` uses
+ * they are not interchangeable: `astro dev` uses `.astro/`, `astro build` uses
  * `node_modules/.astro/`. See `scripts/lib/astro-cache.mjs`.
  *
  * Which is also why this cannot simply spare the store to stay safe: the store

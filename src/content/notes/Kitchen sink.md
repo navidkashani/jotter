@@ -18,7 +18,7 @@ works in your vault.
 
 The boxed list above is this note's own frontmatter. `created` and `updated` are
 always shown; `aliases`, `status`, `source`, `author` and `series` appear when
-you set them. Every other key you keep up there stays off the page on purpose —
+you set them. Every other key you keep up there stays off the page on purpose:
 the list is an allow-list, so a private URL or a note-to-self in frontmatter is
 never published by accident.
 
@@ -29,7 +29,7 @@ A resolved link: [[Zettelkasten]]. One with an alias:
 [[Zettelkasten#How it works]].
 
 A link to a note that was never written: [[A Note That Does Not Exist]]. It is
-a muted, dotted span — not an anchor — so it cannot be clicked or focused.
+a muted, dotted span (not an anchor), so it cannot be clicked or focused.
 
 ## Emphasis and marks
 
@@ -106,7 +106,7 @@ either way.
 - یک پیوند انگلیسی داخل یک جمله‌ی فارسی: [[Obsidian]]
 - An English item, unmarked, in the same list.
 
-The rule is Unicode's own — the first strong character wins — so a line that
+The rule is Unicode's own (the first strong character wins), so a line that
 opens with a year still resolves from the word after it, and a line of digits
 or punctuation alone keeps whatever it inherits. The one case it gets wrong is
 a Persian sentence opening with a Latin word, which Obsidian gets wrong too.
@@ -115,7 +115,7 @@ Put `direction: rtl` in that note's frontmatter to settle it.
 ## An unpublished target
 
 This links to a note with `publish: false`: [[Half-formed]]. The alias the
-author wrote is what shows — never the private note's own title.
+author wrote is what shows: never the private note's own title.
 
 ## Images
 

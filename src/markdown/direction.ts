@@ -11,7 +11,7 @@
  * a raw markdown string and `src/lib/transclude.ts` wraps it in a literal
  * `<aside class="transclusion">`; by the time that is parsed, the `<aside>` is
  * a `raw` node and the body between the blank lines is a real `<p>`. An mdast
- * plugin structurally cannot reach that paragraph — it does not exist yet when
+ * plugin structurally cannot reach that paragraph: it does not exist yet when
  * mdast runs. On the hast side it is an ordinary element, and the walk below
  * finds it without knowing transclusion exists.
  *
@@ -23,7 +23,7 @@
  * ## Why one recursive walk rather than filtered `element` visitors
  *
  * Inheritance. A block only emits a `dir` when it *differs* from what it
- * inherits, so every node needs its parent's resolved direction — and the
+ * inherits, so every node needs its parent's resolved direction, and the
  * filtered visitor API makes no parent-before-child ordering guarantee. The
  * walk carries `inherited` down, which is the only way to get "no redundant
  * `dir` on a child of a marked block" right.
@@ -39,7 +39,7 @@ import type { DocumentContext } from './context.js'
  *
  * Obsidian Publish marks `h1..h6, blockquote, .callout-title` unconditionally
  * and `li, p` when their parent carries no `dir` of its own; this is the same
- * set widened by the block containers Publish happens not to reach — table
+ * set widened by the block containers Publish happens not to reach: table
  * cells, definition lists, figure captions and `aside`.
  *
  * `li` and never `ul`, deliberately: the marker box belongs to the item, so a
@@ -67,8 +67,8 @@ const BLOCKS = new Set([
 
 /**
  * A non-collapsible callout's title. `src/markdown/callouts.ts` gives it
- * `hName: 'div'` — the collapsible form is a `summary`, which `BLOCKS` already
- * covers — and it is the same element Obsidian Publish targets by this class.
+ * `hName: 'div'` (the collapsible form is a `summary`, which `BLOCKS` already
+ * covers), and it is the same element Obsidian Publish targets by this class.
  */
 const isCalloutTitle = (node: Element): boolean =>
   node.tagName === 'div' && classNames(node).includes('callout-title')
@@ -86,7 +86,7 @@ export function direction(doc: DocumentContext) {
    * What the whole document inherits: the site's direction, unless the note
    * overrides it. A note that is entirely Persian on an English site can set
    * `direction: rtl` to flip its own baseline, and then only its *English*
-   * blocks are marked — the same rendering, fewer attributes.
+   * blocks are marked: the same rendering, fewer attributes.
    *
    * `auto` and an unreadable value both fall through to `config.dir`, which is
    * what `auto` asks for anyway. The scan warns about the unreadable one.
@@ -113,7 +113,7 @@ export function direction(doc: DocumentContext) {
            * emitted under the same rule as everything else rather than forced:
            * an unconditional `dir="ltr"` here is a redundant attribute on every
            * code block of every LTR site, which is the zero-cost claim broken.
-           * Never descended into — the `<code>` and Shiki's spans below it
+           * Never descended into: the `<code>` and Shiki's spans below it
            * inherit correctly and have nothing of their own to say.
            */
           if (element.tagName === 'pre') {

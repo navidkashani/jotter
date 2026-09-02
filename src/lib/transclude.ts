@@ -55,9 +55,9 @@ export function sectionOf(body: string, subpath: string): string {
 
 /**
  * The same lookup, addressed by the heading's *slug* rather than by the subpath
- * as written. That is the form a resolved href carries — `preresolveLinks` has
+ * as written. That is the form a resolved href carries (`preresolveLinks` has
  * already turned `[[Note#How it works]]` into `/note#how-it-works` by the time
- * `src/lib/preview.ts` sees it — and slugifying is idempotent, so the two
+ * `src/lib/preview.ts` sees it), and slugifying is idempotent, so the two
  * callers meet here.
  *
  * `undefined` rather than an empty string when there is no such heading, so a

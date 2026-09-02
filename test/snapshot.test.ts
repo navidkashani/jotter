@@ -6,7 +6,7 @@
  * are tested against a real bucket rather than a mocked reader: a `node:http`
  * server on `127.0.0.1` speaking enough S3 to answer a GET. Path-style
  * addressing is the default, so `OP_ENDPOINT=http://127.0.0.1:<port>` reaches
- * it, and the server ignores the signature — what is being tested here is what
+ * it, and the server ignores the signature: what is being tested here is what
  * the build does with a snapshot, not whether SigV4 works, which the first
  * block below covers on its own.
  *
@@ -62,7 +62,7 @@ describe('the S3 reader signs what the plugin signs', () => {
    * AWS's own example credentials and clock, from the SigV4 "GET Object"
    * reference. The published signature there covers a request carrying a
    * `Range` header, which this reader never sends, so the *signature* below is
-   * this implementation's own — pinned as a drift guard. Everything AWS does
+   * this implementation's own: pinned as a drift guard. Everything AWS does
    * fix is asserted: the empty-payload hash, the timestamp format, the
    * credential scope and the signed-header list, in order.
    */
@@ -260,7 +260,7 @@ describe('the link index is re-keyed to the path jotter looks notes up by', () =
 /**
  * The decision this whole layer turns on: an old address is an `aliases:`
  * entry, never a `permalink:`. A permalink is where a note is *served*, so
- * writing the old URL there would move the note onto its own history — the
+ * writing the old URL there would move the note onto its own history: the
  * address the plugin published would 301 to the address the site used to have,
  * backwards. As an alias it is a 301 **to** the published slug, and the note
  * does not move.
@@ -477,7 +477,7 @@ describe('site options become a jotter config', () => {
   /**
    * `homepage` is a vault path, and the plugin has already applied it by giving
    * that note the slug `index`, which `src/lib/site.ts:86` picks up on its own.
-   * Copying it into `config.homepage` — which takes a *slug* — would be a
+   * Copying it into `config.homepage` (which takes a *slug*) would be a
    * second answer to a settled question, and a wrong one.
    */
   it('does not re-apply the homepage the plugin already applied', () => {
@@ -524,7 +524,7 @@ describe('the site URL comes back whole, or not at all', () => {
     ).toBe('https://mine.example')
   })
 
-  /** `config.url` is `z.url()`, so a bare host — which is what Vercel gives — fails the parse. */
+  /** `config.url` is `z.url()`, so a bare host (which is what Vercel gives) fails the parse. */
   it('adds the scheme a bare host arrives without', () => {
     expect(resolveSiteUrl({ VERCEL_URL: 'my-site.vercel.app' }).url).toBe('https://my-site.vercel.app')
     expect(() => defineConfig({ url: resolveSiteUrl({ VERCEL_URL: 'x.vercel.app' }).url })).not.toThrow()
@@ -603,7 +603,7 @@ async function bucket(fixture: Fixture, corrupt: string[] = [], missing: string[
   ])
 
   const server: Server = createServer((req, res) => {
-    // Path style: /<bucket>/<key>. The signature is not checked — SigV4 has its
+    // Path style: /<bucket>/<key>. The signature is not checked: SigV4 has its
     // own tests above, and a bucket that verified it would only be testing them.
     const key = decodeURIComponent((req.url ?? '').replace(/^\/fixture\//, '').split('?')[0])
     const body = keys.get(key)
@@ -879,7 +879,7 @@ describe('fetch-content, against a bucket', () => {
 
   /**
    * The plugin refuses a slug collision at scan time, so this should be
-   * unreachable — and the only other symptom is a note that silently is not on
+   * unreachable, and the only other symptom is a note that silently is not on
    * the site, resolved by whichever download finished last.
    */
   it('refuses two entries that would be written to one file', async () => {

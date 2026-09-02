@@ -14,7 +14,7 @@ npm run dev
 ```
 
 Your notes go in `src/content/notes/`. Delete the demo garden that ships there
-and drop your vault in its place — a folder, a symlink, or a git submodule.
+and drop your vault in its place: a folder, a symlink, or a git submodule.
 
 ---
 
@@ -57,7 +57,7 @@ export default defineConfig({
   title: 'Slipbox',
   description: '',
   url: 'https://example.com',   // needed for sitemap, canonical links and RSS
-  image: undefined,             // the link-preview card image — see “Link previews”
+  image: undefined,             // the link-preview card image (see “Link previews”)
   author: '',
 
   locale: 'en',
@@ -69,8 +69,8 @@ export default defineConfig({
 
   linkResolution: 'shortest',   // 'shortest' | 'absolute' | 'relative'
   publishGate: 'all',           // 'all' | 'opt-in'
-  homepage: undefined,          // the note that claims '/' — see “The note at /” below
-  slugs: 'derive',              // 'derive' | 'preserve' | 'obsidian' — see “URLs” below
+  homepage: undefined,          // the note that claims '/' (see “The note at /” below)
+  slugs: 'derive',              // 'derive' | 'preserve' | 'obsidian' (see “URLs” below)
   strictLineBreaks: false,      // Obsidian's own default
   images: 'optimize',           // 'optimize' | 'passthrough'
   noIndex: false,
@@ -81,22 +81,22 @@ export default defineConfig({
     backlinks: true,
     tags: true,
     themeToggle: true,
-    graph: false,               // the local graph — `layout: 'panels'` only
+    graph: false,               // the local graph, `layout: 'panels'` only
     hoverPreview: false,        // excerpt cards on hovering a link
     search: false,              // Cmd/Ctrl+K full-text search over your notes
-    rss: false,                 // /rss.xml — requires `url`
+    rss: false,                 // /rss.xml: requires `url`
   },
 
   analytics: {
     provider: 'none',        // 'plausible' | 'umami' | 'goatcounter' | 'fathom' | 'cloudflare' | 'google'
-    // id: 'example.com',    // site id, domain or token, depending on the provider — required unless 'none'
+    // id: 'example.com',    // site id, domain or token, depending on the provider: required unless 'none'
     // host: '…',            // self-hosted Plausible, Umami or GoatCounter only
   },
   redirects: {},
 })
 ```
 
-A feature that is off ships **no JavaScript at all** — the island is not
+A feature that is off ships **no JavaScript at all**: the island is not
 rendered rather than hidden, and `npm run verify:full` asserts it.
 
 ---
@@ -118,12 +118,12 @@ status: evergreen              # these four show in the note's header block
 source: Ahrens 2017
 author: A. Writer
 series: Reading notes
-image: attachments/og.png      # the link-preview card — see “Link previews” below
+image: attachments/og.png      # the link-preview card (see “Link previews” below)
 publish: false                 # exclude this note
 draft: true                    # also excludes it
-homepage: true                 # this note claims '/' — see “The note at /” below
-permalink: Company/About+us    # serve this note here instead — see “URLs” below
-direction: rtl                 # this note's baseline — see “Mixed-direction vaults”
+homepage: true                 # this note claims '/' (see “The note at /” below)
+permalink: Company/About+us    # serve this note here instead (see “URLs” below)
+direction: rtl                 # this note's baseline (see “Mixed-direction vaults”)
 ---
 ```
 
@@ -135,8 +135,8 @@ The boxed list at the top of a note is `created`, `updated` when it differs, and
 whichever of `aliases`, `status`, `source`, `author` and `series` you set.
 
 That list is an **allow-list**, not a deny-list. Frontmatter is whatever its
-owner typed — a private URL, a note to self, a `publish: false` you forgot to
-remove — so anything unrecognised stays off the page rather than leaking by
+owner typed: a private URL, a note to self, a `publish: false` you forgot to
+remove, so anything unrecognised stays off the page rather than leaking by
 default.
 
 `author` is display only. The name on the feed is `author` in
@@ -159,7 +159,7 @@ jotter cannot parse falls back to git and then to the file's mtime. Nothing
 there stops a build.
 
 **`publish`, `draft` and `homepage` are the exception.** Those must be real
-booleans — unquoted `true` or `false` — and anything else fails the build naming
+booleans (unquoted `true` or `false`), and anything else fails the build naming
 the key. It is the one place jotter is deliberately strict, because a quoted
 `publish: "false"` coerced generously is a note you meant to hide, published, in
 silence. A misrouted `/` is the same mistake one key over.
@@ -171,7 +171,7 @@ By default every note is published unless it says otherwise. Set
 `publish: true` to be required.
 
 An excluded note gets no page, no route, and no mention. Links to it render as
-inert `<span class="dead-link">` labelled with the filename the author typed —
+inert `<span class="dead-link">` labelled with the filename the author typed:
 **never with the note's own title.** The build asserts this over every text
 file in `dist/`, not only the pages: the feed and the sitemap carry titles too,
 and a check that read only HTML would have said "anywhere in `dist/`" while
@@ -191,7 +191,7 @@ build time, and the ones running the other way are marked:
 <li dir="rtl"><a>وبلاگ شخصی</a></li>
 ```
 
-It is symmetric. An Arabic or Hebrew site (`dir: 'rtl'`) gets the mirror — its
+It is symmetric. An Arabic or Hebrew site (`dir: 'rtl'`) gets the mirror: its
 own script untouched, and the *English* blocks marked `dir="ltr"` instead. The
 majority language is never marked, so **a vault written in one script emits not
 a single extra byte.**
@@ -202,7 +202,7 @@ symbols and emoji do not vote, so `۱۳۹۹ سال خوبی بود` and `2026 م
 resolve right-to-left. A block with no letters in it keeps whatever it inherits.
 
 The one case it gets wrong is a sentence opening with a word from the other
-script — `Obsidian یک برنامه است` — which Obsidian gets wrong too. Set
+script (`Obsidian یک برنامه است`), which Obsidian gets wrong too. Set
 `direction:` on that note to settle it:
 
 ```yaml
@@ -215,7 +215,7 @@ behaviour, i.e. the same as leaving it out.
 
 > **Tip.** A note that is *entirely* Persian on an English site gets every block
 > marked. Setting `direction: rtl` on that note flips its own baseline, so only
-> its English blocks are marked instead — the same rendering, fewer attributes.
+> its English blocks are marked instead: the same rendering, fewer attributes.
 > Your choice; nothing is automated here.
 
 Two limits worth knowing. Obsidian detects direction per *line* and jotter per
@@ -238,7 +238,7 @@ image: https://cdn.example.com/x.png # somebody else's host, on purpose
 ```
 
 It needs `url`. An unfurler has no document to resolve a relative URL against,
-so without one there is no card image at all — and `image` in
+so without one there is no card image at all, and `image` in
 `jotter.config.ts` without a `url` fails the build naming the key, the way
 `features.rss` does.
 
@@ -247,12 +247,12 @@ card, including `/notes`, the tag pages and the 404. A note's own `image:` beats
 it. Quartz's `socialImage:` and `cover:` are read as well, so a vault that came
 from there keeps the cards it had.
 
-PNG, JPEG, GIF or WebP. **Not SVG** — Facebook does not render it, and a card
+PNG, JPEG, GIF or WebP. **Not SVG**: Facebook does not render it, and a card
 that cannot draw is indistinguishable from no card while still costing a fetch.
 A path naming no file in the vault, or a file in a format no preview draws, is a
 build warning naming the note and the value; it is never silence.
 
-Declare nothing and the card is text only — title, description, site name —
+Declare nothing and the card is text only (title, description, site name)
 which is what every link to a jotter site was until you set one.
 
 ---
@@ -306,7 +306,7 @@ If `.jotter/links.json` exists at the top of your vault, it short-circuits
 resolution for every link it names.
 
 That file is meant to be written by something that could see the **whole**
-vault — Obsidian itself, or a plugin — because a site generator only ever sees
+vault (Obsidian itself, or a plugin), because a site generator only ever sees
 the published subset and cannot reproduce attachment folders, aliases and
 shortest-path matching over notes that were never published.
 
@@ -324,8 +324,8 @@ a warning, not a failed build, and an entry naming a slug this build does not
 have falls back rather than emitting a link to a page that will not exist.
 
 [Open Publish](https://github.com/navidkashani/open-publish) writes exactly this
-file. `npm run build` can pull a published snapshot straight out of its bucket —
-notes, attachments, resolved links and site options — with four environment
+file. `npm run build` can pull a published snapshot straight out of its bucket
+(notes, attachments, resolved links and site options) with four environment
 variables and no code change. It no-ops when they are not set.
 See [`docs/open-publish.md`](docs/open-publish.md).
 
@@ -347,14 +347,14 @@ See [`docs/open-publish.md`](docs/open-publish.md).
 
 ### The note at `/`
 
-One note claims `/`, and it is served **there and only there** — it gets no
+One note claims `/`, and it is served **there and only there**: it gets no
 second page at its own slug, because the same note at two URLs is the same note
 twice in the sitemap and twice in the search results.
 
 That is not a special case with links to remember. The note claiming `/` is
 given the slug `index`, which is how jotter has always spelled “this note lives
-at the root”, so every link to it — in a note, a card, the nav tree, backlinks,
-the graph and the feed — is `/`. Its previous URL keeps working: `/<old-slug>`
+at the root”, so every link to it (in a note, a card, the nav tree, backlinks,
+the graph and the feed) is `/`. Its previous URL keeps working: `/<old-slug>`
 301s to `/` in `_redirects` and `vercel.json`, so bookmarks and inbound links
 survive the promotion.
 
@@ -372,7 +372,7 @@ homepage: true             # frontmatter, on the note itself
 index.md                   # a note named index.md, in the vault root
 ```
 
-Set none of them and the site gets a generated landing page — the most-linked
+Set none of them and the site gets a generated landing page: the most-linked
 notes, and what was tended lately.
 
 Set `homepage:` while a root `index.md` exists and config wins, as the more
@@ -391,7 +391,7 @@ people's bookmarks and in Google's index.
 Two opt-in keys change it. Both leave a default build byte-for-byte unchanged.
 
 ```ts
-// jotter.config.ts — the site-wide rule
+// jotter.config.ts: the site-wide rule
 slugs: 'obsidian',   // 'derive' (default) | 'preserve' | 'obsidian'
 ```
 
@@ -399,11 +399,11 @@ slugs: 'obsidian',   // 'derive' (default) | 'preserve' | 'obsidian'
 | --- | --- |
 | `'derive'` | `/wisdom-approaches/critical-thinking` |
 | `'preserve'` | `/Wisdom%20&%20Approaches/Critical%20Thinking` |
-| `'obsidian'` | `/Wisdom+%26+Approaches/Critical+Thinking` — byte-identical to Obsidian Publish |
+| `'obsidian'` | `/Wisdom+%26+Approaches/Critical+Thinking`: byte-identical to Obsidian Publish |
 
 ```yaml
 ---
-permalink: Company/About+us    # frontmatter — the per-note override
+permalink: Company/About+us    # frontmatter: the per-note override
 ---
 ```
 
@@ -466,7 +466,7 @@ git merge upstream/main --allow-unrelated-histories
 
 After that a plain `git merge upstream/main` works.
 
-Conflicts should only land in the files you own — `jotter.config.ts`,
+Conflicts should only land in the files you own: `jotter.config.ts`,
 `src/styles/custom.css`, `src/content/notes/`, `src/i18n/`. Keep your versions
 of those and take upstream's for everything else.
 
@@ -478,13 +478,13 @@ of those and take upstream's for everything else.
 scales, space, radii, durations. Light on `:root`, dark under both
 `[data-theme="dark"]` and `prefers-color-scheme`.
 
-The palette is warm throughout — neutrals on hue 60, an ochre accent on hue 70
-— and the surface model is *raised*: `--surface` is lighter than `--paper`, and
+The palette is warm throughout (neutrals on hue 60, an ochre accent on hue 70)
+and the surface model is *raised*: `--surface` is lighter than `--paper`, and
 anything lifted off the page carries a hairline `--rule` rather than a shadow.
 There is no shadow token. `--soft`, the accent at 11% alpha, does the tinting:
 nav hover, inline code, tag chips, `::selection`, link underlines.
 
-Type runs at two scales, not one. App chrome — header, nav, labels, lists — is
+Type runs at two scales, not one. App chrome (header, nav, labels, lists) is
 `--step-ui` (16/1.65); note prose alone is `--step-body` (17/1.72). Titles are
 38 (site) / 33 (note) / 29 (index) / 19 (section), with mono at 11.5 for data
 (`.meta`) and 10 uppercase for section labels (`.label`).
@@ -504,7 +504,7 @@ The fastest way to re-skin jotter is to override tokens in
 
 Every rule in the theme uses logical properties, so `dir: 'rtl'` is a config
 change and not a second stylesheet. The build fails if a physical property
-sneaks in — and because the CSS is logical throughout, a block that runs the
+sneaks in, and because the CSS is logical throughout, a block that runs the
 other way flips its alignment, indents, list markers and quote bars for free.
 See “Mixed-direction vaults”.
 
@@ -513,12 +513,12 @@ See “Mixed-direction vaults”.
 WCAG AA contrast on every token pair, in both themes, asserted at build.
 Visible focus everywhere, a skip link, landmarks, `prefers-reduced-motion`,
 and a print stylesheet. The navigation tree, the outline, the drawer and every
-callout work with JavaScript disabled — the only scripts in a default build
+callout work with JavaScript disabled: the only scripts in a default build
 are the theme island and the drawer enhancement, about 1.1 KB together. Turn
 `features.graph` on and a note page adds an 18 KB `d3-force` chunk, about
 22 KB in all; the graph's own accessible list stays underneath it either way.
 `features.hoverPreview` adds about 1.2 KB and no request at all, plus the
-excerpts themselves in the markup — 1 KB raw and under 200 bytes brotli'd on
+excerpts themselves in the markup: 1 KB raw and under 200 bytes brotli'd on
 the demo's most-linked page. `features.search` adds about 6 KB, on every page
 rather than only note pages, and nothing else until a reader actually opens it:
 the modal is keyboard-first, focus is trapped and returned, results are real
@@ -529,8 +529,8 @@ The per-page budget is asserted at 32 KB of jotter's own JavaScript. It was
 24 KB until search shipped; graph and search together measure 29,334 bytes on a
 note page, so the ceiling moved once, deliberately, and
 `scripts/verify-build.mjs` says why. A configured analytics provider's script is
-not counted against it — it is not a file in `dist/`, and its weight is the
-vendor's rather than jotter's — but the build reports the tag and its origin
+not counted against it (it is not a file in `dist/`, and its weight is the
+vendor's rather than jotter's), but the build reports the tag and its origin
 next to the number, so the exclusion is visible rather than silent.
 
 ---
@@ -544,7 +544,7 @@ outline, `<details>` navigation, tags, dark and light, RTL-ready i18n strings,
 images, redirects, sitemap, the accessibility baseline, print CSS, the Quartz
 migration guide, the demo garden, and the tests.
 
-**Since v1:** the local graph — a `d3-force` layout on a canvas in the
+**Since v1:** the local graph, a `d3-force` layout on a canvas in the
 `panels` rail, off by default, with the readable list of neighbours kept
 underneath it for keyboards, screen readers and scripting-off. Every node is
 named; the rail card elides long titles to its width and an expand button
@@ -555,7 +555,7 @@ small card shows the target's title and opening paragraph, so you can decide
 whether to follow it without leaving the paragraph you are in. Quartz and
 Obsidian Publish both *fetch* the target; jotter does not, because the build
 fails on `fetch(` anywhere in jotter's own code. So the excerpt travels in the
-HTML instead — instant, offline, and the first paragraph rather than the whole
+HTML instead: instant, offline, and the first paragraph rather than the whole
 note. Pointer only, and the card is `aria-hidden`: it repeats what the
 destination already says, one click away.
 
@@ -569,7 +569,7 @@ to the heading rather than the top.
 And **analytics**, off by default, and the only switch in jotter that adds a
 request to somebody else's server. `analytics.provider` takes `plausible`,
 `umami`, `goatcounter`, `fathom`, `cloudflare` or `google`, and jotter emits
-that vendor's own documented tag and nothing else — no wrapper, no consent
+that vendor's own documented tag and nothing else: no wrapper, no consent
 banner, no Do-Not-Track branch. Quartz builds the same six from JavaScript and
 rewires each into manual pageview mode because it is an SPA and the document
 never reloads; jotter is not, so a real navigation fires the vendor's own
@@ -582,13 +582,13 @@ local reload would be a real pageview against real production stats. Use
 There is deliberately no `custom` provider. A field taking an arbitrary script
 URL is one the origin assertion below cannot check, and an assertion with a hole
 shaped like "anything the user typed" is not an assertion. Six providers, six
-known origins — or none, which is the default. If you need something else, paste
+known origins, or none, which is the default. If you need something else, paste
 its snippet into `src/layouts/Base.astro`.
 
 And **RSS**, off by default and the last v1 flag the build did not honour.
 `features.rss: true` writes `/rss.xml` at the end of `astro build` and links it
 from the `<head>` of every page, which is how a browser and every reader find
-it. It needs `url` — a feed's links are resolved against nothing, so a relative
+it. It needs `url`: a feed's links are resolved against nothing, so a relative
 one is not a degraded link but an unfollowable one, and the config refuses the
 pair rather than shipping a feed nobody can use.
 
@@ -596,21 +596,21 @@ Items carry the note's title, its excerpt, its tags as `<category>`, and both of
 its dates. That last part is worth stating rather than leaving to be
 discovered: **a revised note updates in place, it does not resurface.** Readers
 dedupe on `<guid>`, and RSS Guard stopped re-marking updated items unread in
-4.6.4 — FreshRSS behaves the same. So `<pubDate>` is the note's *created* date
+4.6.4: FreshRSS behaves the same. So `<pubDate>` is the note's *created* date
 and never moves, because moving it would reshuffle a subscriber's list for
 nothing; the revision time goes in `<atom:updated>`, which is the element that
 means that. Two consecutive builds of an unchanged vault produce a
 byte-identical file.
 
 The window is the 50 most recently updated notes, a constant rather than a
-config key. Ten — Quartz's default — is too few once you notice that a
+config key. Ten (Quartz's default) is too few once you notice that a
 revision re-enters the window: a weekend of tidying old notes can push a new one
 out before a fortnightly subscriber ever polls, and because of the guid rule
 above they will never be shown it. Fifty is wide enough that it cannot happen
 and still a few KB at any vault size. A feed is a change notification; `/notes`
 is the archive, one click from every item.
 
-The feed carries excerpts rather than full HTML — Quartz's default agrees — and
+The feed carries excerpts rather than full HTML (Quartz's default agrees), and
 escapes every value rather than wrapping it in CDATA, which closes the `]]>`
 hole a CDATA section has by construction. There is no XSLT stylesheet: it is
 the usual way to make a feed readable in a browser and it is dying, with
@@ -625,11 +625,11 @@ accepts that, but misconfigured hosts are reported in the wild. If a reader
 refuses your feed, check the header your host is actually sending.
 
 `noIndex: true` does not suppress the feed. `noIndex` is about crawlers, and a
-subscription is something you opted into twice — the flag and a `url`.
+subscription is something you opted into twice: the flag and a `url`.
 
 And **the URLs you already published**, which is less a feature than a promise.
-`slugs:` takes `'derive'` — lowercase and dashed, what every jotter site has
-been built at and the default forever — or `'preserve'` and `'obsidian'`, which
+`slugs:` takes `'derive'` (lowercase and dashed, what every jotter site has
+been built at and the default forever), or `'preserve'` and `'obsidian'`, which
 carry a vault path to the URL untouched. `obsidian` reproduces Obsidian
 Publish's own addresses, space to `+` and all, so a site moving onto the domain
 those URLs were served from keeps every inbound link and every search ranking it
@@ -642,7 +642,7 @@ result spells it `%26`. jotter has four producers of a page's URL and they must
 agree byte for byte or Google splits one page into duplicates, so there is one
 encoder, in a module that imports nothing, and `verify:full` compares all four
 against each other. `obsidianPath` is byte-identical to open-publish's own
-`obsidianPublishUrl` — asserted in the tests rather than claimed in a comment.
+`obsidianPublishUrl`: asserted in the tests rather than claimed in a comment.
 One caveat before you deploy: Netlify 301s mixed-case paths to lowercase with no
 opt-out, so these styles do not survive there, and the build says so by name.
 See [`docs/url-styles.md`](docs/url-styles.md).
@@ -650,35 +650,35 @@ See [`docs/url-styles.md`](docs/url-styles.md).
 And **building from an Open Publish snapshot**, which makes this repository a
 deploy target for the Obsidian plugin of that name rather than only a folder of
 markdown. Set four environment variables on your host and `npm run build` pulls
-the published snapshot out of object storage — notes, attachments, resolved
-links and site options — verifying every file against the hash the snapshot
+the published snapshot out of object storage (notes, attachments, resolved
+links and site options) verifying every file against the hash the snapshot
 recorded. Set none of them and the two scripts exit having touched nothing, so
 a plain vault builds exactly as before. No new dependency: SigV4 is hand-rolled
 over `node:crypto`, because some hosts install with `npm ci --omit=dev`.
 
 Two things it deliberately does not do. It **never rewrites a link in a note
-body** — the plugin resolved every wikilink inside Obsidian against the whole
+body**: the plugin resolved every wikilink inside Obsidian against the whole
 vault, and those answers go to `.jotter/links.json`, which jotter has read since
 v1, so the markdown on disk is what its author wrote. And it writes **no
 redirects**, because an old address arrives as `aliases:` and jotter already
-turns an alias into a 301 — to the note, without moving it, which is the half a
+turns an alias into a 301 (to the note, without moving it), which is the half a
 `permalink:` would have got backwards. See
 [`docs/open-publish.md`](docs/open-publish.md).
 
 ### What "no network" means now
 
 It used to mean *nothing jotter ships reaches the network*. Search ended that
-first — Pagefind loads index chunks over plain GETs as you type, which is the
+first (Pagefind loads index chunks over plain GETs as you type, which is the
 entire reason a thousand-note vault is searchable without shipping one enormous
-file — and analytics ends it a second time, on purpose and only if you ask.
+file), and analytics ends it a second time, on purpose and only if you ask.
 Each bullet below is true on its own; none of them is retracted by the next.
 
 - **No tracking unless you configure it.** `analytics.provider` defaults to
-  `'none'`, and a default build emits no analytics tag at all — not a disabled
+  `'none'`, and a default build emits no analytics tag at all: not a disabled
   one, not an empty one, none. Set it and the vendor's code is on your site from
   that moment, and the bullet below stops describing it.
 - **No third-party origin you did not ask for.** No CDN, no fonts from someone
-  else's server — those are self-hosted and subset. `scripts/verify-build.mjs`
+  else's server: those are self-hosted and subset. `scripts/verify-build.mjs`
   collects every external `src` and `href` in `dist/` and fails unless each one
   is a tag jotter itself emitted and marked, and unless the whole site talks to
   at most one origin that is not its own. An origin nobody asked for fails the
@@ -690,7 +690,7 @@ Each bullet below is true on its own; none of them is retracted by the next.
 - **The code jotter wrote makes no requests at all.** The build still fails on
   `fetch(`, `XMLHttpRequest`, `WebSocket`, `sendBeacon` or `EventSource` in any
   inline block or bundled chunk. The exemption is `dist/pagefind/**`, by path,
-  and nothing else — which is what keeps hover previews embedded rather than
+  and nothing else, which is what keeps hover previews embedded rather than
   fetched. It does not read a configured vendor's script, because that script is
   not jotter's and is not in `dist/`. What jotter asserts about analytics is
   which origin the tag points at, not what the vendor does once it is running.
@@ -698,17 +698,17 @@ Each bullet below is true on its own; none of them is retracted by the next.
   One thing jotter wrote *does* make requests, and it is worth naming rather
   than leaving to the scoping above: `scripts/fetch-content.mjs` reads a bucket
   over HTTPS. That runs on the build machine, only when you have configured
-  Open Publish, and nothing it downloads is a script — it is your own notes,
+  Open Publish, and nothing it downloads is a script: it is your own notes,
   verified against the hashes the snapshot recorded. No byte of it reaches a
   reader's browser as code.
 
 Two things jotter cannot detect, and does not pretend to. A site proxied through
 Cloudflare with Web Analytics enabled at the dashboard already has the beacon
 injected, so configuring `cloudflare` here counts twice. And a Netlify or Vercel
-preview deploy is a production build, so the tag ships there too — Plausible and
+preview deploy is a production build, so the tag ships there too: Plausible and
 Fathom simply will not count a domain you have not registered, and GA4 will.
 
-**Still to come:** *generated* OG images — a card drawn from the note's own
+**Still to come:** *generated* OG images, a card drawn from the note's own
 title and description for the notes that declare no `image:`. Declared ones work
 today; see “Link previews”.
 

@@ -9,7 +9,7 @@
   "search.results": "{count} results",
   "search.noResults": "Nothing matches that.",
   "search.close": "Close search",
-  "search.unavailable": "Search is unavailable — no index has been built yet.",
+  "search.unavailable": "Search is unavailable: no index has been built yet.",
 
   "nav.notes": "Notes",
   "nav.tags": "Tags",

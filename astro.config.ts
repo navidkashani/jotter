@@ -51,7 +51,7 @@ const routed = [
  * Feed inputs, or nothing at all.
  *
  * Built here and only when the flag is on, so `features.rss: false` means the
- * integration never receives the option and never writes the file — the same
+ * integration never receives the option and never writes the file: the same
  * shape as `search off writes no dist/pagefind/`, rather than a file emitted
  * and then cleaned up.
  *
@@ -117,7 +117,7 @@ export default defineConfig({
       cssVariable: '--font-sans',
       /**
        * One variable axis rather than four static cuts: fewer files, and the
-       * 300 end of the range exists at all — the static set started at 400, so
+       * 300 end of the range exists at all: the static set started at 400, so
        * anything asking for light silently got regular.
        */
       weights: ['300 700'],
@@ -135,12 +135,12 @@ export default defineConfig({
        * font arrives rendered Arial at 170% and then snapped back. Public Sans
        * and Arial have near-identical x-heights; the honest number is around
        * 100%. The same build computes 99.98% for IBM Plex Mono against Courier
-       * New — the difference between them is that the mono face is static and
+       * New: the difference between them is that the mono face is static and
        * this one is variable, which is where the metrics read goes wrong.
        *
        * Off, so the fallback is the stack above: `ui-sans-serif` is the system
        * UI face, close enough to Public Sans that the swap is a change of
-       * typeface rather than of size. Worth re-testing when Astro updates —
+       * typeface rather than of size. Worth re-testing when Astro updates:
        * a correct optimized fallback is better than an unoptimized one.
        */
       optimizedFallbacks: false,
@@ -152,7 +152,7 @@ export default defineConfig({
       weights: [400, 500],
       /**
        * Normal only. Astro requests both styles when this is unset, and the
-       * mono face is never italic anywhere in the theme — the two italic rules
+       * mono face is never italic anywhere in the theme: the two italic rules
        * in `prose.css` are on a blockquote and a stopped transclusion, both
        * body font. Four files, built and served for nothing.
        */
@@ -189,7 +189,7 @@ export default defineConfig({
              * `@astrojs/sitemap` builds each entry as `new URL(fullPath, site)`
              * off the same WHATWG pathname `Base.astro`'s canonical link used
              * to take, so a slug carrying `&` or `+` was spelled one way in
-             * every `<a href>` and another way here — and sitemaps.org requires
+             * every `<a href>` and another way here, and sitemaps.org requires
              * percent-encoding, while Google's URL guidelines say a link, a
              * canonical and a sitemap entry that disagree split one page into
              * duplicates. The same round trip as the canonical, for the same
@@ -223,8 +223,8 @@ export default defineConfig({
        * an 18 KB chunk no page loads.
        *
        * A literal here is what Rollup needs to drop the import of
-       * `LocalGraph.astro` entirely, which takes the component — and so its
-       * script — out of the module graph.
+       * `LocalGraph.astro` entirely, which takes the component (and so its
+       * script) out of the module graph.
        */
       'import.meta.env.JOTTER_GRAPH': JSON.stringify(
         jotter.features.graph && jotter.layout === 'panels',
@@ -233,7 +233,7 @@ export default defineConfig({
       /**
        * The same trap, for the same reason. `HoverPreview.astro` is nothing but
        * a `<script>`, so left as a plain `config.features.hoverPreview` test it
-       * would ship its bundle on every note page with the feature off — the
+       * would ship its bundle on every note page with the feature off: the
        * markup half of the flag would honour it and the JavaScript half would
        * not.
        */

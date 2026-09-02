@@ -1,7 +1,7 @@
 /**
  * The site's absolute URL, from whatever the host happens to inject.
  *
- * jotter needs one for the sitemap, the canonical link, `og:image` and RSS —
+ * jotter needs one for the sitemap, the canonical link, `og:image` and RSS,
  * and needs it to be a *whole* URL. `src/lib/config.ts` declares `url` as
  * `z.url()`, so the bare host the Quartz port returns (`notes.example.com`)
  * fails the config parse outright. That is the one deliberate difference from
@@ -15,7 +15,7 @@
  */
 
 /**
- * A host or URL from the environment, as an absolute URL — or `undefined` when
+ * A host or URL from the environment, as an absolute URL, or `undefined` when
  * there is nothing usable there.
  *
  * Vercel's variables are bare hosts (`my-site.vercel.app`), Cloudflare's and
@@ -48,7 +48,7 @@ function absolute(value) {
  * a domain the user does not own. jotter has no such fallback: with no `url`
  * the sitemap integration is never registered, `robots.txt` carries no
  * `Sitemap:` line, and pages carry no canonical. The site is smaller, not
- * wrong — so this is a warning, and a build that would otherwise succeed still
+ * wrong, so this is a warning, and a build that would otherwise succeed still
  * does.
  */
 export const NO_SITE_URL_ON_WORKERS =
@@ -58,7 +58,7 @@ export const NO_SITE_URL_ON_WORKERS =
   'Settings > Variables and Secrets on the Worker, then build again.'
 
 /**
- * `{ url, warning }` — the URL to write into the generated config, and anything
+ * `{ url, warning }`: the URL to write into the generated config, and anything
  * the person reading the build log should be told about how it was found.
  */
 export function resolveSiteUrl(env = process.env) {

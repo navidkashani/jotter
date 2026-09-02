@@ -81,7 +81,7 @@ export const isOptimizable = (target: string): boolean =>
  * Intrinsic size of an SVG, from its `width`/`height` or its `viewBox`.
  *
  * Astro's image pipeline does not process SVG, so without this a passthrough
- * SVG would be the one image on the page with no reserved space — and layout
+ * SVG would be the one image on the page with no reserved space, and layout
  * shift is exactly what the width/height build assertion exists to prevent.
  */
 export function svgIntrinsicSize(source: string): { width: number; height: number } | undefined {

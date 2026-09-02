@@ -12,7 +12,7 @@
  *
  * **It no-ops when the bucket is not configured.** With none of the `OP_*`
  * variables set this exits 0 having touched nothing, so a plain markdown folder
- * — the demo garden in this repository included — builds exactly as it did
+ * (the demo garden in this repository included) builds exactly as it did
  * before. With *some* of them set it fails, naming the ones that are missing: a
  * typo in a build setting must not quietly publish somebody else's notes.
  *
@@ -29,7 +29,7 @@
  *
  * Markdown is written at its **slug**; everything else is written at its
  * **vault path**. Those are not the same rule and the difference is load
- * bearing — see the comment on `targetFor` below.
+ * bearing (see the comment on `targetFor` below).
  */
 
 import { mkdir, rm, writeFile } from 'node:fs/promises'
@@ -55,7 +55,7 @@ import { clearContentStores } from './lib/astro-cache.mjs'
 /**
  * Every path this script touches is resolved against the working directory,
  * never against its own location. npm runs a script with the package root as
- * its cwd, so for a real build the two are the same — and keeping it this way
+ * its cwd, so for a real build the two are the same, and keeping it this way
  * is what lets `test/snapshot.test.ts` run the real script against a scratch
  * directory instead of overwriting the config file of the repository it is
  * testing.
@@ -73,7 +73,7 @@ const DOWNLOAD_CONCURRENCY = 8
  * it is wrong on a developer machine: the 1Password CLI puts
  * `OP_SERVICE_ACCOUNT_TOKEN` in the environment, and a plain `npm run build`
  * would then stop with a demand for four bucket variables the person has never
- * heard of. A closed list still catches the case that matters — a typo in one
+ * heard of. A closed list still catches the case that matters: a typo in one
  * name while the other three are spelled correctly.
  */
 const OP_ENV = [...REQUIRED_ENV, 'OP_REGION', 'OP_PREFIX', 'OP_FORCE_PATH_STYLE', 'OP_SITE_URL']
@@ -94,7 +94,7 @@ function fail(message) {
  * file there is what makes `slugs: 'preserve'` serve that address. An
  * attachment has no such address: jotter serves attachments from
  * `/_vault/<path>`, which the plugin never sees, never reports and never
- * redirects to. Slugging one would only break it — `resolveAsset`
+ * redirects to. Slugging one would only break it: `resolveAsset`
  * (`src/lib/resolve.ts:180`) matches an embed on the file's **basename** and
  * does not consult the link index, so `![[My Diagram.png]]` against a file
  * written as `my-diagram.png` resolves to nothing at all.
@@ -139,7 +139,7 @@ async function main() {
   /**
    * Two entries writing to one file, which the download pool would resolve by
    * whichever finished last. The plugin refuses a slug collision at scan time,
-   * so this should be unreachable — and it is one line of `Map` for a failure
+   * so this should be unreachable, and it is one line of `Map` for a failure
    * whose only other symptom is a note that silently is not on the site.
    */
   const claimed = new Map()
@@ -239,7 +239,7 @@ async function main() {
 
   /**
    * The plugin resolved every link inside Obsidian, against the whole vault,
-   * with the user's own settings — attachment folders, aliases, shortest-path
+   * with the user's own settings: attachment folders, aliases, shortest-path
    * matching over notes that were never published. Nothing seeing only the
    * published subset can reproduce that, so jotter reads the answers instead of
    * guessing again.

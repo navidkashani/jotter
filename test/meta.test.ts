@@ -5,7 +5,7 @@
  * `features.rss`, frontmatter `homepage: true` and `image:` were each declared
  * and read by nothing, and `calloutIcon`, `enabledFeatures` and `aliasRedirects`
  * were each written and called by nobody. Every one was invisible for the same
- * reason — nothing compared the list of things jotter *offers* against the list
+ * reason: nothing compared the list of things jotter *offers* against the list
  * of things jotter *uses*, so a promise with no reader looked exactly like a
  * promise being kept.
  *
@@ -63,11 +63,11 @@ describe('nothing in src/lib is written for nobody', () => {
    * reason attached is how the next `calloutIcon` survives a decade.
    *
    * **Empty, and that is the resting state.** Its only two entries were
-   * `outgoingFor` here and the `note.links` string below — the two halves of
+   * `outgoingFor` here and the `note.links` string below: the two halves of
    * an outgoing-links section that was designed and never built. The decision
    * went to deleting them: a note's outgoing links are already in the prose
    * the reader has just scrolled past, as links, so listing them again repeats
-   * the page to itself — where backlinks earn their place precisely because
+   * the page to itself, where backlinks earn their place precisely because
    * they are invisible otherwise, and the local graph answers "what does this
    * connect to" better than a list can. Add an entry here only with the reason
    * *and* the condition that retires it.
@@ -96,7 +96,7 @@ describe('nothing in src/lib is written for nobody', () => {
       }
     }
 
-    expect(orphans, 'exported and never used — delete it, or wire it up').toEqual([])
+    expect(orphans, 'exported and never used: delete it, or wire it up').toEqual([])
   })
 
   /** An exemption that has quietly become true again is dead weight of its own. */
@@ -138,7 +138,7 @@ describe('nothing in en.json is translated for nobody', () => {
         !BUILT.includes(key) &&
         !corpus.some(({ text }) => text.includes(key)),
     )
-    expect(unasked, 'defined and never asked for — a translator would translate it for nothing').toEqual([])
+    expect(unasked, 'defined and never asked for: a translator would translate it for nothing').toEqual([])
   })
 
   /** The other direction: a key that is asked for and does not exist renders as itself. */

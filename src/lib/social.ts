@@ -2,8 +2,8 @@
  * The picture a link to this site unfurls as.
  *
  * `image:` has been declared in `src/content.config.ts` since the first commit
- * and read by nothing, so a vault that already carried the key — Obsidian users
- * write one, and Quartz reads one — got a text-only card and no warning. This
+ * and read by nothing, so a vault that already carried the key (Obsidian users
+ * write one, and Quartz reads one) got a text-only card and no warning. This
  * is the half of the answer that has a *right* answer: which file the author
  * meant, and whether an unfurler will draw it.
  *
@@ -12,7 +12,7 @@
  * `environment: 'node'` and there is no jsdom, so everything decidable lives
  * where a unit test can reach it. What is left in the layouts is markup.
  *
- * Split in two so the scan can validate a value without knowing the site URL —
+ * Split in two so the scan can validate a value without knowing the site URL:
  * `src/lib/vault.ts` warns at scan time, and `config.url` is not its business.
  */
 import { assetHref } from './href.js'
@@ -20,14 +20,14 @@ import { resolveAsset, type VaultIndex } from './resolve.js'
 
 /**
  * The spellings Quartz coalesces in `quartz/plugins/transformers/frontmatter.ts`
- * — `socialImage`, `image`, `cover` — so a vault that was published through
+ * (`socialImage`, `image`, `cover`), so a vault that was published through
  * Quartz keeps its cards on the way over. jotter's own name is `image`, and it
  * wins, the way `aliases` wins over `alias`.
  */
 const FRONTMATTER_KEYS = ['image', 'socialImage', 'cover'] as const
 
 /**
- * The declared image, whichever of the three spellings the author used — and
+ * The declared image, whichever of the three spellings the author used, and
  * *which* spelling, so a warning can quote the line they would go and edit
  * rather than a key they never typed.
  */
@@ -43,7 +43,7 @@ export function frontmatterImage(
 
 /**
  * What an unfurler will actually draw, which is not the same question as
- * `isOptimizable` in `src/lib/embed.ts` — that one answers "what can Astro
+ * `isOptimizable` in `src/lib/embed.ts`: that one answers "what can Astro
  * re-encode". The lists overlap and are kept apart deliberately, for the same
  * reason `thirdPartyOrigins` names its two exemptions separately: one edit
  * should not widen both at once.
@@ -70,7 +70,7 @@ export type SocialImage =
  * resolves: `resolveAsset` already tries the normalized path, the note-relative
  * path and the bare filename, which is the whole of what Obsidian does. A hit
  * is served verbatim from `/_vault/` rather than through Astro's image
- * pipeline — the pipeline needs a static import Vite can see, which a dynamic
+ * pipeline: the pipeline needs a static import Vite can see, which a dynamic
  * vault path does not give it, and its output is WebP/AVIF, thinner ground with
  * unfurlers than the author's own PNG.
  *
@@ -105,7 +105,7 @@ export function resolveSocialImage(
  * Absolute is not a nicety: an unfurler has no document to resolve a relative
  * URL against, so a relative one is not a degraded card but a card nobody
  * draws. That is why the whole feature is gated on `config.url`, exactly as the
- * canonical link and the feed already are — and why this returns `undefined`
+ * canonical link and the feed already are, and why this returns `undefined`
  * without one rather than emitting something shorter.
  */
 export function socialImageUrl(

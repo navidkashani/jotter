@@ -2,15 +2,15 @@
 /**
  * The analytics tag, if the config asked for one.
  *
- * Renders no user-visible text, so nothing here goes through `t()` — the
+ * Renders no user-visible text, so nothing here goes through `t()`: the
  * absence of an `src/i18n/` key for this component is a fact about the feature,
  * not an omission.
  *
  * `is:inline` is required. Astro processes and hoists a bare external
  * `<script src>`, which would take the tag out of the markup entirely; the
  * directive is what makes it stay put. Attribute *expressions* are still
- * evaluated on an inline script — only a script's **body** is left
- * unprocessed — which is why the spread below works and why GA4's init block
+ * evaluated on an inline script (only a script's **body** is left
+ * unprocessed), which is why the spread below works and why GA4's init block
  * uses `define:vars` rather than an expression. See the note at the top of
  * `Base.astro` for what happens when a `{…}` lands in a script body.
  *
@@ -27,7 +27,7 @@ import { analyticsTag } from '../lib/analytics.js'
 
 /**
  * Production only. Without this gate every local reload during `astro dev`
- * would be a real pageview against real production stats — the bug Quartz
+ * would be a real pageview against real production stats: the bug Quartz
  * ships, which has no dev guard anywhere. Plausible and Umami discard localhost
  * by default; GA4, Fathom and GoatCounter do not, and a small garden's numbers
  * are exactly the kind a week of local editing ruins.
@@ -39,7 +39,7 @@ const tag = import.meta.env.PROD ? analyticsTag(config.analytics) : undefined
 
 /**
  * The marker is how `scripts/verify-build.mjs` tells jotter's own tag from any
- * other external script that found its way into `dist/` — the same idiom as
+ * other external script that found its way into `dist/`: the same idiom as
  * `data-search` and `data-preview`. Every vendor here reads only its own
  * `data-` attribute and ignores the rest, so it is inert; it also makes
  * view-source say which vendor is loaded and that jotter put it there.

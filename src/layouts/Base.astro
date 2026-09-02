@@ -3,14 +3,14 @@
  * The page frame: head, header, sidebar, main.
  *
  * Two scripts live here. The theme island is `is:inline` in `<head>` on purpose
- * — it has to run before first paint, or a reader who chose dark gets a white
- * flash on every navigation — and the drawer enhancement is a bundled body
+ * (it has to run before first paint, or a reader who chose dark gets a white
+ * flash on every navigation) and the drawer enhancement is a bundled body
  * script at the end of `<body>`. Everything on the page works with scripting
  * off; neither script is load-bearing.
  *
  * Both are written as plain JavaScript, not as a `{`…`}` expression holding a
  * template literal. A `<script>` element is raw text, so Astro emits an
- * expression there verbatim — braces, backticks and all — and the browser gets
+ * expression there verbatim (braces, backticks and all) and the browser gets
  * a syntax error. `ThemeToggle.astro` has always had the right shape.
  */
 import { Font } from 'astro:assets'
@@ -36,7 +36,7 @@ interface Props {
   current?: string
   /**
    * The card image for this page, already absolute. Only `Note.astro` passes
-   * one — it is the layout that can see a note's frontmatter — and everything
+   * one, it is the layout that can see a note's frontmatter, and everything
    * else falls back to the site-wide default below.
    */
   image?: string
@@ -45,8 +45,8 @@ interface Props {
 const { title, description, current, image } = Astro.props
 
 /**
- * Search belongs on every page, and this is the only layout all of them share
- * — `Note.astro` would leave the tag pages, `/notes` and the 404 without it.
+ * Search belongs on every page, and this is the only layout all of them share:
+ * `Note.astro` would leave the tag pages, `/notes` and the 404 without it.
  *
  * The flag arrives as a literal from `astro.config.ts` rather than off
  * `config`, and the import is dynamic, so that with search off Rollup can drop
@@ -63,10 +63,10 @@ const pageDescription = description || config.description
  *
  * `Astro.url.pathname` is the WHATWG form, which leaves `&` and `+` literal, so
  * on a site whose slugs carry either one this used to disagree with the links
- * pointing at the very same page — and RFC 3986 §6.2.2.2 keeps `/a&b` and
+ * pointing at the very same page, and RFC 3986 §6.2.2.2 keeps `/a&b` and
  * `/a%26b` formally distinct, so Google reads that as two URLs for one page.
  * The round trip is the whole fix, and it covers the pages with no slug at all
- * — tags, `/notes`, the 404 — for free.
+ * (tags, `/notes`, the 404) for free.
  */
 const canonical = config.url
   ? new URL(encodeSlug(decodeSlug(Astro.url.pathname)), config.url).href
@@ -75,7 +75,7 @@ const canonical = config.url
 /**
  * How a browser and every reader *discover* a feed. Without this the file is
  * findable only by guessing its name, and the standing advice is still to link
- * it from every page — so it goes in the layout all of them share.
+ * it from every page, so it goes in the layout all of them share.
  *
  * On the same `config.url` condition as the canonical link above, and a plain
  * `config.features.rss` test rather than a `JOTTER_*` literal: the `vite.define`
@@ -89,7 +89,7 @@ const feedUrl = config.features.rss && config.url ? new URL(FEED_PATH, config.ur
  * The picture a link to this page unfurls as: the note's own if it declared
  * one, else the site-wide default, else nothing at all.
  *
- * Both are already absolute or already `undefined` — `src/lib/social.ts` gates
+ * Both are already absolute or already `undefined`: `src/lib/social.ts` gates
  * on `config.url` for the same reason the canonical link above does, because an
  * `og:image` an unfurler cannot resolve is not a smaller card but no card. So
  * there is no third condition to keep in step here.

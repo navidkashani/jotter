@@ -14,7 +14,7 @@ import { z } from 'astro/zod'
 /**
  * Exported so a test can assert that every member has a tag in
  * `src/lib/analytics.ts`. Adding a provider here without a mapping there would
- * otherwise be a silent `undefined` — a configured site emitting nothing.
+ * otherwise be a silent `undefined`: a configured site emitting nothing.
  */
 export const analyticsProviders = [
   'none',
@@ -28,8 +28,8 @@ export const analyticsProviders = [
 
 /**
  * The three with a self-hosted mode. `host` on any of the other four is not a
- * preference jotter declines to honour, it is a misunderstanding — Fathom,
- * Cloudflare and Google have no self-hosted endpoint to point at — so it is
+ * preference jotter declines to honour, it is a misunderstanding (Fathom,
+ * Cloudflare and Google have no self-hosted endpoint to point at), so it is
  * rejected below rather than ignored.
  */
 const selfHostable: readonly string[] = ['plausible', 'umami', 'goatcounter']
@@ -47,7 +47,7 @@ export const jotterConfigSchema = z
      * The card image for every page that does not name its own.
      *
      * A vault path (`attachments/og.png`), a `/`-rooted path for a file in
-     * `public/`, or an absolute URL. Requires `url` — see the root refine.
+     * `public/`, or an absolute URL. Requires `url` (see the root refine).
      */
     image: z.string().optional(),
 
@@ -78,7 +78,7 @@ export const jotterConfigSchema = z
     /**
      * How a vault path becomes a URL.
      *
-     * `derive` slugifies — lowercase, dashes, punctuation dropped — and is what
+     * `derive` slugifies (lowercase, dashes, punctuation dropped), and is what
      * every jotter site has always done. `preserve` and `obsidian` carry the
      * vault path to the URL untouched, and `obsidian` reproduces Obsidian
      * Publish's own addresses (space → `+`), so a site moving onto the domain
@@ -110,7 +110,7 @@ export const jotterConfigSchema = z
         graph: z.boolean().default(false),
         search: z.boolean().default(false),
         hoverPreview: z.boolean().default(false),
-        /** `/rss.xml`, written at build. Requires `url` — see the root refine. */
+        /** `/rss.xml`, written at build. Requires `url` (see the root refine). */
         rss: z.boolean().default(false),
       })
       .prefault({}),
@@ -122,7 +122,7 @@ export const jotterConfigSchema = z
      * Off by default, and the only switch in jotter that adds a request to
      * somebody else's server. Both refinements exist so that a misconfiguration
      * is a build error naming the key rather than a site that silently collects
-     * nothing — degrade loudly, the way the vault integration already does.
+     * nothing: degrade loudly, the way the vault integration already does.
      *
      * There is deliberately no `custom` provider and no `src`. A field taking
      * an arbitrary script URL is one the origin assertion in
@@ -162,7 +162,7 @@ export const jotterConfigSchema = z
    * The constraints spanning two top-level keys, which is why they are here
    * rather than beside either of them.
    *
-   * Every link in a feed has to be absolute — a reader resolves them against
+   * Every link in a feed has to be absolute: a reader resolves them against
    * nothing. So `features.rss` without `url` is not a degraded feed, it is one
    * nobody can follow, and it fails the build naming the key it needs in the
    * same shape as the two analytics refinements above. Degrade loudly.
@@ -173,7 +173,7 @@ export const jotterConfigSchema = z
   })
   /**
    * The same rule, for the same reason, one key over. `og:image` must be
-   * absolute — an unfurler has no document to resolve a relative URL against —
+   * absolute (an unfurler has no document to resolve a relative URL against)
    * so a site-wide `image` with no `url` to make it absolute is a card nobody
    * ever draws, silently. A note's own `image:` is frontmatter and cannot fail
    * a build; this one is config, and config says so.

@@ -7,10 +7,10 @@
  * awaits things, and everything here is a pure function over plain values.
  *
  * This file is the one exception to the boundary `local-graph.ts` and
- * `hover-preview.ts` both declare — that nothing in `src/scripts/` may import
+ * `hover-preview.ts` both declare: that nothing in `src/scripts/` may import
  * from `src/lib/`. The reason for that rule is that `src/lib/` is build-time
  * code and reaches for `node:fs`; this module imports one thing, `./url.js`,
- * which itself imports nothing at all — and nothing in either touches a global.
+ * which itself imports nothing at all, and nothing in either touches a global.
  * So it bundles into the browser cleanly *and* it is testable without a DOM,
  * which is the whole argument `src/lib/preview.ts` made for the build-time half
  * of hover previews.
@@ -33,8 +33,8 @@ import { decodeSlug, encodeSlug } from './url.js'
  *
  * The second mismatch is the same shape and was invisible until a slug could
  * carry an interesting character. Pagefind reads the **file path** off disk, so
- * a page in `dist/Wisdom+&+Approaches/` is indexed at `/Wisdom+&+Approaches/…`
- * — the slug, not the URL. Re-encoding it here is what makes a search result
+ * a page in `dist/Wisdom+&+Approaches/` is indexed at `/Wisdom+&+Approaches/…`:
+ * the slug, not the URL. Re-encoding it here is what makes a search result
  * byte-identical to the `<a href>`, the canonical link and the sitemap entry
  * for the same page; RFC 3986 §6.2.2.2 keeps `/a&b` and `/a%26b` formally
  * distinct, and Google's URL guidelines split a page that is linked as both.
@@ -53,15 +53,15 @@ export function normalizeResultUrl(url: string): string {
  * The heading jumps worth showing under a result.
  *
  * Pagefind's `sub_results` carry the matching section's `#anchor`, and those
- * resolve against Astro's own heading ids — which `anchorFor()` already mirrors
- * — so nothing needs mapping. Two things have to be dropped, though.
+ * resolve against Astro's own heading ids (which `anchorFor()` already mirrors)
+ * so nothing needs mapping. Two things have to be dropped, though.
  *
  * The **first sub-result is always the page itself**, anchorless, which the
  * result's own link already is. Comparing normalised hrefs drops it without
  * depending on Pagefind's ordering staying what it is today.
  *
- * And two sections can normalise to the same href — an empty heading, or a
- * duplicate one — which would render the same jump twice. `seen` is primed
+ * And two sections can normalise to the same href (an empty heading, or a
+ * duplicate one), which would render the same jump twice. `seen` is primed
  * with the page so one pass does both jobs.
  *
  * Generic so the caller keeps its excerpt fields: this decides *which*
@@ -98,7 +98,7 @@ export function headingJumps<T extends { url: string }>(
  * to the field on one more press is disorienting when you are scanning, and
  * both ends are one keystroke from somewhere useful anyway.
  *
- * `current` is `-1` when focus is somewhere else in the dialog — the close
+ * `current` is `-1` when focus is somewhere else in the dialog: the close
  * button, or the dialog itself. The clamp already sends both directions home
  * to the field from there, which is the right answer and worth noticing rather
  * than rediscovering: `-1 + 1` and `-1 - 1` both clamp to `0`.
@@ -147,14 +147,14 @@ const TEXT_NODE = 3
 const ELEMENT_NODE = 1
 
 /**
- * Pagefind's `excerpt` is *escaped* HTML containing `<mark>` — `&amp;` for an
+ * Pagefind's `excerpt` is *escaped* HTML containing `<mark>`: `&amp;` for an
  * ampersand, `&#x27;` for an apostrophe. Splitting the string on the tags and
  * setting the pieces as text would therefore render those entities literally,
  * and using `innerHTML` to decode them would break the invariant that nothing
  * in `src/` ever does.
  *
- * So the caller parses it with `DOMParser` — which neither executes scripts nor
- * loads resources — and this reduces the result to text runs. Entities decode
+ * So the caller parses it with `DOMParser` (which neither executes scripts nor
+ * loads resources), and this reduces the result to text runs. Entities decode
  * correctly because the parser decoded them, the rebuilt DOM is `textContent`
  * only, and anything unexpected in the excerpt is *dropped* rather than
  * rendered: only text nodes and `<mark>` elements survive.

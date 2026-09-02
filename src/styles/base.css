@@ -6,8 +6,8 @@
  * to reverse, so it is made once, here, on day one: an RTL locale is a `dir`
  * attribute, not a second stylesheet.
  *
- * Two type scales live here. The document runs at `--step-ui` (16/1.65) —
- * headers, nav, labels, lists — and `.prose` alone runs at `--step-body`
+ * Two type scales live here. The document runs at `--step-ui` (16/1.65)
+ * (headers, nav, labels, lists), and `.prose` alone runs at `--step-body`
  * (17/1.72). Setting prose type on `body` is what made every piece of chrome
  * read two steps too large.
  *
@@ -23,7 +23,7 @@
  * emits one shape or the other at build time.
  *
  * The DOM order differs between them, which it did not use to. `column` is
- * head, outline, prose, backlinks — visual order and reading order both.
+ * head, outline, prose, backlinks: visual order and reading order both.
  * `panels` is head, aside(outline + rail), prose, because the outline and the
  * rail have to be one element to be one sticky column; as two grid items they
  * pushed the prose down and overprinted each other on scroll. Below 1100px
@@ -98,7 +98,7 @@ body {
 /**
  * A link is accent-coloured and carries no browser underline. In running text
  * it gets a `--soft` rule underneath instead, which darkens to the accent on
- * hover; in chrome — nav rows, cards, chips — the component draws its own
+ * hover; in chrome (nav rows, cards, chips) the component draws its own
  * affordance and an underline would only add noise.
  */
 :where(a) {
@@ -173,11 +173,11 @@ body {
 /**
  * The two mono voices, and they are not interchangeable.
  *
- * `.label` names a region — "Start here", "On this page", "Linked from". It is
+ * `.label` names a region: "Start here", "On this page", "Linked from". It is
  * 10px, letterspaced hard and uppercased, so it reads as a rule over a section
  * rather than as content.
  *
- * `.meta` is data — a date, a count, a frontmatter value. It is 11.5px and left
+ * `.meta` is data: a date, a count, a frontmatter value. It is 11.5px and left
  * alone: uppercasing a date only makes it harder to read.
  */
 .label {
@@ -222,7 +222,7 @@ body {
 /**
  * Solid, not translucent. A blurred header over a warm paper ground reads as a
  * smear at 52px tall; a flat `--surface` band with one hairline under it is
- * both quieter and cheaper — no compositing layer on every scroll.
+ * both quieter and cheaper: no compositing layer on every scroll.
  */
 .site-header {
   grid-area: header;
@@ -405,7 +405,7 @@ body {
 /**
  * The default shape: one column, centred, no rail. `.note-toc` and
  * `.note-rail` are separate elements rather than one aside, so the outline can
- * sit *above* the prose while backlinks sit below it — one element could not be
+ * sit *above* the prose while backlinks sit below it: one element could not be
  * in two places, and rendering the outline twice would read it twice to a
  * screen reader.
  */
@@ -449,7 +449,7 @@ body {
  * One sticky element, not two, and that is the whole trick. The outline and
  * the rail used to be separate grid items in rows 1 and 2 of column 2, which
  * broke twice over. A grid row is as tall as its tallest cell, so an outline
- * taller than the title block pushed the prose down by the difference — 151px
+ * taller than the title block pushed the prose down by the difference: 151px
  * on the kitchen sink. And two `position: sticky` siblings resolve their
  * containing block to the grid *container* rather than to their own rows, so
  * past the first screen they both pinned to the same offset and drew on top of
@@ -544,7 +544,7 @@ body {
 
 /**
  * The fold-back. Below 1100px `panels` becomes the column stack, and the
- * wrapper has no job there — `display: contents` removes it so the outline and
+ * wrapper has no job there: `display: contents` removes it so the outline and
  * the rail are ordinary stacked children again.
  *
  * The rail is then placed *after* the prose. This is the one place where DOM
@@ -621,7 +621,7 @@ body {
  * has going spare.
  *
  * The type is set on the box rather than in the script because the canvas
- * reads its own computed style for the labels — one more thing that stays a
+ * reads its own computed style for the labels: one more thing that stays a
  * token instead of becoming a literal in JavaScript. The sans rather than the
  * mono is worth about 17% of every label's width, which at 216px is the
  * difference between a name and an ellipsis.
@@ -688,7 +688,7 @@ body {
 /**
  * `::backdrop` inherits from its originating element in current browsers, so
  * `--scrim` resolves here. Where it does not, the backdrop is simply
- * transparent — the dialog is still legible, still on top and still closes.
+ * transparent: the dialog is still legible, still on top and still closes.
  * A hardcoded fallback is not available: `tokens.css` is the only file allowed
  * to name a colour, and the build asserts it.
  */
@@ -708,7 +708,7 @@ body {
 
 /**
  * Every element here is invented by `src/scripts/search.ts` and appended to
- * `<body>`, so — like `.note-preview` and for the same reason — the styles
+ * `<body>`, so (like `.note-preview` and for the same reason) the styles
  * cannot live in a scoped `<style>`: Astro's scoping has no element to hash
  * against at build time.
  *
@@ -762,7 +762,7 @@ body {
 
 /**
  * No `outline: 0` here. The field is focused the moment the dialog opens and a
- * ring around it is not the prettiest thing in the theme — but "visible focus
+ * ring around it is not the prettiest thing in the theme, but "visible focus
  * everywhere, never removed" is a claim the README makes, and a borderless
  * input is exactly the control that cannot afford to lose it.
  */
@@ -784,7 +784,7 @@ body {
 
 /**
  * The count, and every failure message. `aria-live="polite"` is on it in the
- * script, so this is what a screen reader hears after each search — which is
+ * script, so this is what a screen reader hears after each search, which is
  * also why the message is never hidden when it is empty: an element that comes
  * and goes is not a live region.
  */
@@ -803,7 +803,7 @@ body {
  *
  * `display: none` here would contradict the comment above it and defeat the
  * point of the region: a polite live region that is *not rendered* at the
- * moment text is inserted into it is not reliably announced — the element has
+ * moment text is inserted into it is not reliably announced: the element has
  * to be in the tree, and in the layout, before the content arrives. Collapsing
  * the padding leaves it 0px tall and costs no vertical space.
  */
@@ -880,7 +880,7 @@ body {
  * The card `src/scripts/hover-preview.ts` builds and appends to `<body>`.
  *
  * Here rather than in a scoped `<style>` because Astro's scoping cannot reach
- * an element the script invents — and because this file is the only place the
+ * an element the script invents, and because this file is the only place the
  * "no colour literal outside tokens.css" assertion actually looks: it walks
  * `src/styles/*.css` and skips `.astro` `<style>` blocks entirely.
  *
@@ -1058,7 +1058,7 @@ body {
 
 /**
  * Frontmatter as a panel rather than a byline. A note in a vault has a header
- * block in the file; showing it as one — mono, boxed, keys aligned — says "this
+ * block in the file; showing it as one (mono, boxed, keys aligned) says "this
  * is the file's own metadata" in a way a comma-separated line never did.
  */
 .note-frontmatter {
@@ -1350,7 +1350,7 @@ body {
  * A note title is somebody else's words dropped into our layout, and it may
  * run the other way from the page around it. `unicode-bidi: isolate` makes
  * each one its own bidi paragraph, so a Persian title in an English card
- * cannot drag the punctuation of the label beside it to the wrong end — and a
+ * cannot drag the punctuation of the label beside it to the wrong end, and a
  * mixed title like `Radio Marz - رادیو مرز` keeps its own two runs in order.
  *
  * One rule rather than a `dir` attribute on fourteen components, and it is the
@@ -1360,7 +1360,7 @@ body {
  * The honest limit: this is isolation, not alignment. A Persian card title
  * stays left-aligned in its box on an LTR site. Per-element `dir` would give
  * both and cost fourteen files; it is additive later if a screenshot asks for
- * it. The prose itself is already handled per block — see
+ * it. The prose itself is already handled per block: see
  * `src/markdown/direction.ts`.
  *
  * The breadcrumb, the cards, the rows, the nav tree and the TOC are all flex

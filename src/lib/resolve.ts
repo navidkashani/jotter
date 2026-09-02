@@ -148,7 +148,7 @@ export function resolveLink<N extends ResolvableNote>(
   /**
    * Order differs per mode only in where a *path-shaped* target is looked up
    * first. Filename and alias matching are Obsidian behaviours that stay on in
-   * every mode — turning them off would break links that work in the app.
+   * every mode: turning them off would break links that work in the app.
    */
   const lookups =
     mode === 'relative'
@@ -204,7 +204,7 @@ export function resolveAsset(
  *
  * It must never reach for a note's title. A note excluded from the site must
  * not have its title leak into the published HTML through a link somebody else
- * wrote to it — and the basename keeps the folder it sits in out of the page
+ * wrote to it, and the basename keeps the folder it sits in out of the page
  * too.
  */
 export function displayFor(raw: string, alias?: string): string {

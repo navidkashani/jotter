@@ -1,29 +1,29 @@
 /**
  * The local graph, drawn.
  *
- * `src/lib/` is build-time code — it imports `node:fs`. This directory is the
+ * `src/lib/` is build-time code: it imports `node:fs`. This directory is the
  * other side of that boundary: everything here runs in a browser, and nothing
  * here may be imported by a page.
  *
  * A force layout on a 2D canvas. `d3-force` does the physics and the rest is
  * hand-written, including pan, zoom and drag. That last part is not taste:
  * `d3-zoom` pulls in selection, transition, interpolate, ease and color, and
- * takes the shipped bundle from 17 KB to 78 KB — three times the whole theme's
- * budget — for behaviour that is sixty lines here.
+ * takes the shipped bundle from 17 KB to 78 KB (three times the whole theme's
+ * budget) for behaviour that is sixty lines here.
  *
  * Sizing follows Quartz, which is tuned for exactly this box: radius
  * `2 + sqrt(links)`, no node cap.
  *
  * The labelling does not, and that is worth being precise about, because this
- * file used to argue the opposite. Quartz hides labels at rest — their opacity
- * is `max((k - 1) / 3.75, 0)`, which at its own starting zoom is *zero* — and
+ * file used to argue the opposite. Quartz hides labels at rest (their opacity
+ * is `max((k - 1) / 3.75, 0)`, which at its own starting zoom is *zero*), and
  * that was taken as the rule. But the reference this theme is measured
  * against, `navidk.com/start`, is not Quartz: it is Obsidian Publish, and
  * Obsidian draws every label, always. Two products, opposite defaults, and
  * copying the wrong one left the rail card a picture with no names on it.
  *
  * So: every label, always. What makes that affordable is the same thing that
- * makes it affordable for Obsidian — the expand button, and the dialog behind
+ * makes it affordable for Obsidian: the expand button, and the dialog behind
  * it. The card is a glanceable map; the dialog is where you read.
  *
  * The card is also the harder problem of the two. Obsidian gives its graph
@@ -86,7 +86,7 @@ const CLICK_SLOP = 4
 const MIN_ZOOM = 0.35
 /**
  * The fit's ceiling. This used to be 2.5, which was fine while the only box
- * was a 216px card that binds long before it — and wrong the moment the dialog
+ * was a 216px card that binds long before it, and wrong the moment the dialog
  * arrived, where it pinned a six-node neighbourhood into a 200px knot adrift
  * in 1100px of nothing. A magnified layout is not the failure mode here;
  * `MAX_DOT` is what stops five fat circles, and it does that regardless.
@@ -98,8 +98,8 @@ const MAX_DOT = 7
 /**
  * A label's width budget, in screen pixels: `min(MAX_LABEL, width * SHARE)`.
  *
- * The share is what binds in the rail — 45% of 216px is about 96px, roughly
- * sixteen characters of 10px sans — and the ceiling is what binds in the
+ * The share is what binds in the rail (45% of 216px is about 96px, roughly
+ * sixteen characters of 10px sans), and the ceiling is what binds in the
  * dialog, where 320px is past any title anyone will write, so nothing there is
  * ever elided. Two constants rather than two code paths.
  */
@@ -156,7 +156,7 @@ function mountGraph(mount: HTMLElement) {
   /* --------------------------------------------------------- the palette */
 
   const paint = { node: '', focus: '', edge: '', label: '', halo: '', font: '', size: 10 }
-  /** Full title widths, for the hovered label — which never elides. */
+  /** Full title widths, for the hovered label, which never elides. */
   let labelWidths = new Map<string, number>()
   /** And what everything else draws: elided to the budget, width included so
    *  the separation force and the edge nudge do not re-measure every tick. */
@@ -210,7 +210,7 @@ function mountGraph(mount: HTMLElement) {
   /* ------------------------------------------------------- the transform */
 
   /** Whichever element the canvas is living in: the rail card, or the dialog.
-   *  Every measurement — size, type, budget — is taken from this. */
+   *  Every measurement (size, type, budget) is taken from this. */
   let box: HTMLElement = mount
   let width = 0
   let height = 0
@@ -254,7 +254,7 @@ function mountGraph(mount: HTMLElement) {
    * This cannot be a division, because the two things being fitted scale
    * differently: the dots shrink with the zoom and the label allowance under
    * the lowest of them never does. The extent is still monotonic in zoom
-   * though, so eighteen halvings find the largest that fits — well past pixel
+   * though, so eighteen halvings find the largest that fits: well past pixel
    * precision on a 218px card, and a few hundred operations a tick here.
    */
   const fit = () => {
@@ -329,7 +329,7 @@ function mountGraph(mount: HTMLElement) {
     }
 
     /**
-     * Every node is named, every time — see the note at the top of this file.
+     * Every node is named, every time (see the note at the top of this file).
      * Only the hover highlight changes what a label looks like, and it changes
      * it exactly the way it changes the dot beneath it.
      *
@@ -337,7 +337,7 @@ function mountGraph(mount: HTMLElement) {
      * halo, and it is the difference between overlapping labels being
      * unreadable and merely overlapping. The hovered node draws last, over the
      * top of whatever it lands on, and draws its *full* title rather than the
-     * elided one — which is what makes eliding all the others safe.
+     * elided one, which is what makes eliding all the others safe.
      */
     ctx.font = paint.font
     ctx.textAlign = 'center'
@@ -399,7 +399,7 @@ function mountGraph(mount: HTMLElement) {
    * the charge and the links instead of fighting them: every push is scaled by
    * `alpha`, which means it argues loudly while the layout is still forming
    * and falls silent as the simulation cools. That is also why it cannot
-   * oscillate — the thing driving it decays to zero.
+   * oscillate: the thing driving it decays to zero.
    *
    * Only Y. Labels are wide and short, so two of them a few pixels apart
    * horizontally are still two rows you can read, while two a few pixels apart
@@ -460,8 +460,8 @@ function mountGraph(mount: HTMLElement) {
     }
     /**
      * d3's documented static layout. `tick()` dispatches no events, so nothing
-     * paints until we say so, and 300 is the natural count —
-     * `ceil(log(alphaMin) / log(1 - alphaDecay))` — after which the simulation
+     * paints until we say so, and 300 is the natural count
+     * (`ceil(log(alphaMin) / log(1 - alphaDecay))`) after which the simulation
      * would have stopped on its own. A live force simulation is precisely the
      * motion this setting exists to suppress.
      *
@@ -496,7 +496,7 @@ function mountGraph(mount: HTMLElement) {
 
   /**
    * Nearest node under a client point, or null. Screen space, against the
-   * radius actually drawn — no DOM per node and no hit regions.
+   * radius actually drawn: no DOM per node and no hit regions.
    */
   const nodeAt = (event: { clientX: number; clientY: number }) => {
     const rect = canvas.getBoundingClientRect()
@@ -601,7 +601,7 @@ function mountGraph(mount: HTMLElement) {
   })
 
   /**
-   * Zoom on pinch, or Ctrl/Cmd and the wheel — the convention every embedded
+   * Zoom on pinch, or Ctrl/Cmd and the wheel: the convention every embedded
    * map uses. A bare wheel is left alone deliberately: this is a small card in
    * a sticky rail, and a reader scrolling the article with the pointer over it
    * should not have the page stop under them. A trackpad pinch arrives here as
@@ -640,7 +640,7 @@ function mountGraph(mount: HTMLElement) {
 
   /**
    * The rail card is 216px wide, which is enough to see a shape in and not
-   * enough to read one. This is the way out — Obsidian Publish's own answer,
+   * enough to read one. This is the way out: Obsidian Publish's own answer,
    * and the thing that makes drawing every label at that size defensible.
    *
    * Both the button and the dialog are built here rather than sitting in

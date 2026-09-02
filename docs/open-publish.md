@@ -7,7 +7,7 @@ repository can be that host.
 
 Two scripts do it, and both **no-op when the bucket is not configured**. With
 none of the `OP_*` variables set, `npm run build` builds the folder of markdown
-in `src/content/notes/` exactly as it always has — no manifest, no network, no
+in `src/content/notes/` exactly as it always has: no manifest, no network, no
 change to the demo garden. Everything below is opt-in by environment variable.
 
 ```
@@ -49,8 +49,8 @@ to your domain.
 
 The site URL is worked out from `OP_SITE_URL`, then `CF_PAGES_URL`,
 `DEPLOY_PRIME_URL`, `URL`, `VERCEL_PROJECT_PRODUCTION_URL`, `VERCEL_URL`. With
-none of them set, jotter emits no sitemap and no canonical links — a smaller
-site, not a wrong one — so it is a warning rather than a failure. Cloudflare
+none of them set, jotter emits no sitemap and no canonical links (a smaller
+site, not a wrong one), so it is a warning rather than a failure. Cloudflare
 Workers Builds injects no address at all, and is the one host where you have to
 set `OP_SITE_URL` yourself.
 
@@ -157,9 +157,9 @@ every component in `src/`. Nothing in this pipeline touches them.
 | Obsidian | jotter |
 | --- | --- |
 | `title` | `title` |
-| `locale` | `locale` — a BCP-47 tag, region-qualified: `fa-IR`, not `fa` |
-| `dir` | `dir` — carried across, never re-derived here |
-| `noIndex` | `noIndex` — `robots.txt` disallows everything, no sitemap, and `X-Robots-Tag` on every page |
+| `locale` | `locale`: a BCP-47 tag, region-qualified: `fa-IR`, not `fa` |
+| `dir` | `dir`: carried across, never re-derived here |
+| `noIndex` | `noIndex`: `robots.txt` disallows everything, no sitemap, and `X-Robots-Tag` on every page |
 | `strictLineBreaks` | `strictLineBreaks` |
 | `showThemeToggle` | `features.themeToggle` |
 | `showOutline` | `features.toc` |
@@ -169,7 +169,7 @@ every component in `src/`. Nothing in this pipeline touches them.
 | `showNavigation` | `nav: 'tree'` or `'none'` |
 | `showGraph` | `features.graph` **and** `layout: 'panels'` |
 | `analytics` | `analytics`, or `none` when the id is blank |
-| `homepage` | *nothing — already applied* |
+| `homepage` | *nothing: already applied* |
 
 Three of those are not the straight mapping they look like.
 
@@ -184,14 +184,14 @@ provider chosen in Obsidian with the id left blank falls back to no analytics,
 with a line in the build log, rather than stopping the deploy over it.
 
 **The homepage is already applied.** `homepage` is a vault path, and the plugin
-has given that note the slug `index` — which is what `/` is served from. Copying
+has given that note the slug `index`, which is what `/` is served from. Copying
 it into jotter's `homepage`, which takes a *slug*, would be a second answer to a
 settled question.
 
 **The language decides the direction, in Obsidian.** `dir` is not a control
 anybody sets: the plugin derives it from `locale` through a closed table of the
 tags it will publish, and jotter carries the answer across rather than working
-it out again. One table in one place is one answer — and a starter with no
+it out again. One table in one place is one answer, and a starter with no
 direction concept of its own still receives the right one instead of guessing.
 
 Chrome text is a separate question from layout. An `fa-IR` site gets `<html
@@ -210,7 +210,7 @@ settings have no equivalent in a snapshot and stay at their defaults:
 
 ## Old addresses become redirects, and the note does not move
 
-A vault moving off Obsidian Publish carries `legacyUrls` — the addresses each
+A vault moving off Obsidian Publish carries `legacyUrls`: the addresses each
 note used to answer at, like `Wisdom+&+Approaches/Critical+Thinking`. The plugin
 also records every rename it has seen.
 
@@ -224,8 +224,8 @@ aliases: ["Wisdom+&+Approaches/Critical+Thinking"]
 ---
 ```
 
-`buildRedirects` runs an alias through `sourceFor(alias, 'preserve')` — NFC and
-nothing else — and then through the one URL encoder in the build, so that line
+`buildRedirects` runs an alias through `sourceFor(alias, 'preserve')` (NFC and
+nothing else), and then through the one URL encoder in the build, so that line
 becomes a 301 from `/Wisdom+%26+Approaches/Critical+Thinking` to the slug the
 plugin published, and **the note stays where it is**. Written to `permalink:`
 instead it would be the other way round: the address the plugin published would
@@ -238,14 +238,14 @@ The Quartz starter does write `legacyUrls` into `permalink:`, because Quartz
 runs every alias through its own slugifier and `permalink` is the one key it
 honours character for character. jotter honours both, so it can pick the one
 that keeps the note in place. A vault prepared by the Quartz starter still
-works here — see [url-styles.md](url-styles.md).
+works here (see [url-styles.md](url-styles.md)).
 
 ---
 
 ## Links, and why no note body is rewritten
 
 The plugin resolves every wikilink *inside Obsidian*, against the whole vault,
-with your own settings — attachment folders, aliases, shortest-path matching
+with your own settings: attachment folders, aliases, shortest-path matching
 over notes that were never published. Nothing that sees only the published
 subset can reproduce that.
 
@@ -253,7 +253,7 @@ So the answers are written to `<vault>/.jotter/links.json`, in the manifest's ow
 shape, and [`src/lib/links-index.ts`](../src/lib/links-index.ts) reads them. Note
 bodies arrive byte for byte as their author wrote them, plus a `title:` and
 `aliases:` in the frontmatter. A link to a note that was not published renders as
-an inert `<span class="dead-link">` labelled with what the author typed — never
+an inert `<span class="dead-link">` labelled with what the author typed: never
 with the unpublished note's title.
 
 One re-keying happens on the way in: the manifest keys links by vault path, and
@@ -262,8 +262,8 @@ jotter looks them up by the note's on-disk path, which after the fetch is
 
 **Markdown is written at its slug; attachments are written at their vault path.**
 That difference is deliberate. A note's slug is an address the plugin published
-and other people link to. An attachment has no such address — jotter serves
-attachments from `/_vault/<path>`, which the plugin never sees — and
+and other people link to. An attachment has no such address (jotter serves
+attachments from `/_vault/<path>`, which the plugin never sees), and
 `resolveAsset` matches an embed on the file's *basename* without consulting the
 link index, so a slugified `My Diagram.png` would make `![[My Diagram.png]]`
 resolve to nothing.
@@ -274,10 +274,10 @@ resolve to nothing.
 
 After a passing build, `finalize.mjs` writes:
 
-- **`dist/_publish.json`** — `{ snapshot, builtAt }`. The plugin polls this every
+- **`dist/_publish.json`**: `{ snapshot, builtAt }`. The plugin polls this every
   3 to 15 seconds for ten minutes after a publish. Without it, every publish ends
   in "still waiting" on a site that went live minutes earlier.
-- **`dist/_headers`** — `Cache-Control: no-store` on the marker, so a CDN cannot
+- **`dist/_headers`**: `Cache-Control: no-store` on the marker, so a CDN cannot
   serve a stale one and have the plugin report an old snapshot as live, plus
   `X-Robots-Tag: noindex, nofollow` when `noIndex` is set. An existing `_headers`
   is merged, not replaced.
@@ -294,7 +294,7 @@ Every failure names the file or the setting that caused it.
 | Message | What happened |
 | --- | --- |
 | `Missing environment variable(s): …` | Some of the four are set and some are not |
-| `Storage rejected the build credentials (403)` | The token is wrong, or not scoped to this bucket. Not retried — a revoked token will not fix itself |
+| `Storage rejected the build credentials (403)` | The token is wrong, or not scoped to this bucket. Not retried: a revoked token will not fix itself |
 | `No content has been published yet` | `current.json` is not in the bucket, or `OP_PREFIX` points somewhere else |
 | `… is not in the bucket` | `current.json` names a snapshot a cleanup removed. Publish again |
 | `"<file>" downloaded corrupted` | The object's sha256 did not match the manifest. Refusing to publish content that does not match the snapshot |

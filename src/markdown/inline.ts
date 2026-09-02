@@ -5,7 +5,7 @@
  * The rules live in `src/lib/inline.ts` as a pure tokenizer. This is only the
  * mdast half: tokens in, nodes out.
  *
- * A soft break is *not* a `break` node in Satteri — it is a `\n` inside a text
+ * A soft break is *not* a `break` node in Satteri: it is a `\n` inside a text
  * value, which is why `strictLineBreaks` is handled here and not by a `break`
  * visitor. Obsidian's own default is `strictLineBreaks: false`, so a single
  * newline becomes a `<br>`.

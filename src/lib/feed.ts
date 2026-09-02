@@ -3,7 +3,7 @@
  *
  * Pure, and the direct sibling of `toNetlify()`, `toVercel()` and `robotsTxt()`
  * in `src/lib/redirects.ts`: config plus vault in, a string out, written by the
- * vault integration at `astro:build:done`. No DOM, no `node:fs`, no i18n —
+ * vault integration at `astro:build:done`. No DOM, no `node:fs`, no i18n:
  * vitest runs `environment: 'node'` and there is no jsdom, so everything with a
  * right answer lives where a unit test can reach it. That is also why the
  * channel title and description arrive as arguments rather than through
@@ -20,7 +20,7 @@
  * (`quartz/plugins/emitters/contentIndex.tsx`) omits five things this restores:
  * `xmlns:atom` and `<atom:link rel="self">`, `<language>`, `<lastBuildDate>`,
  * an explicit `isPermaLink`, and a scheme that is not hardcoded to `https`.
- * The sixth difference is escaping rather than CDATA — see `escapeXml`.
+ * The sixth difference is escaping rather than CDATA (see `escapeXml`).
  */
 import { noteHref } from './href.js'
 import type { VaultNote } from './vault.js'
@@ -33,7 +33,7 @@ export const FEED_PATH = '/rss.xml'
  *
  * Quartz's default is 10. Ten is too few here for a reason that only shows up
  * with a *revision*: the window is ordered by `updated`, so editing a handful
- * of old notes pushes recent ones out of it — and because readers dedupe on
+ * of old notes pushes recent ones out of it, and because readers dedupe on
  * `<guid>`, an item evicted before a subscriber polled is one they will never
  * be shown. Silent loss, invisible to both sides. Fifty is wide enough that a
  * weekend of tidying cannot do that to a fortnightly subscriber, and still a
@@ -45,7 +45,7 @@ export const FEED_PATH = '/rss.xml'
 export const MAX_ITEMS = 50
 
 export interface FeedOptions {
-  /** The *whole* vault. Filtering is this module's job — see `feedXml`. */
+  /** The *whole* vault. Filtering is this module's job (see `feedXml`). */
   notes: readonly VaultNote[]
   title: string
   description: string
@@ -59,7 +59,7 @@ export interface FeedOptions {
  * Escaped, never CDATA.
  *
  * A CDATA section ends at the first `]]>`, so a note containing one terminates
- * it early and corrupts the document — Quartz's feed has exactly that hole.
+ * it early and corrupts the document: Quartz's feed has exactly that hole.
  * Escaping has no such hole, which means it cannot be forgotten. Applied to
  * every interpolated value without exception, including URLs: they are already
  * percent-encoded by `noteHref`, and running them through here anyway is what
@@ -91,7 +91,7 @@ export function feedXml({
    * The feed is the one output whose note list is not the route list: every
    * page comes from `src/lib/site.ts`'s already-filtered `notes`, so a mistake
    * in *this* list is a mistake nothing else in the build would make too. It
-   * belongs in one tested place, next to the thing that could leak — and the
+   * belongs in one tested place, next to the thing that could leak, and the
    * test feeds it `test/fixtures/vault/private/`, then asserts that title
    * appears nowhere in the output.
    */
@@ -120,8 +120,8 @@ export function feedXml({
      */
     `    <atom:link href="${escapeXml(absolute(FEED_PATH))}" rel="self" type="application/rss+xml"/>`,
     /**
-     * An empty `<description>` is invalid — it is one of the three required
-     * channel children — so a site that never set one falls back to its title
+     * An empty `<description>` is invalid (it is one of the three required
+     * channel children), so a site that never set one falls back to its title
      * rather than emitting a hole.
      */
     `    <description>${escapeXml(description || title)}</description>`,
@@ -142,7 +142,7 @@ export function feedXml({
   for (const note of items) {
     /**
      * Every URL comes from `noteHref()`, so the feed cannot disagree with the
-     * site about where a note lives — it does not compute an answer of its own,
+     * site about where a note lives: it does not compute an answer of its own,
      * and there is no exception. The note claiming `/` reaches here with the
      * slug `index`, which `noteHref` has always spelled `/`; the feed used to
      * take a `homepageSlug` to step around that, and stepping around it was the
@@ -155,7 +155,7 @@ export function feedXml({
     lines.push(`      <title>${escapeXml(note.title)}</title>`)
     lines.push(`      <link>${escapeXml(url)}</link>`)
     /**
-     * `isPermaLink` defaults to `true`, so Quartz omitting it is not wrong —
+     * `isPermaLink` defaults to `true`, so Quartz omitting it is not wrong,
      * but the profile names forgetting it as a common mistake, and a feed that
      * says so survives a reader that guesses.
      */
@@ -163,8 +163,8 @@ export function feedXml({
     /**
      * The excerpt the vault scan already computed for note cards and hover
      * previews, not the rendered note. Full HTML would mean rewriting every
-     * wikilink, image and transclusion to an absolute URL — the layer
-     * open-publish's `rewrite.mjs` exists to be — and would force the feed to
+     * wikilink, image and transclusion to an absolute URL (the layer
+     * open-publish's `rewrite.mjs` exists to be), and would force the feed to
      * become a route with access to the render pipeline. Quartz's default
      * (`rssFullHtml: false`) agrees.
      *
@@ -181,7 +181,7 @@ export function feedXml({
     /**
      * One per tag, as written. The profile recommends a slash-delimited string
      * naming a position in a taxonomy, which is exactly jotter's nested tag
-     * format — so this is free, and it makes reader-side filtering work.
+     * format, so this is free, and it makes reader-side filtering work.
      */
     for (const tag of note.tags) lines.push(`      <category>${escapeXml(tag)}</category>`)
     /**
@@ -191,7 +191,7 @@ export function feedXml({
      * `<pubDate>` is RFC-822 (`toUTCString`), one of the three formats the
      * profile reports as tested across all eighteen aggregators. It is the
      * *created* date and it does not move when a typo is fixed: readers sort by
-     * it, so a moving one reshuffles their list for nothing — and since a
+     * it, so a moving one reshuffles their list for nothing, and since a
      * stable guid means a revised item never resurfaces anyway, moving it buys
      * nothing either.
      *

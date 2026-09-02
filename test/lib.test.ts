@@ -31,7 +31,7 @@ import {
   normalizeResultUrl,
 } from '../src/lib/search.js'
 
-describe('protectedRanges — parity with open-publish rewrite.mjs', () => {
+describe('protectedRanges: parity with open-publish rewrite.mjs', () => {
   it('protects frontmatter', () => {
     const text = '---\ntitle: A [[Link]]\n---\n\nBody [[Real]].'
     const ranges = protectedRanges(text)
@@ -125,11 +125,11 @@ describe('slugify', () => {
 })
 
 /**
- * The five acceptance rows, in all three styles, from one table — so a mode
+ * The five acceptance rows, in all three styles, from one table, so a mode
  * that quietly starts lowercasing, or a rule that only survives in `derive`,
  * fails here rather than on somebody's live site.
  */
-describe('slugFor — the three site-wide styles', () => {
+describe('slugFor: the three site-wide styles', () => {
   const ROWS: [path: string, derive: string, preserve: string, obsidian: string][] = [
     ['notes/plain.md', 'notes/plain', 'notes/plain', 'notes/plain'],
     ['Projects/Q3 Plan.md', 'projects/q3-plan', 'Projects/Q3 Plan', 'Projects/Q3+Plan'],
@@ -193,7 +193,7 @@ describe('slugFor — the three site-wide styles', () => {
  * projects have to agree character for character or a vault published by the
  * plugin and rebuilt by jotter answers at two different sets of addresses.
  */
-describe('obsidianPath — parity with open-publish slug.ts', () => {
+describe('obsidianPath: parity with open-publish slug.ts', () => {
   const obsidianPublishUrl = (path: string): string =>
     path
       .replace(/\.md$/i, '')
@@ -227,7 +227,7 @@ describe('obsidianPath — parity with open-publish slug.ts', () => {
   })
 })
 
-describe('encodeSlug / decodeSlug — a slug is not a URL', () => {
+describe('encodeSlug / decodeSlug: a slug is not a URL', () => {
   const SLUGS = [
     'notes/plain',
     'Wisdom+&+Approaches/Critical+Thinking',
@@ -254,7 +254,7 @@ describe('encodeSlug / decodeSlug — a slug is not a URL', () => {
     expect(encodeSlug('a/b/c')).toBe('a/b/c')
   })
 
-  it('never lowercases and never substitutes — that is slugifySegment’s job', () => {
+  it('never lowercases and never substitutes: that is slugifySegment’s job', () => {
     expect(encodeSlug('Q3 Plan')).toBe('Q3%20Plan')
     expect(encodeSlug('A & B')).not.toContain('-and-')
     expect(encodeSlug('50%')).not.toContain('-percent')
@@ -272,7 +272,7 @@ describe('encodeSlug / decodeSlug — a slug is not a URL', () => {
    * down so it is a known difference rather than a bug report.
    *
    * Obsidian form-urlencoded `C++ Notes.md` to `C%2B%2B+Notes`. That
-   * percent-decodes to `C+++Notes`, which is the slug — so the old address
+   * percent-decodes to `C+++Notes`, which is the slug, so the old address
    * still resolves, because a host decodes the request path before looking for
    * the file. What is lost is only the spelling: jotter emits `C+++Notes` where
    * Obsidian emitted `C%2B%2B+Notes`, because form-urlencoding cannot be
@@ -314,7 +314,7 @@ describe('normalizePermalinks', () => {
   })
 })
 
-describe('slugHazards — reported, never renamed', () => {
+describe('slugHazards: reported, never renamed', () => {
   it('names a case-only collision, which is a silent overwrite on macOS', () => {
     const [warning, ...rest] = slugHazards([
       { path: 'Note.md', slug: 'Note' },
@@ -477,7 +477,7 @@ describe('parseCallout', () => {
   })
 })
 
-describe('parseEmbedPipe — Obsidian size-vs-caption rule', () => {
+describe('parseEmbedPipe: Obsidian size-vs-caption rule', () => {
   it('reads a bare number as a width', () => {
     expect(parseEmbedPipe('300')).toEqual({ width: 300 })
   })
@@ -631,7 +631,7 @@ describe('previewFor', () => {
   })
 })
 
-describe('normalizeResultUrl — Pagefind speaks in trailing slashes', () => {
+describe('normalizeResultUrl: Pagefind speaks in trailing slashes', () => {
   it('strips the trailing slash Pagefind puts on every page URL', () => {
     expect(normalizeResultUrl('/zettelkasten/')).toBe('/zettelkasten')
     expect(normalizeResultUrl('/method/progressive-summarisation/')).toBe(
@@ -675,7 +675,7 @@ describe('normalizeResultUrl — Pagefind speaks in trailing slashes', () => {
   })
 })
 
-describe('excerptParts — the excerpt is escaped HTML, not text', () => {
+describe('excerptParts: the excerpt is escaped HTML, not text', () => {
   const text = (data: string) => ({ nodeType: 3, nodeName: '#text', textContent: data })
   const mark = (data: string) => ({ nodeType: 1, nodeName: 'MARK', textContent: data })
 
@@ -718,7 +718,7 @@ describe('excerptParts — the excerpt is escaped HTML, not text', () => {
   })
 })
 
-describe('headingJumps — the sub-results worth showing', () => {
+describe('headingJumps: the sub-results worth showing', () => {
   const sub = (url: string, title = url) => ({ url, title })
 
   it('drops the sub-result that is only the page again', () => {
@@ -759,7 +759,7 @@ describe('headingJumps — the sub-results worth showing', () => {
   })
 })
 
-describe('nextStop — arrow keys over the focus stops', () => {
+describe('nextStop: arrow keys over the focus stops', () => {
   // Stops are [input, ...results], so a count of 4 is the field plus three.
   it('moves down and up without wrapping', () => {
     expect(nextStop(0, 4, 1)).toBe(1)
@@ -786,7 +786,7 @@ describe('nextStop — arrow keys over the focus stops', () => {
   })
 })
 
-describe('isTypingTarget — when Cmd+K should stand down', () => {
+describe('isTypingTarget, when Cmd+K should stand down', () => {
   it('recognises the fields a keystroke belongs to', () => {
     expect(isTypingTarget({ tagName: 'INPUT', isContentEditable: false })).toBe(true)
     expect(isTypingTarget({ tagName: 'TEXTAREA', isContentEditable: false })).toBe(true)
@@ -808,7 +808,7 @@ describe('isTypingTarget — when Cmd+K should stand down', () => {
   })
 })
 
-describe('analyticsTag — the snippet each vendor documents', () => {
+describe('analyticsTag: the snippet each vendor documents', () => {
   const tag = (analytics: Parameters<typeof analyticsTag>[0]) => analyticsTag(analytics)!
 
   it('emits nothing when analytics is off', () => {

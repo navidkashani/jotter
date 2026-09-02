@@ -2,17 +2,17 @@
  * One provider's documented `<script>` tag, as data.
  *
  * Pure and DOM-free on purpose. `vitest` runs `environment: 'node'` and there
- * is no jsdom, so anything with a right answer — which origin, which attribute,
- * `defer` or `async` — has to live where a unit test can reach it. What is left
+ * is no jsdom, so anything with a right answer (which origin, which attribute,
+ * `defer` or `async`) has to live where a unit test can reach it. What is left
  * in `Analytics.astro` is markup and a dev/prod gate, and neither has a wrong
  * answer to assert against.
  *
  * Every tag below is the vendor's own snippet, unmodified. jotter is a
  * multi-page site: a real navigation loads a real document, so each vendor's
  * automatic pageview fires by itself, correctly, on every page. Quartz builds
- * all of these from JavaScript instead and rewires each one into manual mode —
+ * all of these from JavaScript instead and rewires each one into manual mode:
  * Plausible's `script.manual.js`, GA4's `send_page_view: false`, GoatCounter's
- * `no_onload` — because Quartz is an SPA and the document never reloads. Ported
+ * `no_onload`, because Quartz is an SPA and the document never reloads. Ported
  * here, that machinery would record *nothing*: manual mode with no router to
  * fire it. The static tag is not the lazy version of Quartz's approach; it is
  * the one that is correct for a site without a router.
@@ -25,7 +25,7 @@ export interface AnalyticsTag {
   attrs: Record<string, string>
   /** `async` for the two that document it; the rest defer. */
   async: boolean
-  /** GA4 only — the id its init block needs. */
+  /** GA4 only: the id its init block needs. */
   measurementId?: string
 }
 
@@ -39,7 +39,7 @@ const origin = (host: string | undefined, fallback: string) =>
  * The `id` guard is a second line of defence, not the first: the schema rejects
  * a provider without an `id` at config load, naming the key. It is repeated
  * here because this function is exported and callable without going through
- * `defineConfig`, and a half-built tag is not inert — a gtag.js loader with no
+ * `defineConfig`, and a half-built tag is not inert: a gtag.js loader with no
  * measurement id still pulls ~100 KB and records nothing.
  */
 export function analyticsTag(analytics: JotterConfig['analytics']): AnalyticsTag | undefined {
@@ -56,7 +56,7 @@ export function analyticsTag(analytics: JotterConfig['analytics']): AnalyticsTag
 
     case 'umami':
       /**
-       * `cloud.umami.is`, not the `analytics.umami.is` Quartz still ships —
+       * `cloud.umami.is`, not the `analytics.umami.is` Quartz still ships:
        * that host is stale, and this is exactly the kind of value that rots in
        * silence. Checked against Umami's own docs in August 2026; check again
        * before trusting it.
@@ -102,7 +102,7 @@ export function analyticsTag(analytics: JotterConfig['analytics']): AnalyticsTag
        * The attribute value is JSON, so it is built with `JSON.stringify`
        * rather than concatenated. Astro escapes it into the attribute as
        * `{&quot;token&quot;:&quot;…&quot;}`, which looks broken in view-source
-       * and is not — the browser decodes it before the beacon reads
+       * and is not: the browser decodes it before the beacon reads
        * `dataset.cfBeacon`.
        */
       return {

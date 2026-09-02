@@ -4,15 +4,15 @@
  * Each entry is a *factory*: Satteri calls it once per document with that
  * document's `fileURL`, which is how every plugin learns which note it is
  * compiling without any global state. A factory returning `null` drops itself
- * from the pipeline for that document — that is how a file outside the vault
+ * from the pipeline for that document: that is how a file outside the vault
  * (Astro's own pages, say) is left completely alone.
  *
  * Order is deliberate:
- *   1. transclude — expands note embeds first, so everything downstream sees
+ *   1. transclude: expands note embeds first, so everything downstream sees
  *      the finished document rather than a placeholder.
- *   2. wikilinks  — resolves links and media embeds.
- *   3. callouts   — relabels blockquotes.
- *   4. inline     — the text-level syntaxes, last, so it also reaches text that
+ *   2. wikilinks : resolves links and media embeds.
+ *   3. callouts  : relabels blockquotes.
+ *   4. inline    : the text-level syntaxes, last, so it also reaches text that
  *      transclusion brought in.
  *
  * There is a second list because there is a second phase. `jotterHastPlugins`

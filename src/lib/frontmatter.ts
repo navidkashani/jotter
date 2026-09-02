@@ -4,7 +4,7 @@
  * Here rather than inline in `src/content.config.ts` for one reason: that file
  * imports `astro:content`, which does not exist outside an Astro build, so a
  * declaration written there is unreachable from vitest. This module imports
- * nothing but `astro/zod` — the same instance `src/lib/config.ts` uses — so the
+ * nothing but `astro/zod` (the same instance `src/lib/config.ts` uses), so the
  * contract below can be *asserted* rather than left to be discovered by a
  * forker whose build died.
  *
@@ -15,12 +15,12 @@
  * The schema and `src/lib/vault.ts` are two answers to the same question, and
  * for a long time they disagreed. `resolveTitle` has always had a
  * `typeof fm === 'number'` branch, `normalizeAliases` has always called
- * `String(a)`, and `frontmatterTags` has always called `String(t)` — three
+ * `String(a)`, and `frontmatterTags` has always called `String(t)`: three
  * pieces of deliberate coercion that a stricter declaration here made
  * unreachable. `title: 2026` on a yearly review note, or `tags: [2026, reading]`,
  * did not degrade: it failed the build, on a vault Obsidian opens without
- * comment. That is the opposite of what the file this replaces claimed to be —
- * *"a list of keys jotter will use if it finds them"* — and `test/site.test.ts`
+ * comment. That is the opposite of what the file this replaces claimed to be
+ * (*"a list of keys jotter will use if it finds them"*), and `test/site.test.ts`
  * now walks the two lists against each other so they cannot drift again.
  *
  * ## The three that stay strict, on purpose
@@ -28,7 +28,7 @@
  * `publish`, `draft` and `homepage` are booleans and reject anything else.
  * They are the exception because a wrong value in them is not cosmetic:
  * `publish: 'false'` coerced generously is a note the author meant to hide,
- * published, silently — the exact failure the publish gate exists to prevent.
+ * published, silently: the exact failure the publish gate exists to prevent.
  * A misrouted `/` is the same shape of mistake one key over. Those three
  * degrade *loudly*, naming the key, which everywhere else in jotter is what a
  * privacy or routing decision does.
@@ -43,7 +43,7 @@ import { z } from 'astro/zod'
  * `src/lib/config.ts` rather than in `Analytics.astro`: a test can then assert
  * that every one of them is declared in the schema below *and* has a label in
  * `src/i18n/en.json`. Without that, adding a field to the component is one edit
- * away from a `<dt>` reading `note.field.whatever` on every note page — `t()`
+ * away from a `<dt>` reading `note.field.whatever` on every note page: `t()`
  * returns the key when it cannot find a string.
  */
 export const DISPLAYED_FIELDS = ['aliases', 'status', 'source', 'author', 'series'] as const
@@ -76,14 +76,14 @@ export const noteFrontmatterSchema = z
     aliases: z.union([textish, z.array(textish)]).optional(),
     alias: z.union([textish, z.array(textish)]).optional(),
 
-    /** A list, a single tag, or a comma-separated string — see `frontmatterTags`. */
+    /** A list, a single tag, or a comma-separated string (see `frontmatterTags`). */
     tags: z.union([textish, z.array(textish)]).optional(),
 
     /**
      * Five spellings each, because `src/lib/dates.ts` reads five each. Only
      * five of the ten used to be declared, which is how `created_at` and
      * `createdAt` came to work by accident of `.passthrough()` rather than on
-     * purpose — and `published: true` came to fail the build outright.
+     * purpose, and `published: true` came to fail the build outright.
      */
     created: dateish.optional(),
     created_at: dateish.optional(),
@@ -104,8 +104,8 @@ export const noteFrontmatterSchema = z
     /**
      * The URL this note is served at, instead of the one its path derives.
      *
-     * Honoured character for character in every `slugs:` mode — no
-     * lowercasing, no dashes, no substitutions — which is the semantics
+     * Honoured character for character in every `slugs:` mode (no
+     * lowercasing, no dashes, no substitutions), which is the semantics
      * Obsidian Publish's own `permalink` property has, and Jekyll's, and
      * Hugo's `url`. The note's derived slug 301s to it.
      *
@@ -117,7 +117,7 @@ export const noteFrontmatterSchema = z
      *
      * jotter's own snapshot layer does **not** write this key.
      * `scripts/fetch-content.mjs` puts old addresses in `aliases:` instead,
-     * which 301s to the published slug *without moving the note* — the choice
+     * which 301s to the published slug *without moving the note*: the choice
      * Quartz cannot make, because it slugifies every alias and honours only
      * `permalink` character for character. See `docs/open-publish.md`.
      */
@@ -149,7 +149,7 @@ export const noteFrontmatterSchema = z
     // `aliases`, the fifth displayed field, is declared with `alias` above.
 
     /**
-     * The base direction of this note's blocks — the escape hatch for the one
+     * The base direction of this note's blocks: the escape hatch for the one
      * case first-strong detection gets wrong (`Obsidian یک برنامه است`, a
      * sentence opening with a word from the other script).
      *

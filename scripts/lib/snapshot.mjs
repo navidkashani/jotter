@@ -1,12 +1,12 @@
 /**
  * Reading a published snapshot: fetch it, check it, and turn it into the two
- * things a vault directory needs — files at their addresses, and the link index
+ * things a vault directory needs: files at their addresses, and the link index
  * that says what every wikilink in them means.
  *
  * The half of this that the Quartz starter has and jotter does not need is the
  * link *rewriting*. Quartz cannot be told what a `[[wikilink]]` resolves to, so
  * that starter walks every note body, skips the protected ranges, and replaces
- * each link with a resolved `[label](/slug)` — two regexes, an offset
+ * each link with a resolved `[label](/slug)`: two regexes, an offset
  * recomputation between passes, and the most delicate code in the whole
  * pipeline. jotter can be told: `src/lib/links-index.ts` already accepts the
  * manifest's own `{ links: {...} }` shape, and `IndexedLink` is field for field
@@ -125,8 +125,8 @@ export function redirectFromsFor(slug, redirects = []) {
  *
  * These become `aliases:` rather than `permalink:`, and that decision is the
  * whole of why this layer needs no redirect writer of its own.
- * `buildRedirects` runs an alias through `sourceFor(alias, 'preserve')` — NFC
- * and nothing else — and then through the single `encodeSlug` at
+ * `buildRedirects` runs an alias through `sourceFor(alias, 'preserve')` (NFC
+ * and nothing else), and then through the single `encodeSlug` at
  * `src/lib/redirects.ts:105`, so `Wisdom+&+Approaches/Critical+Thinking`
  * arrives at `/Wisdom+%26+Approaches/Critical+Thinking` as a 301 **and the
  * note does not move**. Writing them to `permalink:` would move it: the first
@@ -147,7 +147,7 @@ export function oldAddressesFor(file, slug, redirects = []) {
  * `snapshot.links`, re-keyed from vault path to the path the note is written at.
  *
  * This is not cosmetic. `src/lib/links-index.ts:42` keys every lookup on the
- * note's own on-disk path, and `resolve.ts:109` passes exactly that — which
+ * note's own on-disk path, and `resolve.ts:109` passes exactly that, which
  * here is `<slug>.md`, not the vault path the manifest used. Left un-re-keyed,
  * every lookup would miss, the index would silently do nothing, and jotter
  * would fall back to guessing at links the plugin had already answered.
@@ -175,7 +175,7 @@ const hasKey = (lines, key) => lines.some((line) => new RegExp(`^${key}\\s*:`).t
  * frontmatter.
  *
  * Files are written at their slug, so without the snapshot's title jotter would
- * name every page after its URL — "cafe-resume", and the homepage "index". The
+ * name every page after its URL: "cafe-resume", and the homepage "index". The
  * plugin has already worked the real one out (frontmatter `title`, else the
  * first H1, else the filename), so it is copied rather than re-derived.
  *
@@ -184,10 +184,10 @@ const hasKey = (lines, key) => lines.some((line) => new RegExp(`^${key}\\s*:`).t
  * not an exception to the rule: the snapshot's `aliases` are read out of this
  * note's own frontmatter by the plugin, so the merged list is a superset of
  * what the author typed, never a replacement for it. The old addresses have to
- * join that list — dropping them because the author happened to keep an alias
+ * join that list: dropping them because the author happened to keep an alias
  * of their own is how a legacy URL silently stops answering.
  *
- * The common case — no `aliases:` key yet — is a line insertion, which touches
+ * The common case (no `aliases:` key yet) is a line insertion, which touches
  * nothing else in the file. Only the merge needs a parse.
  */
 export function applyNoteMetadata(text, meta = {}, warnings = []) {

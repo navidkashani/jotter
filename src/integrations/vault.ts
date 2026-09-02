@@ -74,7 +74,7 @@ export interface VaultIntegrationOptions {
    * Everything `feedXml` needs except the notes, which this already has.
    *
    * Present **only** when `features.rss` is on, and that is the whole design:
-   * off means the option is absent and nothing is written — no `existsSync`,
+   * off means the option is absent and nothing is written: no `existsSync`,
    * no cleanup path, no stale `rss.xml` surviving a flag being turned back off
    * in a `dist/` that was not cleaned.
    */
@@ -100,8 +100,8 @@ export function jotterVault({
          * The one host that cannot honour `preserve`, `obsidian` or a
          * `permalink:` carrying a capital letter, said once and by name.
          *
-         * Netlify 301s a mixed-case path to its lowercase form, with no opt-out
-         * — so `/Company/About+us` lands on `/company/about+us`, which this
+         * Netlify 301s a mixed-case path to its lowercase form, with no opt-out,
+         * so `/Company/About+us` lands on `/company/about+us`, which this
          * build does not serve. Cloudflare Pages, Vercel and GitHub Pages all
          * serve static assets case-sensitively, as written. Degrade loudly: a
          * site that silently lost half its URLs on deploy is the failure this
@@ -136,7 +136,7 @@ export function jotterVault({
          *
          * Astro's dev router decodes an incoming pathname with `decodeURI`
          * (`core/util/pathname.js`), which by definition does **not** decode a
-         * reserved character — `%26` stays `%26` — and then keys static paths
+         * reserved character (`%26` stays `%26`), and then keys static paths
          * by the raw param (`core/render/route-cache.js`). So a link to
          * `/Wisdom+%26+Approaches/…` 404s in dev while working perfectly in
          * production, where the host percent-decodes before looking for the
@@ -146,11 +146,11 @@ export function jotterVault({
          * The rewrite is to the one form that router is stable under: decode
          * the pathname to the slug, then re-encode with `encodeURI`, which
          * escapes exactly what `decodeURI` will put back. `#` and `?` are the
-         * two `encodeURI` leaves alone and must not — they would truncate the
+         * two `encodeURI` leaves alone and must not: they would truncate the
          * path. Query and hash are carried through untouched.
          *
          * A no-op for any URL without an encoded reserved character in it, so a
-         * `derive` site — and every Vite and HMR request — is untouched.
+         * `derive` site (and every Vite and HMR request) is untouched.
          *
          * First, ahead of the `/_vault` middleware below, which already relies
          * on this ordering: it sees the decoded form and reads the file it

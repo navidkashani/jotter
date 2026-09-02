@@ -28,7 +28,7 @@ Write [[Zettelkasten]] to link a note.
 ## What it does not do
 
 Dataview, `.canvas`, Excalidraw, Mermaid and stacked notes are out of scope.
-They are listed here rather than left to be discovered — a missing feature you
+They are listed here rather than left to be discovered: a missing feature you
 were warned about is a decision; one you find at 2am is a bug.
 
 See also [[Kitchen sink]] for everything it renders.

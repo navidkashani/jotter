@@ -3,8 +3,8 @@
  * The last step of a build from Open Publish: tell the plugin the snapshot is
  * live, and tell the CDN not to cache that answer.
  *
- * It runs **after** `astro build` — a generator clears its output directory,
- * so anything written before it would be deleted — and after
+ * It runs **after** `astro build` (a generator clears its output directory,
+ * so anything written before it would be deleted), and after
  * `scripts/verify-build.mjs`, which is the ordering that matters here. A build
  * that failed jotter's own gate never gets a `_publish.json`, so the plugin
  * cannot report a broken deploy as the live one; it keeps polling and then
@@ -15,9 +15,9 @@
  *
  * ## What it does not write
  *
- * `robots.txt` — `src/integrations/vault.ts` already writes it on every build,
+ * `robots.txt`: `src/integrations/vault.ts` already writes it on every build,
  * from `robotsTxt(noIndex)`, whose noIndex output is byte-identical to the
- * reference implementation's. And `_redirects` — old addresses arrive as
+ * reference implementation's. And `_redirects`: old addresses arrive as
  * `aliases:` in each note's frontmatter, so `buildRedirects` has already
  * emitted them, in URL space, through the same encoder every other link in the
  * site went through. There is nothing left here to merge, and so no way for a
@@ -78,7 +78,7 @@ async function main() {
 
   /**
    * `no-store` on the marker, because a CDN serving a cached one would have the
-   * plugin report a stale snapshot as live — the wrong direction to be wrong
+   * plugin report a stale snapshot as live: the wrong direction to be wrong
    * in. `X-Robots-Tag` is the half of `noIndex` that `robots.txt` cannot do:
    * it reaches a crawler that arrived at a page directly. Both are requests
    * rather than access control; see the plugin's `docs/security.md`.
@@ -94,7 +94,7 @@ async function main() {
   }
 
   // jotter writes no `_headers` of its own today. Merged rather than
-  // overwritten anyway, so the day it does — or the day a forker adds one —
+  // overwritten anyway, so the day it does (or the day a forker adds one)
   // this appends to it instead of deleting it.
   const existing = await readFile(join(DIST, '_headers'), 'utf8').catch(() => '')
   const merged = existing.trim() ? `${existing.trimEnd()}\n\n${rules.join('\n')}\n` : `${rules.join('\n')}\n`

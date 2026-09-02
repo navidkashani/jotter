@@ -2,7 +2,7 @@
  * The notes collection.
  *
  * Every field is `.optional()`, deliberately. A vault of bare markdown with no
- * frontmatter at all must build on the first try — that is the difference
+ * frontmatter at all must build on the first try: that is the difference
  * between a theme you can point at a real Obsidian folder and one that makes
  * you prepare your notes for it first. Nothing in the schema is a requirement;
  * it is a list of keys jotter will *use* if it finds them.
@@ -10,7 +10,7 @@
  * The schema itself lives in `src/lib/frontmatter.ts` rather than here, because
  * this file imports `astro:content` and so cannot be reached by vitest. What it
  * declares has to match what `src/lib/vault.ts` coerces, and that is a contract
- * worth a test rather than a hope — see the docstring there.
+ * worth a test rather than a hope (see the docstring there).
  *
  * Note that the collection is not where links resolve. It cannot be: the
  * markdown processor runs before `getCollection()` exists. `src/lib/vault.ts`

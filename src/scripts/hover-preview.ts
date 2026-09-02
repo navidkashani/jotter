@@ -2,8 +2,8 @@
  * Hover previews: the card.
  *
  * Like `local-graph.ts`, this is the browser side of the boundary. Nothing here
- * may import from `src/lib/` — that is build-time code and it reaches for
- * `node:fs` — and nothing here is imported by a page.
+ * may import from `src/lib/` (that is build-time code and it reaches for
+ * `node:fs`), and nothing here is imported by a page.
  *
  * Everything it shows is already in the page. `src/markdown/wikilinks.ts` put
  * `data-preview-title` and `data-preview` on the anchor at build time, so there
@@ -13,14 +13,14 @@
  *
  * Three things it takes from Quartz anyway: the card stays open while the
  * pointer is *on* it (WCAG 1.4.13 *hoverable*), the whole feature is off for
- * touch, and the delay is real hover intent rather than a CSS `animation-delay`
- * — Quartz's fetch still fires on every `mouseenter`; nothing happens here
+ * touch, and the delay is real hover intent rather than a CSS `animation-delay`:
+ * Quartz's fetch still fires on every `mouseenter`; nothing happens here
  * until the intent is confirmed.
  *
  * 400ms is inside the researched band. Wikipedia settled on 500ms after A/B
  * tests on three wikis and Nielsen Norman recommends 300–500ms, scaled to how
- * disruptive the thing that appears is. This card is lighter than Wikipedia's —
- * no image, no scroll — and has no network latency to hide.
+ * disruptive the thing that appears is. This card is lighter than Wikipedia's
+ * (no image, no scroll), and has no network latency to hide.
  */
 
 const OPEN_DELAY = 400
@@ -38,8 +38,8 @@ const ANCHOR = '--jotter-preview'
 /**
  * Positioning is CSS anchor positioning, and the script sets one custom
  * property. That is ~350 bytes smaller than a hand-rolled flip-and-clamp, it
- * gets scroll-tracking and scroll-away hiding for free, and — the deciding
- * argument — `position-area` and `position-try-fallbacks` are *logical*, so RTL
+ * gets scroll-tracking and scroll-away hiding for free, and (the deciding
+ * argument) `position-area` and `position-try-fallbacks` are *logical*, so RTL
  * is correct by construction. The JavaScript alternative wants
  * `getBoundingClientRect().left`, which is physically wrong in RTL and passes
  * the build's physical-property lint only because `.ts` files are not scanned.
@@ -56,14 +56,14 @@ function setup() {
   /**
    * `popover=auto` puts the card in the top layer, which sidesteps z-index the
    * same way `<dialog>` did for the graph, and brings Esc and light dismiss
-   * with it — WCAG 1.4.13 *dismissible*, without focus ever entering the card.
+   * with it: WCAG 1.4.13 *dismissible*, without focus ever entering the card.
    */
   card.popover = 'auto'
   /**
    * Pointer-only acceleration, and `aria-hidden` is the honest way to say so.
    * The excerpt is not new information: the destination is one click away and
    * fully announced there. A screen reader gets no benefit from this feature
-   * and no noise from it either — a page sounds byte-identical with it on or
+   * and no noise from it either: a page sounds byte-identical with it on or
    * off, because `data-*` attributes never reach the accessibility tree.
    */
   card.setAttribute('aria-hidden', 'true')
@@ -88,7 +88,7 @@ function setup() {
    * card at the viewport's top-left corner for the length of the transition.
    * So the name stays put until it is needed somewhere else.
    *
-   * Only ever one element carries it. That is not tidiness — where two elements
+   * Only ever one element carries it. That is not tidiness, where two elements
    * share an anchor name the anchor resolves to the last of them in tree order,
    * so a leftover name earlier in the document is fine and a leftover name
    * *after* the current link would silently attach the card to the wrong one.
@@ -143,7 +143,7 @@ function setup() {
   /**
    * Bound to `document` rather than to a container: the attribute is the gate,
    * and nothing outside prose carries one. `.note-body` would be the wrong
-   * container anyway — `Note.astro` puts `<PrevNext>` inside it, which is why
+   * container anyway: `Note.astro` puts `<PrevNext>` inside it, which is why
    * `verify-build.mjs` has to split prose on `<nav class="prev-next">`.
    */
   document.addEventListener('pointerover', (event) => {
@@ -173,7 +173,7 @@ function setup() {
    * not come back orphaned on a bfcache restore; and it cannot sit stranded
    * under the graph dialog's backdrop, where `showModal()` makes the document
    * inert and `pointerout` may never fire. The two scripts stay unaware of each
-   * other — `local-graph.ts` is explicit that nothing there may be imported.
+   * other: `local-graph.ts` is explicit that nothing there may be imported.
    */
   document.addEventListener('pointerdown', close)
 

@@ -8,8 +8,8 @@
  * here may reach across.
  *
  * As much as possible lives over there, and the split is on purpose: this file
- * has no test harness — `vitest` runs on `environment: 'node'` and there is no
- * jsdom — so anything left here is verified by hand or not at all. What stays
+ * has no test harness: `vitest` runs on `environment: 'node'` and there is no
+ * jsdom, so anything left here is verified by hand or not at all. What stays
  * is element creation, event wiring and the async flow. What leaves is every
  * question with a right answer: which URL a result points at, which sections
  * survive, where an arrow key goes, whether a keystroke belongs to a field.
@@ -22,7 +22,7 @@
  *
  * **Pagefind is loaded lazily and fails to nothing.** The runtime arrives on
  * first open, the index warms while the reader is still typing, and a rejected
- * import — no index built yet, `astro dev` on a fresh checkout — shows a quiet
+ * import (no index built yet, `astro dev` on a fresh checkout) shows a quiet
  * message instead of throwing.
  */
 import {
@@ -136,7 +136,7 @@ function setup(labels: Labels) {
    *
    * A native search field handles Escape itself: the first press clears the
    * value and stops there, so closing the dialog took two presses and the first
-   * one silently ate the query. Measured, not assumed — Chrome reports the
+   * one silently ate the query. Measured, not assumed: Chrome reports the
    * field empty and the dialog still open after one Escape.
    *
    * What `type="search"` bought was a clear button. What it cost was Esc, which
@@ -194,8 +194,8 @@ function setup(labels: Labels) {
   /**
    * **A resolved import is not proof of a working runtime.**
    *
-   * A 0-byte `pagefind.js` — the exact corruption `src/integrations/search.ts`
-   * fails the build over — imports *successfully*, as an empty module
+   * A 0-byte `pagefind.js` (the exact corruption `src/integrations/search.ts`
+   * fails the build over) imports *successfully*, as an empty module
    * namespace. Left unchecked, `api.init` is `undefined`, the call throws
    * inside a `void`-ed promise, and the reader gets an unhandled rejection and
    * a blank modal instead of the message saying search is unavailable.
@@ -216,7 +216,7 @@ function setup(labels: Labels) {
 
   /**
    * The runtime, initialised. `null` once and for all if there is no index or
-   * it cannot start — `broken` rather than a reset, so a failure costs one
+   * it cannot start: `broken` rather than a reset, so a failure costs one
    * attempt rather than one per keystroke, and a rejected `started` is never
    * awaited twice.
    */
@@ -358,7 +358,7 @@ function setup(labels: Labels) {
     /**
      * The *match* count, not the rendered one. `found` is capped at
      * `MAX_RESULTS`, so announcing its length would tell a reader "12 results"
-     * for a query that matched eighty — and the announcement is the only way a
+     * for a query that matched eighty, and the announcement is the only way a
      * screen-reader user learns how much is there.
      */
     status.textContent = search.results.length
@@ -401,7 +401,7 @@ function setup(labels: Labels) {
    * Guarded on `rendered`, because searching is debounced by 300ms: for that
    * window the list still holds the *previous* term's results, and a reader who
    * types and hits Enter quickly would otherwise be navigated to a result for
-   * the term they had just replaced. Doing nothing is right — the results they
+   * the term they had just replaced. Doing nothing is right: the results they
    * asked for are milliseconds away.
    */
   input.addEventListener('keydown', (event) => {
@@ -416,7 +416,7 @@ function setup(labels: Labels) {
     if (!event.metaKey && !event.ctrlKey) return
 
     /**
-     * Ignored while focus is in a field — including this dialog's own input,
+     * Ignored while focus is in a field: including this dialog's own input,
      * so Cmd+K while typing does not re-trigger and wipe what was typed.
      */
     const focused = document.activeElement
@@ -443,7 +443,7 @@ function setup(labels: Labels) {
 
   /**
    * On `close` rather than on the button, so Esc, the close button and a
-   * backdrop click are one path instead of three — the same argument
+   * backdrop click are one path instead of three: the same argument
    * `local-graph.ts` makes for its dialog. Esc is the browser's, which is also
    * what makes search stack correctly over an open graph dialog: the topmost
    * one in the top layer closes first.

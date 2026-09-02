@@ -3,8 +3,8 @@
  * a link to this note look like" and one place to change it.
  *
  * The encoding itself is `encodeSlug` in `src/lib/url.ts`, and every other
- * producer of a page's URL — canonical, `og:url`, the sitemap, a search result
- * — calls the same function: a link and a canonical that spell the same page
+ * producer of a page's URL (canonical, `og:url`, the sitemap, a search result)
+ * calls the same function: a link and a canonical that spell the same page
  * differently are two pages as far as a crawler is concerned.
  */
 import { anchorFor } from './protected.js'

@@ -1,8 +1,8 @@
 /**
  * The scenario table from the direction plan, run in both site directions.
  *
- * Every row is asserted twice — once against an LTR site and once against an
- * RTL one — because the whole claim of the feature is that it is *symmetric*:
+ * Every row is asserted twice, once against an LTR site and once against an
+ * RTL one, because the whole claim of the feature is that it is *symmetric*:
  * one rule, no second code path, and the majority language never marked
  * whichever one it is. A test that only ever ran the LTR side would pass
  * happily on an implementation that could only emit `rtl`, which is exactly the
@@ -22,7 +22,7 @@ describe('firstStrong', () => {
 
   /**
    * Defect 1 of the plan's scenario pass, as a regression test. An earlier
-   * draft enumerated the *LTR* scripts — Latin, Greek, Cyrillic — and these
+   * draft enumerated the *LTR* scripts (Latin, Greek, Cyrillic) and these
    * four match none of them, so each would have found no strong character,
    * returned `undefined`, and on an RTL site inherited RTL. The list is
    * enumerated on the RTL side precisely so that a script nobody thought of is
@@ -55,8 +55,8 @@ describe('firstStrong', () => {
   })
 
   /**
-   * Digits are *weak* under the UBA — ASCII, Arabic-Indic and Extended
-   * Arabic-Indic alike — so a line opening with a year resolves from the word
+   * Digits are *weak* under the UBA (ASCII, Arabic-Indic and Extended
+   * Arabic-Indic alike) so a line opening with a year resolves from the word
    * after it. This is why the test is letter-first and script-second: `۱۳۹۹`
    * is `Script=Arabic` but is not a letter, and treating it as strong would
    * make a bare number an RTL paragraph.

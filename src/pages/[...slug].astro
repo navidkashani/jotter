@@ -4,7 +4,7 @@
  *
  * Folders get pages so that a tree parent is a link and not just a toggle. A
  * note and a folder can slugify to the same path, and when they do the note
- * wins and the build says so — silently dropping either would be worse than
+ * wins and the build says so: silently dropping either would be worse than
  * either choice.
  */
 import { getCollection, render } from 'astro:content'
@@ -30,7 +30,7 @@ export async function getStaticPaths() {
 
   for (const note of notes) {
     // `/` is rendered by index.astro; emitting it here too would collide.
-    // One clause, because `index` is how jotter spells "at the root" — the note
+    // One clause, because `index` is how jotter spells "at the root": the note
     // `homepage:` names is given that slug by the scan, so there is nothing
     // else to skip and nothing left linking to a slug with no page behind it.
     if (note.slug === 'index') continue
