@@ -123,15 +123,22 @@ export function redirectFromsFor(slug, redirects = []) {
  * The old addresses that should 301 to this note: the ones the plugin recorded
  * on the file, plus every rename it has seen since.
  *
- * These become `aliases:` rather than `permalink:`, and that decision is the
+ * These become `oldUrls:` rather than `permalink:`, and that decision is the
  * whole of why this layer needs no redirect writer of its own.
- * `buildRedirects` runs an alias through `sourceFor(alias, 'preserve')` (NFC
- * and nothing else), and then through the single `encodeSlug` at
- * `src/lib/redirects.ts:105`, so `Wisdom+&+Approaches/Critical+Thinking`
- * arrives at `/Wisdom+%26+Approaches/Critical+Thinking` as a 301 **and the
- * note does not move**. Writing them to `permalink:` would move it: the first
- * permalink is where a note is *served*, so the address the plugin published
- * would 301 to the address the site used to have, backwards.
+ * `buildRedirects` runs an old URL through `sourceFor(url, 'preserve')` (NFC
+ * and nothing else), and then through the single `encodeSlug` at the end of
+ * that function, so `Wisdom+&+Approaches/Critical+Thinking` arrives at
+ * `/Wisdom+%26+Approaches/Critical+Thinking` as a 301 **and the note does not
+ * move**. Writing them to `permalink:` would move it: the first permalink is
+ * where a note is *served*, so the address the plugin published would 301 to
+ * the address the site used to have, backwards.
+ *
+ * And `oldUrls:` rather than `aliases:`, which is where these used to go. Both
+ * keys become redirects, so routing was never the difference; display was.
+ * `src/components/Frontmatter.astro` prints `aliases` on the page under "Also
+ * known as", so every note on a vault migrated from Obsidian Publish showed a
+ * `+`-encoded routing artifact as human metadata. An alias is a name the
+ * author gave the note. This is a URL somebody published.
  */
 export function oldAddressesFor(file, slug, redirects = []) {
   return [
@@ -141,6 +148,54 @@ export function oldAddressesFor(file, slug, redirects = []) {
         .filter(Boolean),
     ),
   ]
+}
+
+/**
+ * The real name of every folder in the published tree, keyed by the slug path
+ * jotter will find it at.
+ *
+ * `fetch-content.mjs` writes each note **to its slug**, so
+ * `Wisdom & Approaches/Critical Thinking.md` lands on disk as
+ * `wisdom-approaches/critical-thinking.md`, and `src/lib/tree.ts` derives its
+ * folders from the paths on disk. Note *titles* survive that because the
+ * snapshot carries one and `applyNoteMetadata` writes it into the file; folders
+ * have no file to write anything into, so the sidebar read `about`,
+ * `wisdom-approaches`, `wp-statistics` where Obsidian Publish reads `About`,
+ * `Wisdom & Approaches`, `WP Statistics`.
+ *
+ * The real names never left, though: the manifest is keyed by the original
+ * vault path. So this zips each key's directory segments against its slug's,
+ * and no plugin change is needed.
+ *
+ * **A pair whose segment counts differ is skipped**, which is the one case that
+ * would otherwise be worse than doing nothing: a `permalink:` can move a note
+ * out of its folder entirely, and zipping `Wisdom & Approaches/Critical
+ * Thinking.md` against a slug of `essays/critical-thinking` would confidently
+ * label `essays` as "Wisdom & Approaches".
+ *
+ * A folder whose name already *is* its slug segment is left out: it is not a
+ * correction, and the map is written into a config file somebody reads.
+ *
+ * @param entries `Object.entries(snapshot.files)`
+ * @returns {Record<string, string>} slug path -> display name
+ */
+export function folderNamesFor(entries) {
+  /** @type {Record<string, string>} */
+  const names = {}
+  for (const [path, file] of entries) {
+    if (typeof file?.slug !== 'string' || !path.toLowerCase().endsWith('.md')) continue
+
+    const folders = path.split('/').slice(0, -1)
+    const slugFolders = file.slug.split('/').slice(0, -1)
+    if (folders.length !== slugFolders.length) continue
+
+    for (let i = 0; i < slugFolders.length; i++) {
+      const key = slugFolders.slice(0, i + 1).join('/')
+      if (!key || names[key] !== undefined || slugFolders[i] === folders[i]) continue
+      names[key] = folders[i]
+    }
+  }
+  return names
 }
 
 /**
@@ -165,14 +220,70 @@ export function reKeyLinks(snapshot) {
   return links
 }
 
+/**
+ * Every frontmatter key `src/lib/dates.ts` reads a date out of, mirrored here
+ * because this script runs under plain Node before any bundler exists and that
+ * module is TypeScript.
+ *
+ * `test/snapshot.test.ts` asserts the two lists are identical rather than
+ * trusting this comment, the same way `ANALYTICS_PROVIDERS` is checked against
+ * `src/lib/config.ts`. A spelling added there and missed here would be a note
+ * whose own `date:` is silently overwritten by the filesystem's guess.
+ */
+export const FRONTMATTER_CREATED = ['created', 'date', 'created_at', 'createdAt', 'published']
+export const FRONTMATTER_UPDATED = ['updated', 'modified', 'updated_at', 'updatedAt', 'lastmod']
+
+/**
+ * The dates to write into a note, from the file stats the snapshot carries.
+ *
+ * Why this exists at all: a vault fetched from a snapshot is written fresh to a
+ * scratch directory, so every fallback `src/lib/dates.ts` has collapses at
+ * once. There is no frontmatter date (the author wrote none), no git history
+ * (the directory is `rm -rf`'d and rewritten on every build), and the mtime is
+ * the instant `writeFile` ran. All three land on *now*, which is why every note
+ * on a site built this way read "Created" as the day of the last deploy.
+ *
+ * **`ctime` is best effort and it is treated as such.** Obsidian takes it from
+ * the filesystem, and sync, a restore from backup and an ordinary file transfer
+ * all destroy it; a note's own `created:` is the only trustworthy source, which
+ * is why `applyNoteMetadata` never overwrites one. The cheap guard against the
+ * commonest corruption is here: a creation date *after* the last modification
+ * is not a note edited before it existed, it is a copy operation's timestamp,
+ * so `mtime` wins.
+ *
+ * A snapshot from a plugin that predates `ctime` has only `mtime`, and both
+ * dates come from it: the same day, which is what
+ * `src/components/Frontmatter.astro` renders as a single "Created" row. That is
+ * the whole of what such a snapshot knows.
+ *
+ * @returns `{ created?, updated? }` as ISO strings, empty when the snapshot
+ *   carries no usable stat at all.
+ */
+export function snapshotDates(file) {
+  const stamp = (value) =>
+    typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined
+
+  const mtime = stamp(file?.mtime)
+  const ctime = stamp(file?.ctime)
+
+  const created = ctime === undefined || (mtime !== undefined && ctime > mtime) ? mtime : ctime
+  const updated = mtime ?? created
+  if (created === undefined && updated === undefined) return {}
+
+  return {
+    ...(created === undefined ? {} : { created: new Date(created).toISOString() }),
+    ...(updated === undefined ? {} : { updated: new Date(updated).toISOString() }),
+  }
+}
+
 /** YAML double-quoted scalars accept JSON escaping. */
 const quote = (value) => JSON.stringify(String(value))
 
 const hasKey = (lines, key) => lines.some((line) => new RegExp(`^${key}\\s*:`).test(line))
 
 /**
- * Carry the snapshot's resolved title and the note's full set of names into its
- * frontmatter.
+ * Carry the snapshot's resolved title, the note's own names and its old
+ * addresses into its frontmatter.
  *
  * Files are written at their slug, so without the snapshot's title jotter would
  * name every page after its URL: "cafe-resume", and the homepage "index". The
@@ -183,21 +294,51 @@ const hasKey = (lines, key) => lines.some((line) => new RegExp(`^${key}\\s*:`).t
  * `aliases` is the one key that is *merged* rather than skipped, and that is
  * not an exception to the rule: the snapshot's `aliases` are read out of this
  * note's own frontmatter by the plugin, so the merged list is a superset of
- * what the author typed, never a replacement for it. The old addresses have to
- * join that list: dropping them because the author happened to keep an alias
- * of their own is how a legacy URL silently stops answering.
+ * what the author typed, never a replacement for it.
  *
- * The common case (no `aliases:` key yet) is a line insertion, which touches
- * nothing else in the file. Only the merge needs a parse.
+ * `oldUrls` is jotter's own key and holds no author content at all, so it is
+ * written whole. A note that happens to carry one already (a hand-written
+ * redirect, a previous build's output left in a vault) has it replaced rather
+ * than appended to, because the snapshot is the authority on which addresses
+ * this note used to answer at, and two spellings of the same key in one YAML
+ * block is not a document either parser reads the same way.
+ *
+ * `created` and `updated` are the strictest of the four: written **only** when
+ * the note declares no date of its own under any of the ten spellings
+ * `src/lib/dates.ts` recognises. The snapshot's are filesystem timestamps and
+ * the author's are not, so the author's win outright rather than merging. See
+ * `snapshotDates`.
+ *
+ * The common case (no key present yet) is a line insertion, which touches
+ * nothing else in the file. Only a key that already exists needs a parse.
  */
 export function applyNoteMetadata(text, meta = {}, warnings = []) {
-  const aliases = [...new Set((meta.aliases ?? []).map((a) => String(a)).filter(Boolean))]
+  const clean = (values) => [...new Set((values ?? []).map((v) => String(v)).filter(Boolean))]
+  const aliases = clean(meta.aliases)
+  const oldUrls = clean(meta.oldUrls)
   const lines = text.split('\n')
+
+  const list = (key, values) => `${key}: [${values.map(quote).join(', ')}]`
+
+  /**
+   * The dates, as frontmatter lines, given what the note already declares.
+   * Quoted, so the value is a string under every YAML schema rather than a
+   * timestamp under some of them; `asDate` in `src/lib/dates.ts` parses it back.
+   */
+  const dateLines = (block) => {
+    const out = []
+    const declares = (keys) => block !== null && keys.some((key) => hasKey(block, key))
+    if (meta.created && !declares(FRONTMATTER_CREATED)) out.push(`created: ${quote(meta.created)}`)
+    if (meta.updated && !declares(FRONTMATTER_UPDATED)) out.push(`updated: ${quote(meta.updated)}`)
+    return out
+  }
 
   if (lines[0]?.trim() !== '---') {
     const additions = []
     if (meta.title) additions.push(`title: ${quote(meta.title)}`)
-    if (aliases.length > 0) additions.push(`aliases: [${aliases.map(quote).join(', ')}]`)
+    additions.push(...dateLines(null))
+    if (aliases.length > 0) additions.push(list('aliases', aliases))
+    if (oldUrls.length > 0) additions.push(list('oldUrls', oldUrls))
     return additions.length === 0 ? text : ['---', ...additions, '---', '', text].join('\n')
   }
 
@@ -212,12 +353,15 @@ export function applyNoteMetadata(text, meta = {}, warnings = []) {
   if (close === -1) return text
 
   const block = lines.slice(1, close)
-  const merging = aliases.length > 0 && (hasKey(block, 'aliases') || hasKey(block, 'alias'))
+  const mergingAliases = aliases.length > 0 && (hasKey(block, 'aliases') || hasKey(block, 'alias'))
+  const replacingOldUrls = oldUrls.length > 0 && hasKey(block, 'oldUrls')
 
-  if (!merging) {
+  if (!mergingAliases && !replacingOldUrls) {
     const additions = []
     if (meta.title && !hasKey(block, 'title')) additions.push(`title: ${quote(meta.title)}`)
-    if (aliases.length > 0) additions.push(`aliases: [${aliases.map(quote).join(', ')}]`)
+    additions.push(...dateLines(block))
+    if (aliases.length > 0) additions.push(list('aliases', aliases))
+    if (oldUrls.length > 0) additions.push(list('oldUrls', oldUrls))
     if (additions.length === 0) return text
     return [...lines.slice(0, close), ...additions, ...lines.slice(close)].join('\n')
   }
@@ -225,23 +369,32 @@ export function applyNoteMetadata(text, meta = {}, warnings = []) {
   const doc = parseDocument(block.join('\n'))
   if (doc.errors.length > 0) {
     // jotter's own scan survives malformed YAML (`src/lib/vault.ts:132`) and so
-    // does this: the note keeps every alias it had, and loses only the ones
-    // this pass wanted to add. Said out loud, because a legacy URL that stopped
+    // does this: the note keeps every name it had, and loses only what this
+    // pass wanted to add. Said out loud, because a legacy URL that stopped
     // answering is not something to discover from a 404.
     warnings.push(
       `frontmatter could not be parsed (${doc.errors[0].message}), so its old addresses ` +
-        `were not added as aliases`,
+        `were not written`,
     )
     return text
   }
 
-  const key = doc.has('aliases') || !doc.has('alias') ? 'aliases' : 'alias'
-  const existing = doc.toJS()?.[key]
-  const kept = (Array.isArray(existing) ? existing : existing == null ? [] : [existing])
-    .map((value) => String(value))
-    .filter(Boolean)
-  doc.set(key, [...kept, ...aliases.filter((alias) => !kept.includes(alias))])
+  if (aliases.length > 0) {
+    const key = doc.has('aliases') || !doc.has('alias') ? 'aliases' : 'alias'
+    const existing = doc.toJS()?.[key]
+    const kept = (Array.isArray(existing) ? existing : existing == null ? [] : [existing])
+      .map((value) => String(value))
+      .filter(Boolean)
+    doc.set(key, [...kept, ...aliases.filter((alias) => !kept.includes(alias))])
+  }
+  if (oldUrls.length > 0) doc.set('oldUrls', oldUrls)
   if (meta.title && !doc.has('title')) doc.set('title', String(meta.title))
+  if (meta.created && !FRONTMATTER_CREATED.some((key) => doc.has(key))) {
+    doc.set('created', String(meta.created))
+  }
+  if (meta.updated && !FRONTMATTER_UPDATED.some((key) => doc.has(key))) {
+    doc.set('updated', String(meta.updated))
+  }
 
   return ['---', doc.toString().replace(/\n$/, ''), ...lines.slice(close)].join('\n')
 }

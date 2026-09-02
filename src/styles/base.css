@@ -122,6 +122,40 @@ body {
   border-block-end-color: var(--accent);
 }
 
+/**
+ * A link that leaves the site says so, the way Obsidian Publish does.
+ *
+ * `content` on an `::after` rather than an inline `<svg>` or a character in the
+ * markup: the glyph is decoration, and generated content is not in the
+ * accessibility tree, is not selected when a reader copies the sentence, and is
+ * not read out. The sentence a screen reader *does* get is a visually-hidden
+ * span inside the anchor, which `src/markdown/wikilinks.ts` puts there, because
+ * WCAG G201 wants the warning in words and SC 1.1.1 says an icon is not words.
+ *
+ * `↗` is U+2197 NORTH EAST ARROW, which every system font in the stack has;
+ * sized in `em` so it scales with the text it follows rather than with the root.
+ *
+ * `unicode-bidi: isolate` for the same reason the title classes carry it: on an
+ * RTL line the arrow is a neutral character next to a right-to-left run, and
+ * without isolation the bidi algorithm reorders it to the *start* of the link,
+ * pointing away from the text it belongs to. Isolated, it stays at the end of
+ * the anchor, and `inset-inline` spacing puts the gap on the correct side in
+ * both directions. The arrow itself is not mirrored: it means "away from here",
+ * which is up-and-out on both sides of the page.
+ */
+.external-link::after {
+  content: '\2197';
+  display: inline-block;
+  margin-inline-start: 0.15em;
+  font-size: 0.85em;
+  line-height: 1;
+  vertical-align: baseline;
+  unicode-bidi: isolate;
+  /* Decoration: never the reason a line wraps, never underlined with the text. */
+  border: 0;
+  text-decoration: none;
+}
+
 :where(img, svg, video) {
   max-inline-size: 100%;
   block-size: auto;

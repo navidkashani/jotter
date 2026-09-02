@@ -9,7 +9,7 @@
  */
 import { getCollection, render } from 'astro:content'
 
-import { notes, allFolders, tree, backlinksFor, graph } from '../lib/site.js'
+import { notes, allFolders, tree, backlinksFor, graph, neighboursOf } from '../lib/site.js'
 import { neighbourhood } from '../lib/graph.js'
 import { noteHref } from '../lib/href.js'
 import type { VaultNote } from '../lib/vault.js'
@@ -39,13 +39,12 @@ export async function getStaticPaths() {
   }
 
   for (const folder of allFolders) {
-    if (claimed.has(folder.slug)) {
-      console.warn(
-        `[jotter] "${folder.slug}" is claimed by both a note and the folder ` +
-          `"${folder.path}". The note wins; the folder has no index page.`,
-      )
-      continue
-    }
+    // The note wins. Reported by `jotter:vault` rather than here: a
+    // `console.warn` inside `getStaticPaths` is a line in the middle of a
+    // page-build log, on a hook Astro may not re-run on a warm build, and this
+    // is a decision somebody needs to see. See `shadowedFolders` in
+    // `astro.config.ts`.
+    if (claimed.has(folder.slug)) continue
     paths.push({ params: { slug: folder.slug }, props: { kind: 'folder', path: folder.path } })
   }
 
@@ -71,9 +70,13 @@ if (kind === 'note') {
 
 const Content = rendered?.Content
 
-const index = note ? notes.findIndex((n) => n.slug === note!.slug) : -1
-const previous = index > 0 ? notes[index - 1] : undefined
-const next = index >= 0 && index < notes.length - 1 ? notes[index + 1] : undefined
+/**
+ * The note's siblings under the same folder, in the order the sidebar draws
+ * them. This used to index into the flat published list, which is sorted by
+ * whole vault path, so "Previous" from a root note was whatever happened to
+ * sort before it anywhere in the vault.
+ */
+const { previous, next } = note ? neighboursOf(note.slug) : {}
 
 /* ---- A folder ---------------------------------------------------------- */
 

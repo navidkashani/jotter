@@ -169,8 +169,13 @@ const outputs = await Promise.all(
 
 /**
  * The URL a built page is served at. `dist/index.html` is `/`, not `/index`,
- * and `dist/notes/index.html` is `/notes`: `trailingSlash: 'never'`, which is
- * also how every href in the build spells them.
+ * and `dist/notes.html` is `/notes`: `trailingSlash: 'never'`, which is also
+ * how every href in the build spells them.
+ *
+ * Both output shapes are handled. `build.format: 'file'` is what
+ * `astro.config.ts` sets and what every path below is written for, but the
+ * `directory` form (`dist/notes/index.html`) still reduces correctly, so a
+ * `dist/` left over from an older build reads rather than misreporting.
  */
 const routeOf = (file) =>
   '/' +
@@ -179,6 +184,18 @@ const routeOf = (file) =>
     .join('/')
     .replace(/\/?index\.html$/, '')
     .replace(/\.html$/, '')
+
+/**
+ * The inverse: the file in `dist/` that serves a slug.
+ *
+ * `build.format: 'file'` writes `dist/<slug>.html`, with the root the single
+ * exception, because `/` has no slug to name a file after and Astro writes it
+ * as `dist/index.html` under either format.
+ */
+const pageFileFor = (slug) =>
+  slug === 'index' || slug === ''
+    ? join(DIST, 'index.html')
+    : join(DIST, ...`${slug}.html`.split('/'))
 
 /**
  * `src/lib/url.ts`, reimplemented in four lines.
@@ -572,9 +589,134 @@ section('Links')
   const deadLinkPages = authored.filter(({ html }) => html.includes('class="dead-link"'))
   demo(deadLinkPages.length > 0, 'the demo actually exercises dead links', 'no dead-link span found anywhere')
 
+  /**
+   * Every link off the site carries `rel="noopener"`.
+   *
+   * An invariant rather than an observation: the author writes the URL, jotter
+   * writes the attributes, so a link that leaves without one is this theme's
+   * mistake. `<a href>` is deliberately outside the third-party-origin sweep
+   * further down (a link is not a subresource; nothing is fetched until a
+   * reader clicks), which is exactly why this belongs here instead.
+   *
+   * `noopener` only. `nofollow` is Obsidian Publish's answer and it is the
+   * wrong one for a knowledge garden: those links are citations, and stripping
+   * their credit is not a theme's call. See `config.externalLinks`.
+   */
+  const OFF_SITE_ANCHOR = /<a\b[^>]*\bhref="(?:https?:)?\/\/[^"]*"[^>]*>/gi
+  const unprotected = []
+  const nofollowed = []
+  let offSiteCount = 0
+  for (const { file, html } of authored) {
+    for (const [tag] of html.matchAll(OFF_SITE_ANCHOR)) {
+      offSiteCount++
+      if (!/\brel="[^"]*\bnoopener\b[^"]*"/i.test(tag)) unprotected.push(`${file}: ${tag}`)
+      if (/\brel="[^"]*\bnofollow\b[^"]*"/i.test(tag)) nofollowed.push(`${file}: ${tag}`)
+    }
+  }
+  check(
+    unprotected.length === 0,
+    'every link off the site carries rel="noopener"',
+    unprotected.slice(0, 5).join('\n        '),
+  )
+  check(
+    nofollowed.length === 0,
+    'and none of them is nofollowed, so a cited source keeps the credit',
+    nofollowed.slice(0, 5).join('\n        '),
+  )
+  demo(offSiteCount > 0, 'the demo actually links off the site', 'no external anchor found anywhere')
+
   await internalLinks(pages)
   await producersAgree(pages)
 }
+
+/* ----------------------------------------------------------------- routes */
+
+/**
+ * No two routes write the same file.
+ *
+ * `build.format: 'file'` is what makes this worth asserting. Under the
+ * `directory` format a page's output path carries its own directory
+ * (`dist/about/index.html`), so two routes could only collide by being the same
+ * route; under `file` the directory is gone (`dist/about.html`), and
+ * `src/pages/about.astro` beside `src/pages/about/index.astro` is two ordinary
+ * files that quietly write one page. Whichever renders second wins, `dist/`
+ * shows no sign of it, and every other assertion in this script passes.
+ *
+ * Two nets, because a collision is visible in two different places and neither
+ * sees the other's case:
+ *
+ * 1. **The source tree**, for two static route files sharing an output path.
+ *    That is the pair above, and it cannot be seen in `dist/` at all: there is
+ *    one file there, and it looks correct.
+ * 2. **`dist/` itself**, for two files serving one address. That is a mixed or
+ *    stale output directory (`about.html` left beside `about/index.html` by a
+ *    build under the other format), where the host picks one and the other is
+ *    unreachable.
+ *
+ * The third kind of collision, a note and a folder claiming one slug, is not
+ * here: `src/pages/[...slug].astro` resolves it deliberately (the note wins)
+ * and says so, which is a decision about content rather than a defect in the
+ * build.
+ */
+async function routeCollisions() {
+  const PAGES_DIR = join(ROOT, 'src', 'pages')
+  const routeFiles = await walk(PAGES_DIR, (n) => /\.(astro|md|mdx|html|ts|js)$/.test(n))
+
+  /** Every static route file, as the path in `dist/` it writes. */
+  const emitted = new Map()
+  const clashes = []
+  for (const file of routeFiles) {
+    const rel = relative(PAGES_DIR, file).split(sep).join('/')
+    // A dynamic route's output paths come from `getStaticPaths`, so there is
+    // nothing to compare here; net 2 below is what covers those.
+    if (rel.includes('[')) continue
+    const route = rel.replace(/\.(astro|md|mdx|html|ts|js)$/, '').replace(/(^|\/)index$/, '$1')
+    const out = `${route.replace(/\/$/, '') || 'index'}.html`
+    const first = emitted.get(out)
+    if (first) clashes.push(`${first} and ${rel} both write ${out}`)
+    else emitted.set(out, rel)
+  }
+  check(
+    clashes.length === 0,
+    'no two page files in src/pages write the same file',
+    clashes.join('\n        '),
+  )
+
+  /** And no two files already in `dist/` answer at one address. */
+  const served = new Map()
+  const duplicated = []
+  for (const file of htmlFiles) {
+    if (relative(DIST, file).startsWith(`_vault${sep}`)) continue
+    const route = routeOf(file)
+    const first = served.get(route)
+    if (first) duplicated.push(`${first} and ${relative(DIST, file)} are both served at ${route}`)
+    else served.set(route, relative(DIST, file))
+  }
+  check(
+    duplicated.length === 0,
+    'every page in dist/ is the only file served at its address',
+    duplicated.join('\n        '),
+  )
+
+  /**
+   * And the format really is the one the paths above assume. A silent revert to
+   * `directory` would leave both checks green and put every internal link on
+   * the site back behind a 308.
+   */
+  const directoryPages = htmlFiles.filter(
+    (file) =>
+      relative(DIST, file).endsWith(`${sep}index.html`) &&
+      !relative(DIST, file).startsWith(`_vault${sep}`),
+  )
+  check(
+    directoryPages.length === 0,
+    'pages are written as <slug>.html, so no internal link takes a redirect',
+    directoryPages.map((f) => relative(DIST, f)).join(', '),
+  )
+}
+
+section('Routes')
+await routeCollisions()
 
 /* ----------------------------------------------------------------- images */
 
@@ -1570,6 +1712,36 @@ function thirdPartyOrigins(pages) {
     { strictInDemo: true },
   )
 
+  /**
+   * No `<iframe>` anywhere in `dist/` points at somebody else's origin.
+   *
+   * A `check` rather than the `observe` above it, and in a note's prose as well
+   * as in the chrome, because unlike a CDN image this is never the author's
+   * doing: nothing an author can write in markdown asks jotter for a
+   * cross-origin frame. A remote document is a link card, and a remote video is
+   * a facade whose player is built by `src/scripts/embed.ts` **after a click**.
+   *
+   * That is exactly what the facade buys and this is what states the price of
+   * losing it. An `<iframe src="https://www.youtube.com/embed/…">` in the
+   * markup would put Google's frame, its cookies and its scripts on the page of
+   * every reader who never pressed play, which is precisely what pasting a URL
+   * into a note must not do.
+   */
+  const framed = authored.flatMap(({ file, html }) =>
+    tagsOf(html, 'iframe')
+      .filter((tag) => REMOTE.test(attr(tag, 'src')))
+      .map((tag) => `${file}: ${attr(tag, 'src')}`),
+  )
+  check(
+    framed.length === 0,
+    'no <iframe> in dist/ points at another origin: a player arrives on a click',
+    framed.join('\n        '),
+  )
+  // Without this the assertion above is loudest on a build that embeds nothing
+  // at all, which is every build that could not possibly have failed it.
+  const facades = authored.filter(({ html }) => html.includes('class="video-embed"'))
+  demo(facades.length > 0, 'the demo actually has a click-to-play facade', 'no .video-embed anywhere')
+
   const providers = [...new Set(externalScripts.map((s) => s.provider))]
 
   if (providers.length === 0) {
@@ -2228,7 +2400,7 @@ if (FULL) {
     const off = original
       .replace(
         /features:\s*\{[\s\S]*?\}/,
-        `features: { toc: true, backlinks: true, tags: false, themeToggle: false, graph: false, search: false, hoverPreview: false, rss: false }`,
+        `features: { toc: true, backlinks: true, tags: false, themeToggle: false, metadata: false, prevNext: true, graph: false, search: false, hoverPreview: false, rss: false, embeds: false }`,
       )
       .replace(/\bnav:\s*'(?:tree|tags|none)'/, `nav: 'none'`)
       /**
@@ -2257,6 +2429,10 @@ if (FULL) {
       [/\bthemeToggle:\s*false/, 'features.themeToggle'],
       [/\bsearch:\s*false/, 'features.search'],
       [/\brss:\s*false/, 'features.rss'],
+      // `embeds` is the one scripted feature that defaults *on*, so a rewrite
+      // that missed it would leave the click-to-play island in a build this
+      // section asserts ships no JavaScript at all.
+      [/\bembeds:\s*false/, 'features.embeds'],
       [/\bnav:\s*'none'/, 'nav'],
       ...(/\bprovider:/.test(original) ? [[/\bprovider:\s*'none'/, 'analytics.provider']] : []),
     ]
@@ -2678,7 +2854,7 @@ if (FULL) {
          * the site while every listing, the nav tree, the graph and the feed
          * still named it would be the worse failure.
          */
-        const displaced = onPages.find((p) => p.file === join('index-2', 'index.html'))
+        const displaced = onPages.find((p) => p.file === 'index-2.html')
         check(displaced !== undefined, 'the displaced index.md keeps a page of its own')
         check(
           out.includes('claim "/"') && out.includes('index.md') && out.includes(CLAIMANT),
@@ -2827,12 +3003,7 @@ if (FULL) {
         /** Every row: the page is on disk at the slug, and the URL decodes to it. */
         const everyRow = [...ROWS, [PERMALINK.path, PERMALINK.slug, `/${PERMALINK.slug}`]]
         for (const [path, slug, url] of everyRow) {
-          // `index` is the site root, which is `dist/index.html`: the one
-          // slug that is not a directory of its own.
-          const page =
-            slug === 'index'
-              ? join(DIST, 'index.html')
-              : join(DIST, ...slug.split('/'), 'index.html')
+          const page = pageFileFor(slug)
           check(
             (await stat(page).catch(() => null)) !== null,
             `${path} is served at ${url}`,
@@ -2962,7 +3133,17 @@ if (FULL) {
         body:
           '# Home\n\nSee [[Critical Thinking]], [[Plain]] and [[Draft Note]].\n\n' +
           '![[My Diagram.svg]]\n',
-        entry: { slug: 'index', title: 'Home' },
+        entry: {
+          slug: 'index',
+          title: 'Home',
+          // Promoted to `/` *and* migrated: the note has an old Obsidian
+          // Publish URL as well as a rename, and both have to end up at `/`.
+          legacyUrls: ['Notes/Home'],
+          // Real stats, because the whole point of carrying them is that this
+          // vault is written fresh and has no dates of its own.
+          ctime: Date.UTC(2024, 2, 14),
+          mtime: Date.UTC(2026, 0, 9),
+        },
       },
       'Wisdom & Approaches/Critical Thinking.md': {
         body: '# Critical Thinking\n\nA note that kept the address it was published at.\n',
@@ -2970,6 +3151,17 @@ if (FULL) {
           slug: 'wisdom-approaches/critical-thinking',
           title: 'Critical Thinking',
           legacyUrls: ['Wisdom+&+Approaches/Critical+Thinking'],
+          ctime: Date.UTC(2024, 2, 14),
+          mtime: Date.UTC(2026, 0, 9),
+        },
+      },
+      'Wisdom & Approaches/NVC.md': {
+        body: '# NVC\n\nA sibling, so the note above has a neighbour to link to.\n',
+        entry: {
+          slug: 'wisdom-approaches/nvc',
+          title: 'NVC',
+          ctime: Date.UTC(2024, 2, 15),
+          mtime: Date.UTC(2026, 0, 10),
         },
       },
       'Notes/Plain.md': {
@@ -3017,6 +3209,11 @@ if (FULL) {
         showOutline: true,
         showBacklinks: true,
         showTags: true,
+        // On, against the default, so the block below is asserted against the
+        // option rather than against jotter's own layout. Off is what a fresh
+        // install already does.
+        showPageMetadata: true,
+        showPrevNext: true,
         analytics: { provider: 'none', id: '' },
       },
       files,
@@ -3101,8 +3298,20 @@ if (FULL) {
           'utf8',
         )
         check(
-          critical.includes('aliases: ["Wisdom+&+Approaches/Critical+Thinking"]'),
-          'an old address arrived as an alias, not as a permalink',
+          critical.includes('oldUrls: ["Wisdom+&+Approaches/Critical+Thinking"]'),
+          'an old address arrived as an old URL, not as a permalink',
+          critical.split('\n').slice(0, 5).join(' | '),
+        )
+        /**
+         * And not as an alias, which is where these used to go. Both spellings
+         * become 301s, so the redirect below passes either way; the difference
+         * is that `Frontmatter.astro` prints `aliases` on the page under "Also
+         * known as", so every note on a migrated site displayed a `+`-encoded
+         * routing artifact as human metadata.
+         */
+        check(
+          !/^aliases:.*Wisdom/m.test(critical),
+          'and never as an alias, which the page would print as a name',
           critical.split('\n').slice(0, 5).join(' | '),
         )
 
@@ -3111,8 +3320,36 @@ if (FULL) {
           'an attachment kept its vault path rather than taking its slug',
         )
 
+        /**
+         * The dates the vault directory cannot supply. It was written seconds
+         * ago from a snapshot, so frontmatter, git and mtime, the three
+         * fallbacks in `src/lib/dates.ts`, all resolve to *now*. Without the
+         * snapshot's own stats every note on the site reads as created on the
+         * day of the last deploy.
+         */
+        check(
+          critical.includes('created: "2024-03-14T00:00:00.000Z"') &&
+            critical.includes('updated: "2026-01-09T00:00:00.000Z"'),
+          'the note carries the dates the snapshot knew, not the build’s clock',
+          critical.split('\n').slice(0, 6).join(' | '),
+        )
+
         const generated = await readFile(configPath, 'utf8')
         check(/"slugs": "preserve"/.test(generated), 'the generated config preserves the plugin’s slugs')
+        /**
+         * Notes are written at their slugs, so the folder tree is derived from
+         * a path that is already slugified. The real names are recovered from
+         * the manifest, whose keys are vault paths.
+         */
+        check(
+          /"wisdom-approaches": "Wisdom & Approaches"/.test(generated),
+          'the folder kept the name the vault gave it, not its slug',
+          generated.slice(-400),
+        )
+        check(
+          /"metadata": true/.test(generated) && /"prevNext": true/.test(generated),
+          'the two newest site options reached the generated config',
+        )
         check(
           /"locale": "fa-IR"/.test(generated) && /"dir": "rtl"/.test(generated),
           'the language and its direction reached the generated config',
@@ -3142,10 +3379,7 @@ if (FULL) {
           /** Every note at the slug the plugin gave it, and the homepage at `/`. */
           for (const [path, { entry }] of Object.entries(FILES)) {
             if (!path.endsWith('.md')) continue
-            const page =
-              entry.slug === 'index'
-                ? join(DIST, 'index.html')
-                : join(DIST, ...entry.slug.split('/'), 'index.html')
+            const page = pageFileFor(entry.slug)
             check(
               (await stat(page).catch(() => null)) !== null,
               `${path} is served at /${entry.slug === 'index' ? '' : entry.slug}`,
@@ -3182,9 +3416,36 @@ if (FULL) {
             `${LEGACY} 301s to ${SLUG}`,
             netlify.trim().split('\n').join(' | '),
           )
+          /**
+           * The homepage promotion, which is the case this whole section exists
+           * for and the one that is easiest to lose.
+           *
+           * Under `slugs: 'preserve'` the promoted note is written to disk *at*
+           * `index.md`, so `buildRedirects`' vacated-slug rule short-circuits
+           * (`from === to`) and `claim()` refuses `index` as a source outright.
+           * The old address survives on one path only: the plugin's rename rule
+           * `{from: 'notes/home', to: 'index'}` reaching `redirectFromsFor`.
+           * Delete that and every link anyone ever published to the note that
+           * is now the front page 404s, with nothing else in the build noticing.
+           */
           check(
             netlify.includes('/notes/home / 301'),
             'a note renamed into the homepage still answers at its old slug',
+            netlify.trim().split('\n').join(' | '),
+          )
+          /**
+           * And the same for the address Obsidian Publish served it at, which
+           * arrives by the other route: `legacyUrls` -> `oldUrls:` -> the same
+           * `claim()`. Two sources, one destination, and `/` is a real page.
+           */
+          check(
+            netlify.includes('/Notes/Home / 301'),
+            'and at the URL Obsidian Publish served the same note at',
+            netlify.trim().split('\n').join(' | '),
+          )
+          check(
+            !/^\/index /m.test(netlify) && !/ \/index 301$/m.test(netlify),
+            'and nothing redirects to or from /index, which is not a URL this site serves',
             netlify.trim().split('\n').join(' | '),
           )
 
@@ -3215,6 +3476,40 @@ if (FULL) {
           check(
             homePage.includes('/_vault/attachments/My%20Diagram.svg'),
             'an embed resolved to the attachment at its vault path',
+          )
+
+          /* -- what the reader sees, for the four defects this fixture carries -- */
+
+          const criticalPage =
+            onPages.find((p) => p.file === `wisdom-approaches${sep}critical-thinking.html`)?.html ?? ''
+
+          check(
+            criticalPage.includes('>Wisdom &amp; Approaches<'),
+            'the folder reads by its real name in the breadcrumb and the sidebar',
+            criticalPage.includes('>wisdom-approaches<') ? 'it reads as its slug' : 'no crumb found',
+          )
+          check(
+            !/Also known as/.test(criticalPage),
+            'no page shows an old URL as a name the note answers to',
+          )
+          check(
+            /<time datetime="2024-03-14/.test(criticalPage),
+            'the metadata block shows the date the note was written, not the date of the build',
+            criticalPage.match(/<time datetime="[^"]*"/)?.[0] ?? 'no <time> on the page',
+          )
+          /**
+           * Neighbours are siblings under one folder. `NVC` is the only other
+           * note in `Wisdom & Approaches`, so it is the only link that belongs
+           * here; the flat-list ordering this replaced would have reached for
+           * whatever sorted next across the whole vault.
+           */
+          const prevNext = criticalPage.slice(criticalPage.indexOf('<nav class="prev-next"'))
+          check(
+            /<nav class="prev-next"/.test(criticalPage) &&
+              prevNext.includes('/wisdom-approaches/nvc') &&
+              !prevNext.includes('/notes/plain'),
+            'previous and next stay inside the note’s own folder',
+            prevNext.slice(0, 300),
           )
 
           const marker = JSON.parse(await readFile(join(DIST, '_publish.json'), 'utf8'))
@@ -3423,7 +3718,7 @@ if (FULL) {
        * comes up blank.
        */
       const integrity = await readFile(
-        join(DIST, 'wisdom-approaches', 'integrity', 'index.html'),
+        pageFileFor('wisdom-approaches/integrity'),
         'utf8',
       ).catch(() => '')
       check(

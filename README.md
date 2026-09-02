@@ -81,10 +81,18 @@ export default defineConfig({
     backlinks: true,
     tags: true,
     themeToggle: true,
+    metadata: false,            // the dates + frontmatter block under a note's title
+    prevNext: true,             // links to the notes either side, within the folder
     graph: false,               // the local graph, `layout: 'panels'` only
     hoverPreview: false,        // excerpt cards on hovering a link
     search: false,              // Cmd/Ctrl+K full-text search over your notes
     rss: false,                 // /rss.xml: requires `url`
+    embeds: true,               // click-to-play for a pasted video, cards for the rest
+  },
+
+  externalLinks: {
+    newTab: true,               // target="_blank", plus the screen-reader warning it owes
+    icon: true,                 // the ↗ after the link text
   },
 
   analytics: {
@@ -93,8 +101,14 @@ export default defineConfig({
     // host: '…',            // self-hosted Plausible, Umami or GoatCounter only
   },
   redirects: {},
+  folderNames: {},           // display names for folders whose path is not their name
 })
 ```
+
+`features.metadata` is **off** by default, matching Obsidian Publish, which
+shows none of this. On, a date row appears only where jotter has a real date:
+frontmatter, or git history. It never prints the file's mtime under the heading
+"Created", because on a generated vault that is the moment of the build.
 
 A feature that is off ships **no JavaScript at all**: the island is not
 rendered rather than hidden, and `npm run verify:full` asserts it.
@@ -132,12 +146,22 @@ Unknown keys are left alone. Your Dataview fields will not break the build.
 ### What the header block shows
 
 The boxed list at the top of a note is `created`, `updated` when it differs, and
-whichever of `aliases`, `status`, `source`, `author` and `series` you set.
+whichever of `aliases`, `status`, `source`, `author` and `series` you set. The
+whole block is behind `features.metadata`, which is **off** by default.
+
+A date row appears only where jotter has a real date to show: your frontmatter,
+or the note's git history. The fallback to the file's mtime still happens, so
+"recently updated" has something to sort by, but it is not printed under the
+heading "Created": on a vault a generator wrote, that is the moment of the
+build, and a whole site claiming to have been created on the day it was last
+deployed is worse than a site that says nothing.
 
 That list is an **allow-list**, not a deny-list. Frontmatter is whatever its
 owner typed: a private URL, a note to self, a `publish: false` you forgot to
 remove, so anything unrecognised stays off the page rather than leaking by
-default.
+default. `oldUrls`, which the Open Publish pipeline writes, is deliberately not
+on it: those are addresses, not names, and printing them under "Also known as"
+put `About/How+to+Communicate` on every page of a migrated site.
 
 `author` is display only. The name on the feed is `author` in
 `jotter.config.ts`, which is a claim about who publishes the site rather than
@@ -293,12 +317,29 @@ as a blank box or an unturnable first page on mobile, and gives them a 400px
 pane where the browser's own full-window viewer is one click away. The card
 carries the file's name and extension, so a reader knows what they are opening.
 
-A remote URL that names no image is a link for the same reason the analytics
-feature is opt-in: `![](https://youtube.com/watch?v=…)` renders an embedded
-player in Obsidian, and doing that here would put Google's script on a page
-whose author only pasted a URL. Anything ending in an image extension is still
-an `<img>`. What is never emitted is `<img src="…/watch?v=x">`, which was the
-old behaviour and is a broken-image icon on every screen.
+A remote URL that names no image never becomes an `<iframe>`, for the same
+reason the analytics feature is opt-in: `![](https://youtube.com/watch?v=…)`
+renders an embedded player in Obsidian, and doing that here would put Google's
+frame, its cookies and its scripts on the page of every reader who never pressed
+play. What is also never emitted is `<img src="…/watch?v=x">`, which is a
+broken-image icon on every screen.
+
+What you get instead is a **facade**: a poster, a play control, and a link to
+the video, with the player fetched only when a reader clicks. The click is the
+consent, and until it happens the built page has requested nothing from anybody.
+The poster is *local*: `scripts/fetch-content.mjs` downloads it into the vault
+at build time, because `lite-youtube-embed`, the standard answer to this, gets
+its thumbnail from `i.ytimg.com` at runtime, which is exactly the request
+`scripts/verify-build.mjs` fails the build over. A poster that could not be
+fetched leaves the facade in place without one.
+
+An X post is fetched the same way, through `publish.x.com/oembed` with
+`omit_script=1`, and rendered as jotter's own markup from the text and the
+byline rather than as X's blockquote: nothing to sanitise, and no widget script.
+A tweet nobody could fetch is a link to the tweet, never an invented one.
+Everything else remote is a card naming the host and the path. Anything ending
+in an image extension is still an `<img>`. `features.embeds: false` turns the
+lot back into link cards.
 
 ### An authoritative link index
 
@@ -660,9 +701,11 @@ Two things it deliberately does not do. It **never rewrites a link in a note
 body**: the plugin resolved every wikilink inside Obsidian against the whole
 vault, and those answers go to `.jotter/links.json`, which jotter has read since
 v1, so the markdown on disk is what its author wrote. And it writes **no
-redirects**, because an old address arrives as `aliases:` and jotter already
-turns an alias into a 301 (to the note, without moving it), which is the half a
-`permalink:` would have got backwards. See
+redirects**, because an old address arrives as `oldUrls:` and jotter already
+turns one into a 301 (to the note, without moving it), which is the half a
+`permalink:` would have got backwards. A key of its own rather than more
+`aliases:`, because both become redirects but only one of them is a *name*, and
+the header block prints names. See
 [`docs/open-publish.md`](docs/open-publish.md).
 
 ### What "no network" means now

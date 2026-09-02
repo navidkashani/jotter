@@ -24,6 +24,7 @@ import { svgIntrinsicSize } from './embed.js'
 import { frontmatterImage, resolveSocialImage } from './social.js'
 import { normalizeDirection } from './bidi.js'
 import { loadLinksIndex, type LinkOverrides } from './links-index.js'
+import { loadEmbedsIndex, type EmbedIndex } from './embeds-index.js'
 import type { ResolvableNote, VaultIndex } from './resolve.js'
 
 export interface LinkEdge {
@@ -43,6 +44,16 @@ export interface VaultNote extends ResolvableNote {
    * every note in a vault that has never heard of the key.
    */
   permalinks: string[]
+  /**
+   * Addresses this note used to be served at, from `oldUrls:`. Redirect
+   * sources and nothing else: they are not names, so they do not resolve a
+   * wikilink (which is why they are here rather than on `ResolvableNote`
+   * beside `aliases`) and nothing renders them.
+   *
+   * `scripts/fetch-content.mjs` writes the key from an Open Publish snapshot.
+   * A hand-written vault has none, and an author is free to write one.
+   */
+  oldUrls: string[]
   frontmatter: Record<string, unknown>
   /** Raw markdown with frontmatter removed. */
   body: string
@@ -62,6 +73,11 @@ export interface Vault extends VaultIndex<VaultNote> {
   /** Intrinsic size for assets Astro's image pipeline will not measure (SVG). */
   assetSizes: Map<string, { width: number; height: number }>
   linkOverrides?: LinkOverrides
+  /**
+   * `.jotter/embeds.json`: posters and tweet text a build with a network
+   * fetched. Absent for every vault nobody fetched for, which is most of them.
+   */
+  embeds?: EmbedIndex
   /** Outgoing links per note path, in document order. */
   edges: Map<string, LinkEdge[]>
   warnings: string[]
@@ -270,6 +286,7 @@ export function scanVault(options: ScanOptions): Vault {
       path,
       slug: slugs.get(path) ?? path,
       permalinks: [],
+      oldUrls: normalizeAliases(frontmatter.oldUrls),
       filename,
       title: resolveTitle(frontmatter, body, filename),
       aliases,
@@ -296,6 +313,8 @@ export function scanVault(options: ScanOptions): Vault {
     )
   }
 
+  const embeds = loadEmbedsIndex(root, warnings)
+
   const index = buildIndex(notes, assetPaths, warnings)
   warnSocialImages(notes, image, index, warnings)
   warnDirections(notes, warnings)
@@ -308,6 +327,7 @@ export function scanVault(options: ScanOptions): Vault {
     warnings,
     assetSizes: measureAssets(root, assetPaths),
     linkOverrides,
+    embeds,
     ...index,
   }
   cache.set(key, vault)
@@ -404,6 +424,12 @@ function measureAssets(
   return sizes
 }
 
+/**
+ * A frontmatter key holding one name or a list of them, as a clean list.
+ *
+ * Used for `aliases`/`alias` and for `oldUrls`: three keys, one shape, and YAML
+ * lets any of them be written as a bare scalar.
+ */
 function normalizeAliases(value: unknown): string[] {
   if (value == null) return []
   const list = Array.isArray(value) ? value : [value]

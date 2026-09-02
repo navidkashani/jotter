@@ -11,9 +11,20 @@
  * they forgot to remove, so anything unrecognised stays off the page rather
  * than leaking by default.
  *
- * Created and updated are always shown (updated only when it differs), because
- * in a garden they answer different questions: when a thought started, and
- * whether it is still being tended.
+ * Created and updated answer different questions in a garden (when a thought
+ * started, and whether it is still being tended), so both are shown, updated
+ * only when it differs.
+ *
+ * **A date is shown only when it is a real one.** `resolveDates` falls back to
+ * the file's mtime so that "recently updated" has something to sort by, and an
+ * mtime is not a claim about a note: it is when this machine last wrote the
+ * file. On a build from an Open Publish snapshot that is the second the vault
+ * was fetched, which is how every page of a 96-note site came to read
+ * `Created Sep 2, 2026`. `NoteDates.known` is which branch answered, and a row
+ * whose date was guessed is simply absent.
+ *
+ * The whole block is behind `features.metadata`, off by default. This component
+ * therefore has to survive having nothing at all to render.
  */
 import type { VaultNote } from '../lib/vault.js'
 import { config } from '../lib/site.js'
@@ -41,24 +52,29 @@ const format = (value: unknown): string | undefined => {
 }
 
 const sameDay = isoDate(note.dates.created) === isoDate(note.dates.updated)
+const { known } = note.dates
 
 const rows: { key: string; label: string; value: string; datetime?: string }[] = [
-  {
-    key: 'created',
-    label: t('note.created'),
-    value: formatDate(note.dates.created),
-    datetime: isoDate(note.dates.created),
-  },
-  ...(sameDay
-    ? []
-    : [
+  ...(known.created
+    ? [
+        {
+          key: 'created',
+          label: t('note.created'),
+          value: formatDate(note.dates.created),
+          datetime: isoDate(note.dates.created),
+        },
+      ]
+    : []),
+  ...(known.updated && !sameDay
+    ? [
         {
           key: 'updated',
           label: t('note.updated'),
           value: formatDate(note.dates.updated),
           datetime: isoDate(note.dates.updated),
         },
-      ]),
+      ]
+    : []),
   ...DISPLAYED_FIELDS.flatMap((key) => {
     const value = format(note.frontmatter[key])
     return value ? [{ key, label: t(`note.field.${key}`), value }] : []
@@ -81,13 +97,15 @@ const rows: { key: string; label: string; value: string; datetime?: string }[] =
 const indexed = config.features.search ? '' : undefined
 ---
 
-<dl class="note-frontmatter">
-  {
-    rows.map((row) => (
-      <div data-pagefind-ignore={row.datetime ? indexed : undefined}>
-        <dt>{row.label}</dt>
-        <dd>{row.datetime ? <time datetime={row.datetime}>{row.value}</time> : row.value}</dd>
-      </div>
-    ))
-  }
-</dl>
+{
+  rows.length > 0 && (
+    <dl class="note-frontmatter">
+      {rows.map((row) => (
+        <div data-pagefind-ignore={row.datetime ? indexed : undefined}>
+          <dt>{row.label}</dt>
+          <dd>{row.datetime ? <time datetime={row.datetime}>{row.value}</time> : row.value}</dd>
+        </div>
+      ))}
+    </dl>
+  )
+}

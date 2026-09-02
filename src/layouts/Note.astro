@@ -99,6 +99,14 @@ const HoverPreview = showHoverPreview
   : null
 
 /**
+ * Click-to-play, gated the same way and for the same reason. With embeds off
+ * there is no facade in the markup for this script to upgrade, so shipping it
+ * would be bytes doing nothing on every note page.
+ */
+const showEmbeds: boolean = import.meta.env.JOTTER_EMBEDS
+const Embeds = showEmbeds ? (await import('../components/Embeds.astro')).default : null
+
+/**
  * What Pagefind indexes, and (the part worth naming) what it therefore does
  * *not*. `data-pagefind-body` is **site-wide sticky**: once it appears on any
  * page, every page without it is dropped. So putting it here quietly decides
@@ -133,7 +141,7 @@ const hasRail = config.features.backlinks || showGraph
     <header class="note-head">
       <Breadcrumb note={note} />
       <h1 class="note-title" dir={textDir(note.title, config.dir)}>{note.title}</h1>
-      <Frontmatter note={note} />
+      {config.features.metadata && <Frontmatter note={note} />}
       {config.features.tags && <TagList tags={note.tags} />}
     </header>
 
@@ -155,7 +163,7 @@ const hasRail = config.features.backlinks || showGraph
 
     <div class="note-body prose">
       <slot />
-      <PrevNext previous={previous} next={next} />
+      {config.features.prevNext && <PrevNext previous={previous} next={next} />}
     </div>
 
     {
@@ -168,5 +176,6 @@ const hasRail = config.features.backlinks || showGraph
     }
 
     {HoverPreview && <HoverPreview />}
+    {Embeds && <Embeds />}
   </article>
 </Base>

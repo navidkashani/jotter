@@ -105,6 +105,97 @@ export function mediaKind(target: string): MediaKind | undefined {
 /** Targets Obsidian embeds as media rather than transcluding as a note. */
 export const isMediaTarget = (target: string): boolean => mediaKind(target) !== undefined
 
+/**
+ * A remote URL Obsidian turns into a player or a card, recognised by its host
+ * rather than by an extension.
+ *
+ * The extension table above is untouched on purpose: `mediaKind` answers "what
+ * *file* is this", and none of these is a file. `https://youtu.be/dQw4w9WgXcQ`
+ * has no extension, names no image, and is not a page to link to either: it is a
+ * video, and a reader who sees a bare URL where Obsidian showed them a player
+ * has been given a worse copy of their own note.
+ *
+ * What jotter does with the answer is the important half, and it does not
+ * change the stance `README.md` sets out: **nothing third party is loaded**.
+ * A recognised video becomes a facade with a locally-hosted poster, and the
+ * player is fetched only when the reader clicks. The built HTML still contains
+ * no request to anybody else's server, so the origin assertion in
+ * `scripts/verify-build.mjs` keeps its meaning rather than gaining an exception.
+ *
+ * `undefined` for everything else, which stays a link card.
+ */
+export type RemoteKind = 'youtube' | 'vimeo' | 'tweet'
+
+export interface RemoteEmbed {
+  kind: RemoteKind
+  /** Video, playlist or status id: what the facade needs to build a player. */
+  id: string
+  /** A playlist is `?list=`, not `?v=`, and the player URL differs. */
+  playlist?: boolean
+}
+
+/** `youtu.be/<id>`, `youtube.com/watch?v=`, `/embed/`, `/shorts/`, `/playlist?list=`. */
+const YOUTUBE_HOST = /^(?:www\.|m\.)?(?:youtube(?:-nocookie)?\.com|youtu\.be)$/i
+const VIMEO_HOST = /^(?:www\.|player\.)?vimeo\.com$/i
+const TWEET_HOST = /^(?:www\.|mobile\.)?(?:twitter\.com|x\.com)$/i
+
+/** YouTube ids are 11 characters of the URL-safe base64 alphabet. */
+const YOUTUBE_ID = /^[\w-]{11}$/
+const NUMERIC_ID = /^\d+$/
+
+export function remoteEmbed(target: string): RemoteEmbed | undefined {
+  let url: URL
+  try {
+    // A protocol-relative URL is somebody else's host too, and `new URL` needs
+    // a scheme to say so.
+    url = new URL(target.startsWith('//') ? `https:${target}` : target)
+  } catch {
+    return undefined
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return undefined
+
+  const path = url.pathname.replace(/\/+$/, '')
+  const segments = path.split('/').filter(Boolean)
+
+  if (YOUTUBE_HOST.test(url.host)) {
+    const list = url.searchParams.get('list')
+    // A playlist link with no video id plays the list; one with both plays the
+    // video, which is what the reader clicked.
+    const v = url.searchParams.get('v')
+    if (v && YOUTUBE_ID.test(v)) return { kind: 'youtube', id: v }
+    if (list) return { kind: 'youtube', id: list, playlist: true }
+    // `youtu.be/<id>`, `/embed/<id>`, `/shorts/<id>`, `/live/<id>`.
+    const last = segments.at(-1)
+    if (last && YOUTUBE_ID.test(last)) return { kind: 'youtube', id: last }
+    return undefined
+  }
+
+  if (VIMEO_HOST.test(url.host)) {
+    // `vimeo.com/76979871` and `player.vimeo.com/video/76979871`.
+    const last = segments.at(-1)
+    return last && NUMERIC_ID.test(last) ? { kind: 'vimeo', id: last } : undefined
+  }
+
+  if (TWEET_HOST.test(url.host)) {
+    // `/<handle>/status/<id>`, with `/statuses/` the older spelling.
+    const at = segments.findIndex((s) => s === 'status' || s === 'statuses')
+    const id = at === -1 ? undefined : segments[at + 1]
+    return id && NUMERIC_ID.test(id) ? { kind: 'tweet', id } : undefined
+  }
+
+  return undefined
+}
+
+/**
+ * The key `.jotter/embeds.json` files a fetched poster or tweet under.
+ *
+ * The URL as written is not usable: two notes citing one video with different
+ * tracking parameters would be two entries, and neither would match the third
+ * spelling. What identifies the thing is its kind and its id.
+ */
+export const embedKey = (embed: RemoteEmbed): string =>
+  `${embed.kind}:${embed.playlist ? 'list:' : ''}${embed.id}`
+
 /** The file's own name, which is what a document or download card is labelled. */
 export function fileName(target: string): string {
   const path = target.split('#')[0].split('?')[0].trim()

@@ -342,6 +342,212 @@
   block-size: min(70dvh, 40rem);
 }
 
+/* ---- Remote embeds ----------------------------------------------------- */
+
+/**
+ * A video, before the reader has asked for one.
+ *
+ * The whole facade is one `<a>` to the video, so the page works with no
+ * JavaScript at all; `src/scripts/embed.ts` intercepts the click and swaps the
+ * player in. Nothing here is loaded from anybody else's origin: the poster was
+ * downloaded into the vault at build time, and until the click there is no
+ * `<iframe>` in the document.
+ *
+ * `aspect-ratio` on the wrapper rather than a height, and on the *wrapper*
+ * rather than on the poster, so the box is the same size before and after the
+ * swap and a click moves nothing on the page. A facade with no poster (an
+ * offline build, a thumbnail that 404s) keeps the same box and shows the panel
+ * underneath, which is why the background is here and not on the image.
+ *
+ * A `<span>` doing block layout is deliberate, for the reason `doc-embed` gives:
+ * an embed that is not alone in its paragraph stays inside the `<p>`, and a
+ * `<div>` there is invalid nesting.
+ */
+.prose .video-embed {
+  display: block;
+  position: relative;
+  margin-block: 2em;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border: var(--hairline) solid var(--rule);
+  border-radius: var(--radius-l);
+  background: var(--surface);
+}
+
+.prose .embed-figure .video-embed {
+  margin-block: 0;
+}
+
+.prose .video-embed-link {
+  display: flex;
+  position: absolute;
+  inset: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  border: 0;
+  text-decoration: none;
+  color: var(--ink-strong);
+}
+
+.prose .video-embed-poster {
+  position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+  /* Dimmed, so the label and the play control read against any frame. */
+  filter: brightness(0.72);
+  transition: filter 120ms ease-out;
+}
+
+.prose .video-embed-link:hover .video-embed-poster,
+.prose .video-embed-link:focus-visible .video-embed-poster {
+  filter: brightness(0.55);
+}
+
+/**
+ * The play control, drawn rather than fetched: a rounded rectangle with a
+ * triangle cut from `border`, which is the one shape CSS gives for free. No
+ * icon font, no SVG file, no request.
+ */
+.prose .video-embed-play {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 3.5rem;
+  block-size: 2.4rem;
+  border-radius: var(--radius-m);
+  background: var(--ink-strong);
+  opacity: 0.85;
+  transition: opacity 120ms ease-out;
+}
+
+.prose .video-embed-play::before {
+  content: '';
+  border-block: 0.55rem solid transparent;
+  border-inline-start: 0.9rem solid var(--surface);
+  border-inline-end: 0;
+  margin-inline-start: 0.2rem;
+  /* The triangle points the way the video plays, not the way the text reads. */
+  transform: none;
+}
+
+.prose .video-embed-link:hover .video-embed-play,
+.prose .video-embed-link:focus-visible .video-embed-play {
+  opacity: 1;
+}
+
+/**
+ * A chip rather than text with a shadow over the poster.
+ *
+ * `tokens.css` says it out loud: there is deliberately no shadow token, and
+ * every edge in jotter is a hairline or a tint. A drop shadow to make white
+ * text survive an unknown frame would be the one place that stopped being
+ * true, and it would still fail on a pale thumbnail. A filled chip reads on
+ * any poster and on no poster at all, which is what a facade with nothing
+ * downloaded falls back to.
+ */
+.prose .video-embed-label {
+  position: relative;
+  padding: 2px var(--space-xs);
+  border-radius: var(--radius-xs);
+  background: var(--ink-strong);
+  color: var(--surface);
+  font-family: var(--font-code);
+  font-size: var(--step-code);
+}
+
+/** The player, after the click. Fills the box the facade was holding open. */
+.prose .video-embed-frame {
+  position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  border: 0;
+}
+
+/**
+ * A tweet, in jotter's own type.
+ *
+ * The text and the byline are fetched at build time from X's oEmbed endpoint
+ * and stored as *strings*, so this is our markup rather than theirs: nothing to
+ * sanitise, no borrowed stylesheet, and no `platform.twitter.com` script on a
+ * page whose author pasted a URL. A tweet nobody could fetch is a link card
+ * instead; it is never invented.
+ */
+.prose .tweet-embed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin-block: 2em;
+  padding: var(--space-s) var(--space-m);
+  border: var(--hairline) solid var(--rule);
+  border-radius: var(--radius-l);
+  background: var(--surface);
+}
+
+.prose .tweet-embed-text {
+  /* Somebody else's words in our layout: their own bidi paragraph. */
+  unicode-bidi: isolate;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.prose .tweet-embed-meta {
+  display: flex;
+  gap: var(--space-xs);
+  align-items: baseline;
+  border: 0;
+  font-size: var(--step-small);
+  color: var(--ink-muted);
+}
+
+.prose .tweet-embed-date {
+  color: var(--ink-muted);
+}
+
+/**
+ * Everything else remote: a card naming where the link goes.
+ *
+ * The host and the path, not the URL. What this replaced was the raw address as
+ * the label, which is correct and unreadable: `?si=8f2a1c` is tracking, not
+ * information, and the `href` already carries it for anyone who follows.
+ */
+.prose .embed-card {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-xs);
+  margin-block: 2em;
+  padding: var(--space-xs) var(--space-s);
+  border: var(--hairline) solid var(--rule);
+  border-radius: var(--radius-l);
+  background: var(--surface);
+  color: var(--ink-strong);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.prose .embed-card:hover {
+  border-color: var(--rule-strong);
+  color: var(--accent);
+}
+
+.prose .embed-card-host {
+  flex: none;
+  font-family: var(--font-code);
+  font-size: var(--step-code);
+  color: var(--ink-muted);
+  border-inline-end: var(--hairline) solid var(--rule);
+  padding-inline-end: var(--space-xs);
+}
+
+.prose .embed-card-path {
+  unicode-bidi: isolate;
+}
+
 /* Mono, so a caption reads as apparatus rather than as another paragraph. */
 .prose figcaption {
   font-family: var(--font-code);

@@ -45,3 +45,11 @@ Inline `[[AlsoLiteral]]` too.
 ![](https://twitter.com/someone/status/1834417901081694320?s=4)
 
 ![](https://cdn.example.com/photo.png)
+
+![](https://www.youtube.com/watch?v=dQw4w9WgXcQ)
+
+![](https://youtu.be/aBcDeFgHiJk)
+
+![Never Gonna Give You Up](https://youtu.be/xYzWvUtSrQp)
+
+![](https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT?si=abc123)

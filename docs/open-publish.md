@@ -150,6 +150,14 @@ overwrites the edit.
 What stays yours: `src/styles/custom.css`, the strings in `src/i18n/*.json`, and
 every component in `src/`. Nothing in this pipeline touches them.
 
+**Two files are written into the vault beside your notes**, both under
+`.jotter/`, which the scan ignores as a directory and reads as data:
+`links.json` (every wikilink, resolved inside Obsidian: see below) and
+`embeds.json` (posters and tweet text, fetched from the network: see
+"Obsidian syntax support" in [the README](../README.md)). A poster downloaded
+for a video facade lands
+in `attachments/embeds/` and is served from your own site like any other image.
+
 ---
 
 ## The site options, and what each becomes
@@ -168,8 +176,22 @@ every component in `src/`. Nothing in this pipeline touches them.
 | `showSearch` | `features.search` |
 | `showNavigation` | `nav: 'tree'` or `'none'` |
 | `showGraph` | `features.graph` **and** `layout: 'panels'` |
+| `showPageMetadata` | `features.metadata`: the dates and frontmatter block under the title |
+| `showPrevNext` | `features.prevNext` |
 | `analytics` | `analytics`, or `none` when the id is blank |
 | `homepage` | *nothing: already applied* |
+
+Two of those arrived to answer the same question twice, and it is worth knowing
+why they are site options rather than jotter config keys. **`fetch-content.mjs`
+regenerates `jotter.config.ts` on every build**, so a key `mapSite` does not
+emit is frozen at its schema default and cannot be changed from anywhere: not in
+Obsidian, and not by editing the file, because the next build overwrites it.
+Anything you need to flip has to travel in the snapshot. (`src/styles/custom.css`
+and `src/i18n/` are the two surfaces that survive regeneration.)
+
+`showPageMetadata` is **off** by default, which is what Obsidian Publish does:
+it shows none of this. Turned on, jotter still prints a date only where it has a
+real one: see the next section.
 
 Three of those are not the straight mapping they look like.
 
@@ -202,9 +224,63 @@ language alone, so either `fa-IR.json` or `fa.json` is found. That directory is
 yours and survives every rebuild.
 
 A site option this repository has never heard of is reported in the build log
-and ignored, which is how you find out to update from the template. Two jotter
+and ignored, which is how you find out to update from the template. Four jotter
 settings have no equivalent in a snapshot and stay at their defaults:
-`features.hoverPreview` and `features.rss`.
+`features.hoverPreview`, `features.rss`, `features.embeds` and `externalLinks`.
+The last two are deliberate rather than pending: click-to-play embeds and the
+`↗` on an outbound link have a defensible default each, and three more site
+options is too high a price for a preference.
+
+**One thing Obsidian Publish has that no plugin can import.** Its sidebar order
+is hand-dragged, and that order lives in Obsidian Publish's *server-side* site
+options rather than in `.obsidian/publish.json`, so there is nothing on disk for
+the plugin to read. jotter sorts alphabetically, with one adjustment that gets
+most of the way there for free: the loose notes at the root of the vault sort
+*above* the folders, because those are the front doors (Welcome, Now, Start
+here) and under the folders they sat at the bottom of the sidebar. Inside a
+folder it is folders-first, the way a file tree reads. A deliberate order needs
+`config.redirects`-style hand editing, which regeneration would overwrite; there
+is no good answer today, and pretending otherwise would be worse than saying so.
+
+---
+
+## Dates, and which ones jotter believes
+
+A vault fetched from a snapshot is written fresh into a directory this build
+just deleted. Every fallback in `src/lib/dates.ts` therefore collapses at once:
+the author wrote no frontmatter date, there is no git history, and the mtime is
+the instant `writeFile` ran. All three land on *now*, which is why every note on
+a site built this way used to read `Created` as the day of the last deploy.
+
+So the snapshot carries the file's `ctime` and `mtime`, and
+`scripts/fetch-content.mjs` writes them into each note:
+
+```yaml
+---
+title: "Critical Thinking"
+created: "2024-03-14T00:00:00.000Z"
+updated: "2026-01-09T00:00:00.000Z"
+---
+```
+
+**Only when the note dates none of itself.** A note carrying any of the ten
+spellings `src/lib/dates.ts` recognises (`created`, `date`, `created_at`,
+`createdAt`, `published`, and the five `updated` ones) keeps what its author
+wrote, untouched.
+
+That precedence is not politeness, it is accuracy. Obsidian takes `ctime` from
+the filesystem, and the filesystem loses it: sync, a restore from backup and an
+ordinary file transfer all reset it to the moment the copy landed, which is why
+Obsidian's own forum carries a long-standing request to stop deriving it that
+way and why plugins exist whose whole job is to write a creation date into
+frontmatter. **A note's own `created:` is the only trustworthy source**; the
+snapshot's `ctime` is best effort. The one corruption cheap to catch is caught:
+a creation date later than the last modification is a copy operation's
+timestamp, not a note edited before it existed, so `mtime` wins.
+
+And where jotter has no real date at all, it prints none. `features.metadata`
+on a vault with no dates and no git history shows the other frontmatter fields
+and no `Created` row, rather than the build's own clock.
 
 ---
 
@@ -214,22 +290,32 @@ A vault moving off Obsidian Publish carries `legacyUrls`: the addresses each
 note used to answer at, like `Wisdom+&+Approaches/Critical+Thinking`. The plugin
 also records every rename it has seen.
 
-Both arrive in the note's frontmatter as **`aliases:`**, never as `permalink:`,
-and that is the whole design:
+Both arrive in the note's frontmatter as **`oldUrls:`**, never as `permalink:`
+and never as `aliases:`:
 
 ```yaml
 ---
 title: "Critical Thinking"
-aliases: ["Wisdom+&+Approaches/Critical+Thinking"]
+aliases: ["Crit"]
+oldUrls: ["Wisdom+&+Approaches/Critical+Thinking"]
 ---
 ```
 
-`buildRedirects` runs an alias through `sourceFor(alias, 'preserve')` (NFC and
+`buildRedirects` runs an old URL through `sourceFor(url, 'preserve')` (NFC and
 nothing else), and then through the one URL encoder in the build, so that line
 becomes a 301 from `/Wisdom+%26+Approaches/Critical+Thinking` to the slug the
 plugin published, and **the note stays where it is**. Written to `permalink:`
 instead it would be the other way round: the address the plugin published would
 301 to the address the site used to have, backwards.
+
+**And a key of its own, not more `aliases:`.** Both become 301s, so routing
+never told them apart; the page did. `src/components/Frontmatter.astro` prints
+`aliases` under the heading "Also known as", so every note on a vault migrated
+from Obsidian Publish displayed `About/How+to+Communicate` as human metadata.
+An alias is a name the author gave the note. An old URL is routing data that
+somebody happened to publish. `oldUrls` is written whole rather than merged,
+because unlike `aliases` it holds no author content: the snapshot is the
+authority on which addresses this note used to answer at.
 
 This is why nothing in this pipeline writes `_redirects` of its own. jotter had
 a redirect writer already; it just needed to be told the names.
@@ -251,10 +337,10 @@ subset can reproduce that.
 
 So the answers are written to `<vault>/.jotter/links.json`, in the manifest's own
 shape, and [`src/lib/links-index.ts`](../src/lib/links-index.ts) reads them. Note
-bodies arrive byte for byte as their author wrote them, plus a `title:` and
-`aliases:` in the frontmatter. A link to a note that was not published renders as
-an inert `<span class="dead-link">` labelled with what the author typed: never
-with the unpublished note's title.
+bodies arrive byte for byte as their author wrote them, plus a `title:`, an
+`aliases:`, an `oldUrls:` and the note's dates in the frontmatter. A link to a
+note that was not published renders as an inert `<span class="dead-link">`
+labelled with what the author typed: never with the unpublished note's title.
 
 One re-keying happens on the way in: the manifest keys links by vault path, and
 jotter looks them up by the note's on-disk path, which after the fetch is

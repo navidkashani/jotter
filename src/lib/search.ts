@@ -22,22 +22,24 @@
 import { decodeSlug, encodeSlug } from './url.js'
 
 /**
- * Pagefind emits `/foo/` for `dist/foo/index.html`. jotter is
- * `trailingSlash: 'never'` and every other href on the site is `/foo`, so
- * without this every result would disagree with the page's own canonical URL
- * and with every link pointing at it.
+ * Pagefind names a result after the **file it read**, and jotter's hrefs are
+ * named after the route. Three ways those disagree, all fixed here.
  *
- * The homepage is the case that makes this more than a `replace`: `/` is
- * already spelled the way jotter spells it, and trimming it would produce an
- * empty href.
+ * `build.format: 'file'` writes `dist/foo.html`, so a result arrives as
+ * `/foo.html` where every link, canonical and sitemap entry on the site says
+ * `/foo`. (Under the `directory` format this repository used to build with, the
+ * same result arrived as `/foo/`; both spellings are stripped, so an index
+ * built either way lands on jotter's own.) The homepage is the case that makes
+ * this more than a `replace`: `/index.html` and `/` must both come back as `/`,
+ * and trimming to nothing would give an empty href.
  *
- * The second mismatch is the same shape and was invisible until a slug could
- * carry an interesting character. Pagefind reads the **file path** off disk, so
- * a page in `dist/Wisdom+&+Approaches/` is indexed at `/Wisdom+&+Approaches/…`:
- * the slug, not the URL. Re-encoding it here is what makes a search result
- * byte-identical to the `<a href>`, the canonical link and the sitemap entry
- * for the same page; RFC 3986 §6.2.2.2 keeps `/a&b` and `/a%26b` formally
- * distinct, and Google's URL guidelines split a page that is linked as both.
+ * The third mismatch is a different shape and was invisible until a slug could
+ * carry an interesting character. The path on disk is the **slug**, so a page
+ * written as `dist/Wisdom+&+Approaches/…` is indexed at `/Wisdom+&+Approaches/…`.
+ * Re-encoding it here is what makes a search result byte-identical to the
+ * `<a href>`, the canonical link and the sitemap entry for the same page; RFC
+ * 3986 §6.2.2.2 keeps `/a&b` and `/a%26b` formally distinct, and Google's URL
+ * guidelines split a page that is linked as both.
  *
  * `#anchor` survives, because sub-results are the reason heading jumps work.
  */
@@ -45,7 +47,12 @@ export function normalizeResultUrl(url: string): string {
   const hash = url.indexOf('#')
   const path = hash === -1 ? url : url.slice(0, hash)
   const anchor = hash === -1 ? '' : url.slice(hash)
-  const trimmed = path.replace(/\/+$/, '')
+  // One suffix each, in order, so a note actually slugged `readme.html` keeps
+  // the half of its name that is not the extension jotter just added.
+  const trimmed = path
+    .replace(/\/+$/, '')
+    .replace(/\.html$/i, '')
+    .replace(/^\/index$/i, '')
   return `${encodeSlug(decodeSlug(trimmed)) || '/'}${anchor}`
 }
 

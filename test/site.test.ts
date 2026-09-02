@@ -2,7 +2,15 @@ import { describe, expect, it } from 'vitest'
 import { fileURLToPath } from 'node:url'
 
 import { scanVault, clearVaultCache } from '../src/lib/vault.js'
-import { buildTree, folders, contains } from '../src/lib/tree.js'
+import {
+  buildTree,
+  folders,
+  contains,
+  neighbours,
+  shadowedFolders,
+  type TreeEntry,
+  type TreeFolder,
+} from '../src/lib/tree.js'
 import { encodeSlug } from '../src/lib/url.js'
 import { noteHref, assetHref, tagHref, relativeAssetPath } from '../src/lib/href.js'
 import { liveLabel } from '../src/lib/resolve.js'
@@ -73,14 +81,136 @@ describe('tree', () => {
     expect(names).toContain('notes/nested')
   })
 
+  /**
+   * The repair an Open Publish build needs. There every note is written to its
+   * *slug*, so the folder tree derived from the paths on disk reads
+   * `wisdom-approaches` where the vault reads `Wisdom & Approaches`. Note
+   * titles survive because the snapshot carries one; folders have no file to
+   * carry anything, so the names arrive through config instead.
+   */
+  it('calls a folder what config.folderNames calls it', () => {
+    const notes = vault().notes.filter((n) => n.published)
+    const named = buildTree(notes, 'derive', { notes: 'Notes', 'notes/nested': 'Nested Away' })
+    const byPath = new Map(folders(named).map((f) => [f.path, f.name]))
+
+    expect(byPath.get('notes')).toBe('Notes')
+    expect(byPath.get('notes/nested')).toBe('Nested Away')
+  })
+
+  it('keeps its own path segment for a folder config does not name', () => {
+    const notes = vault().notes.filter((n) => n.published)
+    const byPath = new Map(
+      folders(buildTree(notes, 'derive', { notes: 'Notes' })).map((f) => [f.path, f.name]),
+    )
+    expect(byPath.get('notes/nested')).toBe('nested')
+  })
+
+  it('sorts by the name a reader sees, not by the path', () => {
+    // One ordering, decided where the name is: the sidebar and the folder
+    // pages both read `name`, so a display name that sorts differently must
+    // move the entry in both or in neither.
+    const notes = vault().notes.filter((n) => n.published)
+    const named = buildTree(notes, 'derive', { notes: 'Zed' })
+    const topFolders = named.filter((e) => e.kind === 'folder').map((e) => e.name)
+    expect([...topFolders].sort((a, b) => a.localeCompare(b))).toEqual(topFolders)
+  })
+
+  /**
+   * The footer's chain. Neighbours are siblings under one folder, in the order
+   * the sidebar draws them, because the flat published list this replaces is
+   * sorted by whole vault path: from a note at the root, "Previous" was
+   * whatever happened to sort before it anywhere in the vault.
+   */
+  it('links a note to its siblings, in the order the sidebar shows', () => {
+    const pairs = neighbours(t)
+    const inNotes = folders(t).find((f) => f.path === 'notes')!
+    const siblings = (
+      (t.find((e) => e.kind === 'folder' && e.path === 'notes') as TreeFolder).children
+    ).filter((c) => c.kind === 'note')
+
+    expect(siblings.length).toBeGreaterThan(1)
+    expect(inNotes.slug).toBeTruthy()
+    for (const [i, note] of siblings.entries()) {
+      expect(pairs.get(note.slug)).toEqual({
+        previous: siblings[i - 1]?.slug,
+        next: siblings[i + 1]?.slug,
+      })
+    }
+  })
+
+  it('never steps across a folder boundary', () => {
+    const pairs = neighbours(t)
+    const parentOf = (slug: string) => {
+      const note = vault().notes.find((n) => n.slug === slug)!
+      return note.path.split('/').slice(0, -1).join('/')
+    }
+    for (const [slug, pair] of pairs) {
+      for (const other of [pair.previous, pair.next]) {
+        if (other) expect(parentOf(other)).toBe(parentOf(slug))
+      }
+    }
+  })
+
+  it('leaves an only child with neither neighbour rather than borrowing one', () => {
+    const pairs = neighbours(t)
+    const nested = (
+      folders(t).find((f) => f.path === 'notes/nested')!.children
+    ).filter((c) => c.kind === 'note')
+    expect(nested).toHaveLength(1)
+    expect(pairs.get(nested[0].slug)).toEqual({ previous: undefined, next: undefined })
+  })
+
+  /**
+   * The `/about` collision, which used to be a `console.warn` inside
+   * `getStaticPaths`: a line in a page-build log, on a hook Astro may not
+   * re-run. The note wins the URL, the sidebar keeps listing the folder, and
+   * somebody has to be told.
+   */
+  it('names a folder whose slug a note has taken', () => {
+    const notes = vault().notes.filter((n) => n.published)
+    const clash = { ...notes[0], slug: 'notes', path: 'notes/About.md' }
+    expect(shadowedFolders(t, [...notes, clash])).toContainEqual({
+      folder: 'notes',
+      slug: 'notes',
+      note: 'notes/About.md',
+    })
+  })
+
+  it('says nothing when every folder owns its own slug', () => {
+    expect(shadowedFolders(t, vault().notes.filter((n) => n.published))).toEqual([])
+  })
+
   it('never invents a folder holding nothing published', () => {
     // `private/` holds only an unpublished note, so it must not appear.
     expect(folders(t).map((f) => f.path)).not.toContain('private')
   })
 
-  it('sorts folders before notes, each alphabetically', () => {
+  /**
+   * The loose notes at the top of a vault are its front doors: Welcome, Now,
+   * Start here. Under the folders they sat at the bottom of the sidebar, below
+   * every folder in the vault, which is where Obsidian Publish never puts them.
+   */
+  it('puts the root’s own notes above its folders', () => {
     const kinds = t.map((e) => e.kind)
+    expect(kinds.lastIndexOf('note')).toBeLessThan(kinds.indexOf('folder'))
+  })
+
+  /** And inside a folder it is a file tree again, which is what people expect. */
+  it('sorts folders before notes everywhere below the root', () => {
+    const notesFolder = t.find(
+      (e): e is TreeFolder => e.kind === 'folder' && e.path === 'notes',
+    )!
+    const kinds = notesFolder.children.map((e) => e.kind)
     expect(kinds.indexOf('folder')).toBeLessThan(kinds.lastIndexOf('note'))
+  })
+
+  it('sorts alphabetically within a kind, at every level', () => {
+    const names = (entries: TreeEntry[], kind: string) =>
+      entries.filter((e) => e.kind === kind).map((e) => (e.kind === 'folder' ? e.name : e.title))
+    for (const kind of ['folder', 'note']) {
+      const at = names(t, kind)
+      expect([...at].sort((a, b) => a.localeCompare(b))).toEqual(at)
+    }
   })
 
   it('counts notes into every ancestor', () => {
@@ -394,13 +524,18 @@ describe('feed', () => {
       filename: 'Note',
       title: 'Note',
       aliases: [],
+      oldUrls: [],
       published: true,
       frontmatter: {},
       body: '',
       tags: [],
       excerpt: 'An excerpt.',
       bodyOffset: 0,
-      dates: { created: new Date('2026-01-02T00:00:00Z'), updated: new Date('2026-03-04T00:00:00Z') },
+      dates: {
+        created: new Date('2026-01-02T00:00:00Z'),
+        updated: new Date('2026-03-04T00:00:00Z'),
+        known: { created: true, updated: true },
+      },
       ...over,
     }) as VaultNote
 
@@ -457,7 +592,11 @@ describe('feed', () => {
       note({
         slug: `n-${i}`,
         title: `N ${i}`,
-        dates: { created: new Date(2026, 0, 1), updated: new Date(2026, 0, 1 + i) },
+        dates: {
+          created: new Date(2026, 0, 1),
+          updated: new Date(2026, 0, 1 + i),
+          known: { created: true, updated: true },
+        },
       }),
     )
     const capped = feedXml({ ...options, notes: many })
@@ -750,7 +889,13 @@ describe('redirects', () => {
    * fixture missing either would pass for the wrong reason.
    */
   const note = (fields: Partial<VaultNote> & { slug: string }): VaultNote =>
-    ({ path: `${fields.slug}.md`, aliases: [], permalinks: [], ...fields }) as VaultNote
+    ({
+      path: `${fields.slug}.md`,
+      aliases: [],
+      oldUrls: [],
+      permalinks: [],
+      ...fields,
+    }) as VaultNote
 
   const notes = [
     note({ slug: 'zettelkasten', aliases: ['Slipbox Method', 'Zettel'] }),

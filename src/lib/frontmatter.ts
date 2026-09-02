@@ -116,12 +116,29 @@ export const noteFrontmatterSchema = z
      * become redirects. See `applyPermalinks` in `src/lib/vault.ts`.
      *
      * jotter's own snapshot layer does **not** write this key.
-     * `scripts/fetch-content.mjs` puts old addresses in `aliases:` instead,
+     * `scripts/fetch-content.mjs` puts old addresses in `oldUrls:` instead,
      * which 301s to the published slug *without moving the note*: the choice
      * Quartz cannot make, because it slugifies every alias and honours only
      * `permalink` character for character. See `docs/open-publish.md`.
      */
     permalink: z.union([textish, z.array(textish)]).optional(),
+
+    /**
+     * Addresses this note used to be served at, which should 301 to it.
+     *
+     * Written by `scripts/fetch-content.mjs` from the snapshot's `legacyUrls`
+     * and every rename the plugin has recorded, and read back by
+     * `buildRedirects`. It exists as a key of its own rather than as more
+     * `aliases:` because the two are not the same thing and were never the same
+     * thing: an alias is a *name* the author gave the note, and
+     * `Frontmatter.astro` prints it on the page under "Also known as". An old
+     * URL is routing data. Merged into `aliases`, every note on a site migrated
+     * from Obsidian Publish printed `About/How+to+Communicate` as human
+     * metadata.
+     *
+     * Not in `DISPLAYED_FIELDS`, and it should stay out of it.
+     */
+    oldUrls: z.union([z.string(), z.array(z.string())]).optional(),
 
     /**
      * The card a link to this note unfurls as. `socialImage` and `cover` are

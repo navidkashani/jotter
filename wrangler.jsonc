@@ -64,14 +64,16 @@
     "not_found_handling": "404-page",
 
     // Not the default, and the one line here that differs from the Quartz
-    // starter's, because the two sites emit different URLs. Astro's default
-    // `build.format` writes folder index files (`dist/notes/index.html`) while
-    // `trailingSlash: 'never'` makes all four producers of a URL in this build
-    // (links, canonical, sitemap, search) spell that page `/notes`.
-    // "drop-trailing-slash" is the mode that serves the first from the second.
-    // The default "auto-trailing-slash" would 307 every internal link on the
-    // site to `/notes/`, an address none of those four agrees with, and "none"
-    // would 404 them.
+    // starter's, because the two sites emit different URLs. All four producers
+    // of a URL in this build (links, canonical, sitemap, search) spell a page
+    // `/notes`, from `trailingSlash: 'never'`, and `build.format: 'file'`
+    // writes it to `dist/notes.html`. "drop-trailing-slash" serves that file at
+    // that address and sends `/notes/` back to it, which is also what cleans up
+    // anything indexed at the trailing-slash form by an older build. The
+    // default "auto-trailing-slash" reaches the same place from this file
+    // layout, and this is the stricter of the two: it keeps its promise even if
+    // `build.format` ever moves back, where "auto" would 307 every internal
+    // link on the site to `/notes/`. "none" would 404 them.
     "html_handling": "drop-trailing-slash"
   }
 }

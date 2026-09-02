@@ -106,17 +106,84 @@ export const jotterConfigSchema = z
         backlinks: z.boolean().default(true),
         tags: z.boolean().default(true),
         themeToggle: z.boolean().default(true),
+        /**
+         * The block under a note's title: its dates, and the frontmatter fields
+         * `src/lib/frontmatter.ts` declares as displayable.
+         *
+         * **Off by default**, which is what Obsidian Publish does: it shows
+         * none of this. A garden and a changelog want opposite answers here, so
+         * it is a switch rather than a decision, and the switch is reachable
+         * from Obsidian as the `showPageMetadata` site option.
+         *
+         * On, the date rows still appear only where the date is a real one.
+         * See `NoteDates.known`.
+         */
+        metadata: z.boolean().default(false),
+        /**
+         * Links to the notes either side of this one, at the foot of the page.
+         * Neighbours are a note's siblings under the same folder, in the order
+         * the sidebar already uses. `showPrevNext` in Obsidian.
+         */
+        prevNext: z.boolean().default(true),
         /** v2 */
         graph: z.boolean().default(false),
         search: z.boolean().default(false),
         hoverPreview: z.boolean().default(false),
         /** `/rss.xml`, written at build. Requires `url` (see the root refine). */
         rss: z.boolean().default(false),
+        /**
+         * Click-to-play for a remote video, and a real card for a tweet.
+         *
+         * On, `![](https://youtu.be/…)` becomes a poster with a play control
+         * and **no `<iframe>` in the HTML at all**; the player is fetched when
+         * the reader clicks, which is the click that consents to it. Off, a
+         * remote URL is the link card it has always been.
+         *
+         * The poster is local. It is downloaded at build time by
+         * `scripts/fetch-content.mjs` into the vault's attachments, because a
+         * facade that fetches its own thumbnail from `i.ytimg.com` is the third
+         * party this whole design exists to keep off the page.
+         */
+        embeds: z.boolean().default(true),
       })
       .prefault({}),
 
     /** Transclusion depth before jotter stops and says so. */
     transcludeDepth: z.number().int().min(0).max(6).default(3),
+
+    /**
+     * How a link that leaves the site is dressed.
+     *
+     * Two deliberate departures from Obsidian Publish, which uses
+     * `class="external-link" rel="noopener nofollow" target="_blank"` plus a
+     * glyph:
+     *
+     * - **The new tab is announced, not only drawn.** WCAG technique G201 asks
+     *   for a warning *in advance*, and SC 1.1.1 means an icon is not one, so
+     *   jotter also puts a visually-hidden "(opens in a new tab)" inside the
+     *   anchor. Obsidian Publish does not; that is a bug in Obsidian Publish,
+     *   not a specification to copy.
+     * - **No blanket `nofollow`.** On a personal knowledge site the outbound
+     *   links are editorial citations, and `nofollow`ing every one of them
+     *   withholds credit from the sources the author is recommending. jotter
+     *   ships `rel="noopener"` and nothing else.
+     *
+     * Deliberately *not* mapped from an Open Publish site option: three more
+     * options is too high a price for a preference with a defensible default.
+     */
+    externalLinks: z
+      .object({
+        /** `target="_blank"`, with the screen-reader warning that owes. */
+        newTab: z.boolean().default(true),
+        /**
+         * The `↗` after the link text, drawn from `.external-link` in CSS.
+         * Off means the class is absent rather than the glyph hidden, so
+         * nothing is rendered and then styled away.
+         */
+        icon: z.boolean().default(true),
+      })
+      .strict()
+      .prefault({}),
 
     /**
      * Off by default, and the only switch in jotter that adds a request to
@@ -156,6 +223,23 @@ export const jotterConfigSchema = z
 
     /** Extra redirects, on top of the ones `aliases:` generates. */
     redirects: z.record(z.string(), z.string()).default({}),
+
+    /**
+     * Display names for folders whose path on disk is not what to call them,
+     * keyed by the folder's path relative to the vault.
+     *
+     * Empty for an ordinary vault, where the folder *is* its name. It is filled
+     * in on an Open Publish build, which writes every note to its slug: there
+     * `Wisdom & Approaches/Critical Thinking.md` is on disk at
+     * `wisdom-approaches/critical-thinking.md`, and without this the sidebar,
+     * the breadcrumbs and the folder pages would all read `wisdom-approaches`.
+     * `scripts/fetch-content.mjs` recovers the real names from the manifest,
+     * which is keyed by vault path.
+     *
+     * A folder that is not named here keeps its own last path segment, so this
+     * is a set of corrections rather than a table anybody has to complete.
+     */
+    folderNames: z.record(z.string(), z.string()).default({}),
   })
   .strict()
   /**

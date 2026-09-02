@@ -15,8 +15,11 @@
  */
 import { resolveLink, resolveAsset, displayFor, liveLabel, splitTarget } from '../lib/resolve.js'
 import {
+  embedKey,
   parseEmbedPipe,
   parseEmbedFragment,
+  remoteEmbed,
+  type RemoteEmbed,
   isMediaTarget,
   isOptimizable,
   mediaKind,
@@ -57,6 +60,29 @@ const EXTERNAL = /^(?:[a-z][a-z0-9+.-]*:|\/\/|#|\/)/i
  * a `data:` URI is nobody's, so both are left exactly as the author wrote them.
  */
 const REMOTE = /^(?:[a-z][a-z0-9+.-]*:)?\/\//i
+
+/**
+ * A link that leaves this site for a web page somewhere else.
+ *
+ * Narrower than `EXTERNAL`, which also matches `#anchor`, a rooted `/path` and
+ * every other scheme. `mailto:` and `tel:` are schemes and they are not pages:
+ * "opens in a new tab" is a false promise about a mail client, and an arrow
+ * glyph beside an address says nothing a reader did not already know.
+ */
+const OFF_SITE = /^(?:https?:)?\/\//i
+
+/**
+ * The warning `target="_blank"` owes a reader who cannot see the glyph.
+ *
+ * Hard-coded English rather than a lookup in `src/i18n/`, and the reason is
+ * structural rather than a shortcut: `src/i18n/index.ts` imports `src/lib/site.ts`
+ * for the locale, `site.ts` resolves the vault root from `process.cwd()` when
+ * it is loaded outside a bundle, and this module is loaded by `astro.config.ts`
+ * during config evaluation. Importing it there would scan a *different*
+ * directory than the config just resolved whenever `JOTTER_VAULT_OVERRIDE` is
+ * set. `src/lib/callout.ts` hard-codes its labels for the same reason.
+ */
+const NEW_TAB_HINT = ' (opens in a new tab)'
 
 /** Mark a node inert. `href: null` stops the link->hast step emitting an href. */
 const deadLink = (ctx: VisitorContext, node: unknown, label?: string) => {
@@ -220,6 +246,238 @@ export function wikilinks(doc: DocumentContext) {
     children: [{ type: 'text', value: label }],
   })
 
+  /** `https://open.spotify.com/track/x?si=1` -> `open.spotify.com` + `/track/x`. */
+  const hostAndPath = (target: string): { host: string; path: string } | undefined => {
+    try {
+      const url = new URL(target.startsWith('//') ? `https:${target}` : target)
+      return {
+        host: url.host.replace(/^www\./i, ''),
+        // The query is dropped: it is where tracking parameters live, and a
+        // card is a label rather than the URL itself, which the href already is.
+        path: decodeURIComponent(url.pathname).replace(/\/$/, '') || '/',
+      }
+    } catch {
+      return undefined
+    }
+  }
+
+  /**
+   * A remote URL that is not a picture, as a card naming where it goes.
+   *
+   * What this replaces is a bare `<a class="file-embed">` labelled with the raw
+   * URL: correct, and unreadable. A reader deciding whether to follow a link
+   * wants the host and the path, not `?si=8f2a1c` after them.
+   */
+  const linkCard = (target: string, label: string | undefined) => {
+    const parts = hostAndPath(target)
+    return {
+      type: 'remoteEmbed',
+      data: {
+        hName: 'a',
+        hProperties: {
+          className: ['embed-card'],
+          href: target,
+          rel: 'noopener',
+          ...(config.externalLinks.newTab ? { target: '_blank' } : {}),
+        },
+      },
+      children: label
+        ? [{ type: 'text', value: label }]
+        : parts
+          ? [
+              {
+                type: 'embedCardHost',
+                data: { hName: 'span', hProperties: { className: ['embed-card-host'] } },
+                children: [{ type: 'text', value: parts.host }],
+              },
+              {
+                type: 'embedCardPath',
+                data: { hName: 'span', hProperties: { className: ['embed-card-path'] } },
+                children: [{ type: 'text', value: parts.path }],
+              },
+            ]
+          : [{ type: 'text', value: target }],
+    }
+  }
+
+  /** The address a facade's link, and its player, point at. */
+  const watchUrl = (remote: RemoteEmbed): string =>
+    remote.kind === 'vimeo'
+      ? `https://vimeo.com/${remote.id}`
+      : remote.playlist
+        ? `https://www.youtube.com/playlist?list=${remote.id}`
+        : `https://www.youtube.com/watch?v=${remote.id}`
+
+  /**
+   * A video, as a poster and a play control, with **no `<iframe>` anywhere in
+   * the built HTML**.
+   *
+   * This is the whole of jotter's answer to "Obsidian shows a player and you
+   * show a URL". The stance `README.md` sets out does not move: an author who
+   * pasted a link did not ask to put Google's script on their readers' page.
+   * A facade honours that rather than overturning it, because the reader's
+   * click is the consent, and until they click the page has fetched nothing
+   * from anybody.
+   *
+   * The element is an `<a>` to the video, so this is also its own `noscript`
+   * answer: with JavaScript off, or before the island loads, the facade is a
+   * link that works. `src/scripts/embed.ts` intercepts the click and swaps in
+   * the player; nothing here depends on it having run.
+   *
+   * The poster is served from this site. `lite-youtube-embed` is the standard
+   * solution to this problem and could not be used: it fetches its thumbnail
+   * from `i.ytimg.com` at runtime, which is exactly the request the origin
+   * assertion in `scripts/verify-build.mjs` exists to forbid. So the poster is
+   * downloaded at build time instead, and its absence is survivable: no
+   * `.jotter/embeds.json`, no network when the vault was fetched, or a video
+   * whose thumbnail 404s, and the facade is a labelled panel rather than a
+   * broken one.
+   *
+   * A `<span>` rather than a `<div>` for the reason `doc-embed` gives: an embed
+   * that is not alone in its paragraph stays inside the `<p>`, where a `<div>`
+   * is invalid nesting. The block layout is CSS's job.
+   */
+  const videoFacade = (remote: RemoteEmbed, authored: string | undefined) => {
+    const record = vault.embeds?.lookup(embedKey(remote))
+    const href = watchUrl(remote)
+    const label = authored || (remote.kind === 'vimeo' ? 'Play on Vimeo' : 'Play on YouTube')
+
+    return {
+      type: 'videoEmbed',
+      data: {
+        hName: 'span',
+        hProperties: {
+          className: ['video-embed'],
+          'data-embed': remote.kind,
+          'data-embed-id': remote.id,
+          ...(remote.playlist ? { 'data-embed-playlist': '' } : {}),
+        },
+      },
+      children: [
+        {
+          type: 'videoEmbedLink',
+          data: {
+            hName: 'a',
+            hProperties: {
+              className: ['video-embed-link'],
+              href,
+              rel: 'noopener',
+              ...(config.externalLinks.newTab ? { target: '_blank' } : {}),
+            },
+          },
+          children: [
+            ...(record?.poster
+              ? [
+                  {
+                    type: 'videoEmbedPoster',
+                    data: {
+                      hName: 'img',
+                      hProperties: {
+                        className: ['video-embed-poster'],
+                        src: assetHref(record.poster),
+                        // Decorative: the label beside it names the video, and
+                        // a thumbnail described twice is read out twice.
+                        alt: '',
+                        ...(record.width ? { width: record.width } : {}),
+                        ...(record.height ? { height: record.height } : {}),
+                        loading: 'lazy',
+                        decoding: 'async',
+                      },
+                    },
+                    children: [],
+                  },
+                ]
+              : []),
+            {
+              type: 'videoEmbedPlay',
+              data: {
+                hName: 'span',
+                hProperties: { className: ['video-embed-play'], 'aria-hidden': 'true' },
+              },
+              children: [],
+            },
+            {
+              type: 'videoEmbedLabel',
+              data: { hName: 'span', hProperties: { className: ['video-embed-label'] } },
+              children: [
+                { type: 'text', value: label },
+                ...(config.externalLinks.newTab
+                  ? [
+                      {
+                        type: 'newTabHint',
+                        data: {
+                          hName: 'span',
+                          hProperties: {
+                            className: ['visually-hidden'],
+                            ...(config.features.search ? { 'data-pagefind-ignore': '' } : {}),
+                          },
+                        },
+                        children: [{ type: 'text', value: NEW_TAB_HINT }],
+                      },
+                    ]
+                  : []),
+              ],
+            },
+          ],
+        },
+      ],
+    }
+  }
+
+  /**
+   * A tweet, as jotter's own markup rather than X's.
+   *
+   * `publish.x.com/oembed` needs no authentication and, with `omit_script=1`,
+   * returns a `<blockquote>` carrying the text and the author as static HTML.
+   * `scripts/fetch-content.mjs` fetches it at build time and stores the
+   * *strings*, not the markup: rendering our own elements means there is no
+   * third-party HTML to sanitise and no borrowed styling to override.
+   *
+   * A tweet nobody could fetch (deleted, rate-limited, an offline build) is a
+   * link card. Never a fabricated one.
+   */
+  const tweetCard = (remote: RemoteEmbed, target: string, authored: string | undefined) => {
+    const record = vault.embeds?.lookup(embedKey(remote))
+    if (!record?.text) return linkCard(target, authored)
+
+    const byline = [record.author, record.handle].filter(Boolean).join(' ')
+    return {
+      type: 'tweetEmbed',
+      data: { hName: 'span', hProperties: { className: ['tweet-embed'] } },
+      children: [
+        {
+          type: 'tweetEmbedText',
+          data: { hName: 'span', hProperties: { className: ['tweet-embed-text'] } },
+          children: [{ type: 'text', value: record.text }],
+        },
+        {
+          type: 'tweetEmbedMeta',
+          data: {
+            hName: 'a',
+            hProperties: {
+              className: ['tweet-embed-meta'],
+              href: target,
+              rel: 'noopener',
+              ...(config.externalLinks.newTab ? { target: '_blank' } : {}),
+            },
+          },
+          children: [
+            { type: 'text', value: byline || target },
+            ...(record.date
+              ? [
+                  {
+                    type: 'tweetEmbedDate',
+                    data: { hName: 'span', hProperties: { className: ['tweet-embed-date'] } },
+                    children: [{ type: 'text', value: record.date }],
+                  },
+                ]
+              : []),
+          ],
+        },
+      ],
+    }
+  }
+
   /**
    * The element an embed becomes, for every kind except a picture: an `image`
    * node is left alone so Astro's pipeline still sees one.
@@ -321,7 +579,81 @@ export function wikilinks(doc: DocumentContext) {
       }
     }
 
+    /**
+     * Everything remote that is not a picture or a media file.
+     *
+     * Ahead of the file card this used to fall through to, and it is the same
+     * decision one step later: a bare URL where Obsidian showed a player is a
+     * worse copy of somebody's own note, and a `<iframe>` of somebody else's
+     * origin is a third party the author never asked for. A facade is neither.
+     */
+    if (embed.remote) {
+      /**
+       * Whatever the author called it: a wikilink's pipe caption, or the alt
+       * text of a markdown embed. The same first two clauses as `embedLabel`,
+       * and the same reason: `![Never Gonna Give You Up](https://youtu.be/…)`
+       * named the video, and "Play on YouTube" is what to say when nobody did.
+       */
+      const label = embed.caption || (embed.wiki ? '' : embed.alt) || undefined
+
+      const remote = config.features.embeds ? remoteEmbed(embed.target) : undefined
+      if (remote?.kind === 'tweet') return tweetCard(remote, embed.target, label)
+      if (remote) return videoFacade(remote, label)
+      return linkCard(embed.target, label)
+    }
+
     return fileCard(src, fileName(embed.target), embedLabel(embed), embed.remote)
+  }
+
+  /**
+   * A link off the site, dressed as one: the class the glyph hangs off, the
+   * `rel` every cross-origin link owes, the new tab, and the sentence a screen
+   * reader needs before it opens one.
+   *
+   * `rel="noopener"` and nothing else. Obsidian Publish adds `nofollow` to
+   * every outbound link; on a personal knowledge site those links are
+   * editorial citations, and `nofollow`ing them withholds credit from the
+   * sources being recommended. See `config.externalLinks`.
+   *
+   * Off, each half is *absent* rather than styled away: no class means no
+   * glyph rule to match, and no `target` means no promise to warn about.
+   */
+  const markExternal = (node: LinkNode, ctx: VisitorContext): void => {
+    const { newTab, icon } = config.externalLinks
+    const existing = node.data?.hProperties?.className
+    const classes = Array.isArray(existing) ? existing : existing ? [String(existing)] : []
+
+    ctx.setProperty(node, 'data', {
+      ...node.data,
+      hProperties: {
+        ...node.data?.hProperties,
+        ...(icon ? { className: [...classes, 'external-link'] } : {}),
+        rel: 'noopener',
+        ...(newTab ? { target: '_blank' } : {}),
+      },
+    })
+
+    if (!newTab) return
+    ctx.setProperty(node, 'children', [
+      ...(node.children ?? []),
+      {
+        type: 'newTabHint',
+        data: {
+          hName: 'span',
+          hProperties: {
+            className: ['visually-hidden'],
+            /**
+             * Out of the search index, for the reason every other chrome string
+             * is: this text is on every external link in the vault, and indexed
+             * it would put "opens in a new tab" into the excerpt of any note
+             * that cites anything.
+             */
+            ...(config.features.search ? { 'data-pagefind-ignore': '' } : {}),
+          },
+        },
+        children: [{ type: 'text', value: NEW_TAB_HINT }],
+      },
+    ])
   }
 
   return {
@@ -333,9 +665,13 @@ export function wikilinks(doc: DocumentContext) {
       if (!wiki && EXTERNAL.test(node.url)) {
         // `EXTERNAL` lumps internal absolute hrefs in with genuinely external
         // ones. A single leading slash is ours; `//host` is not.
-        if (previews && node.url.startsWith('/') && !node.url.startsWith('//')) {
-          const target = noteForHref(node.url)
-          if (target) attachPreview(node, ctx, target.note, target.subpath)
+        if (node.url.startsWith('/') && !node.url.startsWith('//')) {
+          if (previews) {
+            const target = noteForHref(node.url)
+            if (target) attachPreview(node, ctx, target.note, target.subpath)
+          }
+        } else if (OFF_SITE.test(node.url)) {
+          markExternal(node, ctx)
         }
         return
       }

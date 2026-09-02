@@ -22,7 +22,16 @@ import type { VaultNote } from '../src/lib/vault.js'
 import { parseCallout } from '../src/lib/callout.js'
 import { analyticsTag } from '../src/lib/analytics.js'
 import { analyticsProviders } from '../src/lib/config.js'
-import { parseEmbedPipe, parseEmbedFragment, isMediaTarget, mediaKind, fileName } from '../src/lib/embed.js'
+import {
+  parseEmbedPipe,
+  parseEmbedFragment,
+  isMediaTarget,
+  mediaKind,
+  fileName,
+  remoteEmbed,
+  embedKey,
+} from '../src/lib/embed.js'
+import { parseEmbedsIndex } from '../src/lib/embeds-index.js'
 import {
   excerptParts,
   headingJumps,
@@ -705,23 +714,143 @@ describe('previewFor', () => {
   })
 })
 
-describe('normalizeResultUrl: Pagefind speaks in trailing slashes', () => {
-  it('strips the trailing slash Pagefind puts on every page URL', () => {
+describe('remoteEmbed: what a pasted URL actually is', () => {
+  it('reads a YouTube id out of every spelling of the URL', () => {
+    for (const url of [
+      'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      'https://youtube.com/watch?v=dQw4w9WgXcQ&t=42',
+      'https://m.youtube.com/watch?v=dQw4w9WgXcQ',
+      'https://youtu.be/dQw4w9WgXcQ',
+      'https://www.youtube.com/embed/dQw4w9WgXcQ',
+      'https://www.youtube.com/shorts/dQw4w9WgXcQ',
+      'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ',
+      '//youtu.be/dQw4w9WgXcQ',
+    ]) {
+      expect(remoteEmbed(url), url).toEqual({ kind: 'youtube', id: 'dQw4w9WgXcQ' })
+    }
+  })
+
+  it('knows a playlist from a video, because the player URL differs', () => {
+    expect(remoteEmbed('https://www.youtube.com/playlist?list=PL1234')).toEqual({
+      kind: 'youtube',
+      id: 'PL1234',
+      playlist: true,
+    })
+    // A link carrying both plays the video, which is what the reader clicked.
+    expect(remoteEmbed('https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PL1234')).toEqual({
+      kind: 'youtube',
+      id: 'dQw4w9WgXcQ',
+    })
+  })
+
+  it('reads Vimeo and X', () => {
+    expect(remoteEmbed('https://vimeo.com/76979871')).toEqual({ kind: 'vimeo', id: '76979871' })
+    expect(remoteEmbed('https://player.vimeo.com/video/76979871')).toEqual({
+      kind: 'vimeo',
+      id: '76979871',
+    })
+    expect(remoteEmbed('https://x.com/someone/status/1834417901081694320')).toEqual({
+      kind: 'tweet',
+      id: '1834417901081694320',
+    })
+    expect(remoteEmbed('https://twitter.com/someone/statuses/1834417901081694320?s=4')).toEqual({
+      kind: 'tweet',
+      id: '1834417901081694320',
+    })
+  })
+
+  it('recognises nothing else, so everything else stays a link card', () => {
+    for (const url of [
+      'https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT',
+      'https://example.com/watch?v=dQw4w9WgXcQ',
+      'https://youtube.com/',
+      'https://vimeo.com/channels/staffpicks',
+      'https://x.com/someone',
+      'mailto:someone@example.com',
+      'not a url at all',
+      '/notes/luhmann',
+    ]) {
+      expect(remoteEmbed(url), url).toBeUndefined()
+    }
+  })
+
+  /** Two notes citing one video through different tracking parameters are one poster. */
+  it('keys on what the thing is, not on how the URL was spelled', () => {
+    const a = remoteEmbed('https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=9')!
+    const b = remoteEmbed('https://youtu.be/dQw4w9WgXcQ')!
+    expect(embedKey(a)).toBe(embedKey(b))
+    expect(embedKey(a)).toBe('youtube:dQw4w9WgXcQ')
+    // A playlist and a video could otherwise share an id space.
+    expect(embedKey({ kind: 'youtube', id: 'PL1', playlist: true })).toBe('youtube:list:PL1')
+  })
+})
+
+describe('the embeds index: what a build with a network found out', () => {
+  it('accepts the enveloped shape fetch-content writes', () => {
+    const index = parseEmbedsIndex(
+      JSON.stringify({
+        embeds: {
+          'youtube:abc': { poster: 'attachments/embeds/youtube-abc.jpg', width: 1280, height: 720 },
+        },
+      }),
+    )
+    expect(index?.lookup('youtube:abc')).toEqual({
+      poster: 'attachments/embeds/youtube-abc.jpg',
+      width: 1280,
+      height: 720,
+    })
+  })
+
+  it('drops a record with nothing usable, rather than answering “yes, and nothing”', () => {
+    const warnings: string[] = []
+    expect(parseEmbedsIndex('{"embeds":{"youtube:a":{"width":0,"poster":""}}}', warnings)).toBeUndefined()
+    expect(warnings.join(' ')).toMatch(/no usable entries/)
+  })
+
+  /** A bad index must degrade to poster-less facades, never stop the site. */
+  it('warns and ignores rather than throwing', () => {
+    const warnings: string[] = []
+    expect(parseEmbedsIndex('{ not json', warnings)).toBeUndefined()
+    expect(parseEmbedsIndex('[]', warnings)).toBeUndefined()
+    expect(warnings).toHaveLength(2)
+  })
+})
+
+describe('normalizeResultUrl: Pagefind names a result after the file it read', () => {
+  /** `build.format: 'file'` writes `dist/zettelkasten.html`. */
+  it('strips the .html the file format puts on every page URL', () => {
+    expect(normalizeResultUrl('/zettelkasten.html')).toBe('/zettelkasten')
+    expect(normalizeResultUrl('/method/progressive-summarisation.html')).toBe(
+      '/method/progressive-summarisation',
+    )
+  })
+
+  /** The `directory` format's spelling, still stripped, so either index works. */
+  it('strips the trailing slash the directory format would have given instead', () => {
     expect(normalizeResultUrl('/zettelkasten/')).toBe('/zettelkasten')
     expect(normalizeResultUrl('/method/progressive-summarisation/')).toBe(
       '/method/progressive-summarisation',
     )
   })
 
-  it('leaves the homepage as the site spells it', () => {
-    // The case that makes this more than a `replace`: trimming `/` would give
-    // an empty href.
+  it('leaves the homepage as the site spells it, under either format', () => {
+    // The case that makes this more than a `replace`: trimming to nothing would
+    // give an empty href.
     expect(normalizeResultUrl('/')).toBe('/')
+    expect(normalizeResultUrl('/index.html')).toBe('/')
+  })
+
+  it('takes off one extension, not every dot-html in the name', () => {
+    // A note really called `readme.html.md` is slugged `readme.html` and written
+    // to `dist/readme.html.html`. Its page is `/readme.html`.
+    expect(normalizeResultUrl('/readme.html.html')).toBe('/readme.html')
   })
 
   it('keeps the anchor a sub-result jumps to', () => {
+    expect(normalizeResultUrl('/zettelkasten.html#how-it-works')).toBe('/zettelkasten#how-it-works')
     expect(normalizeResultUrl('/zettelkasten/#how-it-works')).toBe('/zettelkasten#how-it-works')
     expect(normalizeResultUrl('/#start-here')).toBe('/#start-here')
+    expect(normalizeResultUrl('/index.html#start-here')).toBe('/#start-here')
   })
 
   it('leaves a URL already spelled jotter’s way alone', () => {

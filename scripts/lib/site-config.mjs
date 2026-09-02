@@ -4,7 +4,7 @@
  * Open Publish's site options are deliberately generator-agnostic *intent*
  * ("show a graph", not "render `LocalGraph.astro` in the right panel"), so the
  * mapping to any one generator is where the intent either lands or quietly
- * does nothing. Three of the twelve keys are traps in exactly that way, and
+ * does nothing. Three of the sixteen keys are traps in exactly that way, and
  * each is handled below with the reason attached:
  *
  * - **`showGraph`** is not enough on its own. `astro.config.ts` gates the graph
@@ -54,6 +54,9 @@ export const DEFAULT_SITE = {
   showOutline: true,
   showBacklinks: true,
   showTags: true,
+  /** Off in the plugin too, the way Obsidian Publish is. */
+  showPageMetadata: false,
+  showPrevNext: true,
   analytics: { provider: 'none', id: '' },
 }
 
@@ -83,7 +86,9 @@ export const ANALYTICS_PROVIDERS = [
  * by hand: a key renamed there is an error here.
  *
  * @param rawSite  the snapshot's `site`, or anything at all
- * @param options  `{ url }` from `resolveSiteUrl`
+ * @param options  `{ url }` from `resolveSiteUrl`, and `{ folderNames }` from
+ *   `folderNamesFor`: neither is a site option, both are things only the build
+ *   knows.
  * @returns {{
  *   options: import('../../src/lib/config.js').JotterConfigInput,
  *   notes: string[],
@@ -91,7 +96,7 @@ export const ANALYTICS_PROVIDERS = [
  * }} the config, the lines worth printing, and the places jotter did something
  *   other than what was asked.
  */
-export function mapSite(rawSite, { url } = {}) {
+export function mapSite(rawSite, { url, folderNames } = {}) {
   const site = { ...DEFAULT_SITE }
   for (const key of Object.keys(DEFAULT_SITE)) {
     if (rawSite?.[key] !== undefined) site[key] = rawSite[key]
@@ -142,6 +147,14 @@ export function mapSite(rawSite, { url } = {}) {
     layout: graph ? 'panels' : 'column',
     nav: site.showNavigation ? 'tree' : 'none',
 
+    /**
+     * Not a site option: a repair. Every note is written to its slug, so the
+     * folder tree jotter derives from the paths on disk would read
+     * `wisdom-approaches` where the vault reads `Wisdom & Approaches`. The real
+     * names are recovered from the manifest, which is keyed by vault path.
+     */
+    ...(folderNames && Object.keys(folderNames).length > 0 ? { folderNames } : {}),
+
     features: {
       toc: !!site.showOutline,
       backlinks: !!site.showBacklinks,
@@ -149,6 +162,8 @@ export function mapSite(rawSite, { url } = {}) {
       themeToggle: !!site.showThemeToggle,
       graph,
       search: !!site.showSearch,
+      metadata: !!site.showPageMetadata,
+      prevNext: !!site.showPrevNext,
     },
 
     analytics: analyticsFor(site.analytics, warnings),

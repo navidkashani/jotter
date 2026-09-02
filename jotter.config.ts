@@ -31,5 +31,10 @@ export default defineConfig({
     graph: true,
     hoverPreview: true,
     search: true,
+    // On here, off by default. The demo garden is in git, so its notes have
+    // real dates to show; a vault with none would show the day of the build,
+    // which is why the default is the other way.
+    metadata: true,
+    prevNext: true,
   },
 })

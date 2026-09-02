@@ -11,7 +11,7 @@ import { resolve } from 'node:path'
 import jotter from '../../jotter.config'
 import { scanVault, type VaultNote } from './vault.js'
 import { buildGraph } from './graph.js'
-import { buildTree, folders } from './tree.js'
+import { buildTree, folders, neighbours } from './tree.js'
 import { tagTree, expandTag } from './tags.js'
 import { resolveSocialImage, socialImageUrl } from './social.js'
 
@@ -57,9 +57,30 @@ export const byUpdated = [...notes].sort(
   (a, b) => b.dates.updated.getTime() - a.dates.updated.getTime(),
 )
 
-export const tree = buildTree(notes, vault.slugs)
+export const tree = buildTree(notes, vault.slugs, jotter.folderNames)
 export const allFolders = folders(tree)
 export const tags = tagTree(notes)
+
+/**
+ * The pages either side of a note, for `<PrevNext>`.
+ *
+ * Read off the tree, so the footer and the sidebar agree about what comes next.
+ * Both pages that render a note have to ask (`[...slug].astro` and
+ * `index.astro`): a note promoted to `/` used to silently drop out of the chain
+ * because only one of them passed the props.
+ */
+const neighbourSlugs = neighbours(tree)
+const publishedBySlug = new Map(notes.map((note) => [note.slug, note]))
+
+export const neighboursOf = (
+  slug: string,
+): { previous?: VaultNote; next?: VaultNote } => {
+  const pair = neighbourSlugs.get(slug)
+  return {
+    previous: pair?.previous === undefined ? undefined : publishedBySlug.get(pair.previous),
+    next: pair?.next === undefined ? undefined : publishedBySlug.get(pair.next),
+  }
+}
 
 /** Every tag, expanded, mapped to the notes carrying it or anything beneath it. */
 export const notesByTag = (() => {

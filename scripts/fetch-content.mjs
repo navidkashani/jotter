@@ -19,13 +19,15 @@
  * ## What it writes, and what it deliberately does not
  *
  * Note bodies are written **byte for byte as their author wrote them**, plus a
- * `title:` and `aliases:` in the frontmatter. No link in any note is rewritten.
+ * `title:`, an `aliases:`, an `oldUrls:` and the note's dates in the
+ * frontmatter. No link in any note is rewritten.
  * The Quartz starter has to rewrite them because Quartz cannot be told what a
  * wikilink resolves to; jotter can, so the plugin's own answers go to
  * `<vault>/.jotter/links.json` and `src/lib/links-index.ts` reads them.
  *
- * Old addresses become `aliases:`, which `buildRedirects` turns into 301s
- * without moving the note. See `oldAddressesFor` in `lib/snapshot.mjs`.
+ * Old addresses become `oldUrls:`, which `buildRedirects` turns into 301s
+ * without moving the note, and which nothing renders. See `oldAddressesFor` in
+ * `lib/snapshot.mjs`.
  *
  * Markdown is written at its **slug**; everything else is written at its
  * **vault path**. Those are not the same rule and the difference is load
@@ -40,6 +42,7 @@ import { S3Reader, REQUIRED_ENV } from './lib/s3.mjs'
 import {
   applyNoteMetadata,
   entryProblem,
+  folderNamesFor,
   objectKey,
   oldAddressesFor,
   pool,
@@ -47,7 +50,9 @@ import {
   redirectFromsFor,
   reKeyLinks,
   sha256,
+  snapshotDates,
 } from './lib/snapshot.mjs'
+import { collectEmbeds } from './lib/embeds.mjs'
 import { mapSite, renderConfig } from './lib/site-config.mjs'
 import { resolveSiteUrl } from './lib/site-url.mjs'
 import { clearContentStores } from './lib/astro-cache.mjs'
@@ -110,6 +115,14 @@ async function main() {
     // Nothing to fetch. The vault on disk is the vault this build uses.
     return
   }
+
+  /**
+   * Before the bucket, and long before the vault directory is deleted: this
+   * reads nothing but the environment, and the one thing it can refuse is a
+   * misconfiguration that no amount of downloading would fix.
+   */
+  const { url, warning: urlWarning, error: urlError } = resolveSiteUrl(process.env)
+  if (urlError) fail(urlError)
 
   const reader = S3Reader.fromEnv()
   const vault = resolve(ROOT, process.env.JOTTER_VAULT_OVERRIDE ?? 'src/content/notes')
@@ -190,6 +203,8 @@ async function main() {
 
   let done = 0
   const warnings = []
+  /** Note bodies, for the remote-embed scan after the downloads. */
+  const bodies = []
 
   await pool(entries, DOWNLOAD_CONCURRENCY, async ([path, file]) => {
     const body = await reader.get(objectKey(file.hash))
@@ -219,14 +234,28 @@ async function main() {
         body.toString('utf8'),
         {
           title: file.title,
-          aliases: [
-            ...(file.aliases ?? []),
-            ...oldAddressesFor(file, file.slug, redirects),
-          ],
+          /**
+           * Two keys, not one list. Both become 301s, so routing never told
+           * them apart; the page does. `aliases` is printed on every note under
+           * "Also known as", and an old Obsidian Publish URL
+           * (`About/How+to+Communicate`) is not a name anybody gave the note.
+           */
+          aliases: file.aliases ?? [],
+          oldUrls: oldAddressesFor(file, file.slug, redirects),
+          /**
+           * The dates the note would otherwise not have. Every fallback in
+           * `src/lib/dates.ts` collapses on a vault written fresh by this
+           * script (no frontmatter date, no git history, an mtime of *now*), so
+           * without these every page reads as created on the day of the last
+           * deploy. Skipped for any note that dates itself. See
+           * `snapshotDates`.
+           */
+          ...snapshotDates(file),
         },
         local,
       )
       for (const message of local) warnings.push(`${path}: ${message}`)
+      bodies.push(text)
       await writeFile(target, text, 'utf8')
     } else {
       await writeFile(target, body)
@@ -256,11 +285,29 @@ async function main() {
     note('the snapshot resolved no links, so no .jotter/links.json was written')
   }
 
-  const { url, warning: urlWarning } = resolveSiteUrl(process.env)
+  /**
+   * The posters and tweet text a click-to-play embed needs, fetched here
+   * because this is already the step with a network and the built page must not
+   * have one. Never fatal: everything it cannot fetch stays a link card, and
+   * `src/markdown/wikilinks.ts` renders that without knowing why.
+   */
+  const embeds = await collectEmbeds(bodies, vault, note)
+  if (Object.keys(embeds).length > 0) {
+    await mkdir(join(vault, '.jotter'), { recursive: true })
+    await writeFile(
+      join(vault, '.jotter', 'embeds.json'),
+      JSON.stringify({ embeds }, null, 2),
+      'utf8',
+    )
+  }
+
   if (urlWarning) warn(urlWarning)
   if (url) log(`site URL ${url}`)
 
-  const { options, notes, warnings: siteWarnings } = mapSite(snapshot.site, { url })
+  const { options, notes, warnings: siteWarnings } = mapSite(snapshot.site, {
+    url,
+    folderNames: folderNamesFor(entries),
+  })
   for (const message of notes) note(message)
   for (const message of siteWarnings) warn(message)
 

@@ -31,6 +31,15 @@ A resolved link: [[Zettelkasten]]. One with an alias:
 A link to a note that was never written: [[A Note That Does Not Exist]]. It is
 a muted, dotted span (not an anchor), so it cannot be clicked or focused.
 
+A link off the site: [Zettelkasten, on Wikipedia](https://en.wikipedia.org/wiki/Zettelkasten).
+It carries an arrow, opens in a new tab, and says so to a screen reader in
+words. It does **not** carry `nofollow`: an outbound link here is a citation,
+and withholding credit from a source is not something a theme should decide on
+its author's behalf.
+
+An address is a scheme too, and gets none of that, because "opens in a new tab"
+is a false promise about a mail client: <mailto:someone@example.com>.
+
 ## Emphasis and marks
 
 Text can be *emphasised*, **strong**, ~~struck through~~, `inline code`, or
@@ -104,6 +113,9 @@ either way.
 
 - وبلاگ شخصی
 - یک پیوند انگلیسی داخل یک جمله‌ی فارسی: [[Obsidian]]
+- یک پیوند بیرونی: [ویکی‌پدیای فارسی](https://fa.wikipedia.org/): the arrow after
+  a right-to-left link has to stay at the end of it, which is what
+  `unicode-bidi: isolate` on `.external-link::after` is for.
 - An English item, unmarked, in the same list.
 
 The rule is Unicode's own (the first strong character wins), so a line that
@@ -129,6 +141,25 @@ Sized to 320 wide, inline: ![[slipbox.png|320]]
 An SVG is passed through untouched rather than re-encoded:
 
 ![[linked-cards.svg|Three cards, linked]]
+
+## Remote embeds
+
+A pasted video is a **facade**: a poster, a play control, and no request to
+anybody until you click it. The player is fetched on that click, from
+`youtube-nocookie.com`, so nothing is set in your browser by a page you were
+only reading.
+
+![](https://www.youtube.com/watch?v=dQw4w9WgXcQ)
+
+The poster is downloaded into the vault at build time by the Open Publish
+pipeline, which is the only step with a network. This site is not built that
+way, so the facade above has no poster and says so by showing the panel
+underneath: that is the degraded state, on purpose, rather than a broken image.
+
+Anything else remote is a card naming where it goes, rather than the raw URL
+with its tracking parameters read out as a label:
+
+![](https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT?si=abc123)
 
 ## Whitespace probe
 

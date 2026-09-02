@@ -18,7 +18,7 @@ import { jotterPlugins, jotterHastPlugins, satteriFeatures } from './src/markdow
 import { jotterVault } from './src/integrations/vault'
 import { jotterSearch } from './src/integrations/search'
 import { buildRedirects } from './src/lib/redirects'
-import { buildTree, folders } from './src/lib/tree'
+import { buildTree, folders, shadowedFolders } from './src/lib/tree'
 import { decodeSlug, encodeSlug } from './src/lib/url'
 
 /**
@@ -41,11 +41,26 @@ const graph = buildGraph(vault, jotter.linkResolution)
 
 const published = vault.notes.filter((note) => note.published)
 
+const tree = buildTree(published, vault.slugs, jotter.folderNames)
+
 /** Every slug this build routes: a note page, or a folder index above one. */
-const routed = [
-  ...published.map((note) => note.slug),
-  ...folders(buildTree(published, vault.slugs)).map((folder) => folder.slug),
-]
+const routed = [...published.map((note) => note.slug), ...folders(tree).map((f) => f.slug)]
+
+/**
+ * A folder and a note that both want one URL.
+ *
+ * `src/pages/[...slug].astro` resolves it (the note wins, the folder gets no
+ * index page) and that is the right call, but it resolved it with a
+ * `console.warn` inside `getStaticPaths`, which is a line in the middle of a
+ * page-build log that Astro may not even re-run on a warm build. On
+ * `navidk.com` the folder `About/` and the note `About/About.md` carrying
+ * `permalink: about` collide exactly this way: the sidebar still says
+ * `About (5)` and still links to it, and following it lands on the note.
+ *
+ * Detected in `src/lib/tree.ts`, where it can be tested, and reported by the
+ * integration, which is the channel a person reading a build log actually sees.
+ */
+const shadowed = shadowedFolders(tree, published)
 
 /**
  * Feed inputs, or nothing at all.
@@ -86,6 +101,28 @@ const redirects = buildRedirects({
 export default defineConfig({
   site: jotter.url,
   trailingSlash: 'never',
+
+  /**
+   * The other half of `trailingSlash: 'never'`.
+   *
+   * `trailingSlash` governs which requests Astro's dev server *matches*;
+   * `build.format` governs what it *writes*, and the default (`directory`)
+   * writes `dist/welcome/index.html`. Every host then normalises `/welcome` to
+   * `/welcome/` with a 308, so every internal link on the site (all of which
+   * jotter spells without a slash) took a redirect before it reached a page,
+   * and the sitemap advertised 96 URLs that redirect. Astro's own reference
+   * names two coherent pairings, `directory`+`always` and `file`+`never`; this
+   * file had half of the second one.
+   *
+   * `file` writes `dist/welcome.html`. Cloudflare's default asset routing is
+   * `auto-trailing-slash`, so with that file present `/welcome` is served
+   * directly and `/welcome/` 301s to it: anything already indexed at the
+   * trailing-slash form is cleaned up without a `_redirects` rule, which
+   * matters because a Pages splat cannot strip a trailing slash. It also
+   * collapses the legacy chain `/Welcome` -> `/welcome` -> `/welcome/` to one
+   * hop.
+   */
+  build: { format: 'file' },
 
   /**
    * Astro 7 changed this default from `true` to `'jsx'`, which strips
@@ -167,6 +204,7 @@ export default defineConfig({
       vault,
       graph,
       redirects,
+      shadowedFolders: shadowed,
       noIndex: jotter.noIndex,
       siteUrl: jotter.url,
       feed,
@@ -246,6 +284,16 @@ export default defineConfig({
        * the site* with the feature off.
        */
       'import.meta.env.JOTTER_SEARCH': JSON.stringify(jotter.features.search),
+
+      /**
+       * And once more, for the island that turns a video facade into a player.
+       * `Embeds.astro` is nothing but a `<script>`, so a plain
+       * `config.features.embeds` test would ship its bundle on every note page
+       * with the feature off, which on this feature would be the worse half to
+       * get wrong: the markup half honouring it means there is no facade for
+       * the script to upgrade, and the script would sit there for nothing.
+       */
+      'import.meta.env.JOTTER_EMBEDS': JSON.stringify(jotter.features.embeds),
     },
   },
 

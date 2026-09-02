@@ -16,4 +16,7 @@ A markdown link written by hand: [the sections note](/sections).
 A dead one: [[Nothing At All]]. Nothing on [an external one](https://example.com)
 or a [protocol-relative one](//example.com/notes/luhmann).
 
+A scheme that is not a page: [write to someone](mailto:someone@example.com), and
+an anchor on this page: [further down](#previews).
+
 ![[Luhmann]]

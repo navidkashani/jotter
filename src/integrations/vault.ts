@@ -67,6 +67,14 @@ export interface VaultIntegrationOptions {
   graph: Graph
   /** `from` -> `to`, already merged from aliases and config. */
   redirects: Record<string, string>
+  /**
+   * Folders whose slug a note already owns, so the folder has no index page.
+   *
+   * Computed in `astro.config.ts`, where both lists exist, and reported here
+   * because this is the channel a person reading a build log sees. The
+   * resolution itself lives in `src/pages/[...slug].astro`.
+   */
+  shadowedFolders?: readonly { folder: string; slug: string; note: string }[]
   noIndex: boolean
   /** Absolute site URL, when one is configured. */
   siteUrl?: string
@@ -85,6 +93,7 @@ export function jotterVault({
   vault,
   graph,
   redirects,
+  shadowedFolders = [],
   noIndex,
   siteUrl,
   feed,
@@ -107,6 +116,20 @@ export function jotterVault({
          * site that silently lost half its URLs on deploy is the failure this
          * whole feature exists to prevent.
          */
+        /**
+         * A folder and a note claiming one URL. The note wins, which is the
+         * right answer and a surprising one: the sidebar still shows the folder
+         * with its note count, and following it lands on the note instead of a
+         * listing. Said by name so it is a decision rather than a discovery.
+         */
+        for (const { folder, slug, note } of shadowedFolders) {
+          logger.warn(
+            `"/${slug}" is claimed by both the note "${note}" and the folder "${folder}". ` +
+              `The note wins and the folder has no index page, though the navigation still ` +
+              `lists it. Give one of them a different permalink to choose deliberately.`,
+          )
+        }
+
         const mixedCase = vault.notes.filter((n) => n.published && /\p{Lu}/u.test(n.slug))
         if (mixedCase.length > 0) {
           logger.warn(

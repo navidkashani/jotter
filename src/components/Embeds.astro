@@ -1,0 +1,21 @@
+---
+/**
+ * The click-to-play island: a script, and nothing else.
+ *
+ * It renders no markup on purpose. Every facade is already in the page, built
+ * at compile time by `src/markdown/wikilinks.ts` as a poster inside a link to
+ * the video, so this file has nothing to draw and nothing to fetch: it upgrades
+ * a link that already works into a player the reader asked for.
+ *
+ * The component exists in order to be *conditionally imported*, exactly as
+ * `HoverPreview.astro` does. A bare `<script>` in `Note.astro` behind
+ * `{config.features.embeds && …}` would still ship: Astro hoists and bundles
+ * component scripts at compile time regardless of the surrounding conditional.
+ * Only dropping the import takes the script out of the module graph. See
+ * `JOTTER_EMBEDS` in `astro.config.ts`.
+ */
+---
+
+<script>
+  import '../scripts/embed.js'
+</script>

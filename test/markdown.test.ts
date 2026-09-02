@@ -6,14 +6,30 @@ import { markdownToHtml } from 'satteri'
 import { scanVault, clearVaultCache } from '../src/lib/vault.js'
 import { defineConfig, type JotterConfigInput } from '../src/lib/config.js'
 import { jotterPlugins, jotterHastPlugins, satteriFeatures } from '../src/markdown/index.js'
+import { parseEmbedsIndex } from '../src/lib/embeds-index.js'
 
 const VAULT = fileURLToPath(new URL('./fixtures/vault', import.meta.url))
 
-/** Compile a note exactly the way the Astro build will. */
-function render(notePath: string, overrides: JotterConfigInput = {}): string {
+/**
+ * Compile a note exactly the way the Astro build will.
+ *
+ * `embeds` stands in for `.jotter/embeds.json`, which only an Open Publish
+ * build writes: it is what a build with a network downloaded, and the fixture
+ * vault has none, so the default here is the degraded state every other test
+ * sees.
+ */
+function render(
+  notePath: string,
+  overrides: JotterConfigInput = {},
+  embeds?: Record<string, Record<string, unknown>>,
+): string {
   clearVaultCache()
   const vault = scanVault({ root: VAULT })
   const config = defineConfig({ vault: VAULT, ...overrides })
+  if (embeds) {
+    const index = parseEmbedsIndex(JSON.stringify({ embeds }))
+    vault.embeds = index
+  }
   const note = vault.byPath.get(notePath.toLowerCase())
   if (!note) throw new Error(`fixture missing: ${notePath}`)
 
@@ -160,18 +176,114 @@ describe('embeds', () => {
     }
   })
 
-  it('links a remote embed that names no image, rather than fetching it', () => {
-    // `![](https://twitter.com/…)` is an address, not a picture. An <img> of it
-    // is a broken icon; an <iframe> of it would put another origin in the page.
+  it('cards a remote embed that names no image, rather than fetching it', () => {
+    // `![](https://open.spotify.com/…)` is an address, not a picture. An <img>
+    // of it is a broken icon; an <iframe> of it would put another origin in the
+    // page. The card names the host and the path, without the tracking query
+    // the raw URL used to be labelled with.
     expect(html).toContain(
-      '<a class="file-embed" href="https://twitter.com/someone/status/1834417901081694320?s=4"' +
-        ' data-file="link" rel="noopener">',
+      '<a class="embed-card" href="https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT?si=abc123"' +
+        ' rel="noopener" target="_blank">' +
+        '<span class="embed-card-host">open.spotify.com</span>' +
+        '<span class="embed-card-path">/track/4cOdK2wGLETKBW3PvgPWqT</span></a>',
     )
-    expect(html).not.toMatch(/<img[^>]+twitter\.com/)
+    expect(html).not.toMatch(/<img[^>]+spotify/)
   })
 
   it('still renders a remote embed that does name an image', () => {
     expect(html).toContain('<img src="https://cdn.example.com/photo.png" alt="">')
+  })
+})
+
+/**
+ * The whole claim, in one describe: Obsidian shows a player, jotter shows the
+ * same frame, and the page has still asked nobody for anything.
+ */
+describe('click-to-play embeds', () => {
+  const html = render('Zettelkasten.md')
+
+  it('renders a video as a facade with no cross-origin frame in the markup', () => {
+    expect(html).toContain('<span class="video-embed" data-embed="youtube" data-embed-id="dQw4w9WgXcQ">')
+    // The note embeds a PDF too, so the claim is about *whose* frame it is: the
+    // only `<iframe>` here is jotter's own, pointing at this site's `/_vault/`.
+    const frames = [...html.matchAll(/<iframe\b[^>]*\bsrc="([^"]*)"/g)].map(([, src]) => src)
+    expect(frames.length).toBeGreaterThan(0)
+    for (const src of frames) expect(src.startsWith('/')).toBe(true)
+    expect(html).not.toContain('youtube-nocookie')
+  })
+
+  /**
+   * The facade *is* its own noscript answer: one `<a>` to the video, upgraded
+   * by `src/scripts/embed.ts` on click. Nothing here depends on that script
+   * having run, or having loaded at all.
+   */
+  it('is a working link to the video before any script runs', () => {
+    expect(html).toContain('href="https://www.youtube.com/watch?v=dQw4w9WgXcQ"')
+    expect(html).toContain('class="video-embed-link"')
+    expect(html).toContain('Play on YouTube')
+  })
+
+  /**
+   * The poster is the reason `lite-youtube-embed` could not be used: it fetches
+   * its thumbnail from `i.ytimg.com` at runtime, which is the request jotter's
+   * origin assertion forbids. Downloaded at build time, it is a local file.
+   */
+  it('serves the poster from this site, with its box reserved', () => {
+    const withPoster = render('Zettelkasten.md', {}, {
+      'youtube:dQw4w9WgXcQ': {
+        poster: 'attachments/embeds/youtube-dQw4w9WgXcQ.jpg',
+        width: 1280,
+        height: 720,
+      },
+    })
+    expect(withPoster).toContain(
+      '<img class="video-embed-poster" src="/_vault/attachments/embeds/youtube-dQw4w9WgXcQ.jpg"' +
+        ' alt="" width="1280" height="720" loading="lazy" decoding="async">',
+    )
+    expect(withPoster).not.toContain('ytimg.com')
+  })
+
+  it('keeps whatever the author called the video, and names it when they did not', () => {
+    expect(html).toContain('<span class="video-embed-label">Never Gonna Give You Up<span')
+    expect(html).toContain('<span class="video-embed-label">Play on YouTube<span')
+  })
+
+  it('degrades to a poster-less facade rather than a broken image', () => {
+    // No index, or a video whose thumbnail 404s: the box and the link stay.
+    expect(html).toContain('class="video-embed"')
+    expect(html).not.toContain('video-embed-poster')
+  })
+
+  /**
+   * A tweet is real text or a link, never invented text. Without a fetched
+   * record there is nothing honest to render but the address.
+   */
+  it('cards a tweet the build could not fetch', () => {
+    expect(html).toContain('<span class="embed-card-host">twitter.com</span>')
+    expect(html).not.toContain('tweet-embed')
+  })
+
+  it('renders a fetched tweet as jotter’s own markup, not X’s', () => {
+    const withTweet = render('Zettelkasten.md', {}, {
+      'tweet:1834417901081694320': {
+        text: 'A thing somebody said.',
+        author: 'Someone',
+        handle: '@someone',
+        date: 'September 13, 2024',
+      },
+    })
+    expect(withTweet).toContain('<span class="tweet-embed-text">A thing somebody said.</span>')
+    expect(withTweet).toContain('Someone @someone')
+    expect(withTweet).toContain('<span class="tweet-embed-date">September 13, 2024</span>')
+    // Nothing of X's: no blockquote class, no script, no widget stylesheet.
+    expect(withTweet).not.toContain('twitter-tweet')
+    expect(withTweet).not.toContain('platform.twitter.com')
+  })
+
+  it('falls back to the link card it always was with embeds off', () => {
+    const off = render('Zettelkasten.md', { features: { embeds: false } })
+    expect(off).not.toContain('video-embed')
+    expect(off).toContain('<span class="embed-card-host">youtu.be</span>')
   })
 })
 
@@ -276,6 +388,68 @@ function compile(markdown: string, overrides: JotterConfigInput = {}): string {
  * only shows up in finished HTML, which anchors get the attributes, and which
  * emphatically do not.
  */
+describe('links that leave the site', () => {
+  const html = render('Previews.md')
+
+  it('carries the class, the rel and the new tab', () => {
+    expect(html).toContain(
+      '<a href="https://example.com" class="external-link" rel="noopener" target="_blank">',
+    )
+  })
+
+  /**
+   * WCAG G201 wants the warning in advance and SC 1.1.1 says an icon is not
+   * one, so the sentence is in the markup. Obsidian Publish ships the glyph
+   * alone; that is a bug in Obsidian Publish, not a spec to copy.
+   */
+  it('warns a screen reader in words, not only with a glyph', () => {
+    expect(html).toContain('<span class="visually-hidden"> (opens in a new tab)</span>')
+  })
+
+  /**
+   * Obsidian Publish nofollows every outbound link. On a knowledge garden those
+   * links are editorial citations, and nofollowing them withholds credit from
+   * the sources the author is recommending.
+   */
+  it('never nofollows a citation', () => {
+    expect(html).not.toContain('nofollow')
+  })
+
+  it('treats a protocol-relative URL as what it is: somebody else’s host', () => {
+    expect(html).toMatch(/<a href="\/\/example\.com\/notes\/luhmann"[^>]*class="external-link"/)
+  })
+
+  /**
+   * A scheme is not a page. "Opens in a new tab" is a false promise about a
+   * mail client, and an arrow beside an address says nothing new.
+   */
+  it('leaves mailto and same-page anchors exactly as they were', () => {
+    expect(html).toContain('<a href="mailto:someone@example.com">')
+    expect(html).toContain('<a href="#previews">')
+  })
+
+  it('leaves an internal link alone', () => {
+    expect(html).toContain('<a href="/sections">')
+    expect(html).not.toMatch(/<a href="\/sections"[^>]*target/)
+  })
+
+  it('drops the class rather than hiding the glyph when the icon is off', () => {
+    const noIcon = render('Previews.md', { externalLinks: { icon: false } })
+    expect(noIcon).toContain('<a href="https://example.com" rel="noopener" target="_blank">')
+    expect(noIcon).not.toContain('external-link')
+    // The rel and the warning are independent of the decoration.
+    expect(noIcon).toContain('(opens in a new tab)')
+  })
+
+  it('drops the target and its warning together when the new tab is off', () => {
+    const sameTab = render('Previews.md', { externalLinks: { newTab: false } })
+    expect(sameTab).toContain('<a href="https://example.com" class="external-link" rel="noopener">')
+    expect(sameTab).not.toContain('opens in a new tab')
+    // `rel="noopener"` stays: it is not the new tab's to own.
+    expect(sameTab).toContain('rel="noopener"')
+  })
+})
+
 describe('hover previews', () => {
   const on = { features: { hoverPreview: true } }
 
@@ -332,10 +506,17 @@ describe('hover previews', () => {
     )
   })
 
-  it('leaves genuinely external links alone, including protocol-relative ones', () => {
+  /**
+   * There is nothing on this site to preview, so neither gets one. They do get
+   * the external-link treatment, which is a different visitor's business and
+   * asserted under "links that leave the site" above; what matters here is that
+   * `//example.com/notes/luhmann` is not mistaken for the local `/notes/luhmann`.
+   */
+  it('previews no genuinely external link, protocol-relative ones included', () => {
     const html = render('Previews.md', on)
-    expect(html).toMatch(/<a href="https:\/\/example\.com">/)
-    expect(html).toMatch(/<a href="\/\/example\.com\/notes\/luhmann">/)
+    const external = [...html.matchAll(/<a\b[^>]*href="(?:https?:)?\/\/example\.com[^"]*"[^>]*>/g)]
+    expect(external).toHaveLength(2)
+    for (const [tag] of external) expect(tag).not.toContain('data-preview')
   })
 
   /**

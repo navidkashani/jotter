@@ -3,12 +3,21 @@
  * Where the note lives in the vault.
  *
  * Not a navigation aid so much as an orientation one: it says "this page is a
- * file, in a folder, in somebody's vault", which is the whole premise of a
+ * note, in a folder, in somebody's vault", which is the whole premise of a
  * published garden. The folder segments are links because every folder has a
- * real page; the file name is not, because you are already on it.
+ * real page; the last crumb is not, because you are already on it.
  *
  * Derived from `note.path` against the folder tree that `src/lib/tree.ts`
- * already computed for the sidebar, so it costs one array lookup per note.
+ * already computed for the sidebar, so it costs one array lookup per note, and
+ * so the folder names here are the same ones the sidebar draws: on an Open
+ * Publish build those come from `config.folderNames` rather than from the path,
+ * which is a slug.
+ *
+ * The last crumb is the note's **title**, not `<filename>.md`. It used to be the
+ * filename, which read well on a vault of ordinary markdown and read as a bug
+ * on a published one: every note there is written to its slug, so the trail
+ * ended `wisdom-approaches / nvc.md` under a heading that said "How to
+ * Communicate". A title is what the note is called in both.
  */
 import type { VaultNote } from '../lib/vault.js'
 import { allFolders, config } from '../lib/site.js'
@@ -44,5 +53,5 @@ const indexed = config.features.search ? '' : undefined
       </>
     ))
   }
-  <span>{note.filename}.md</span>
+  <span>{note.title}</span>
 </p>

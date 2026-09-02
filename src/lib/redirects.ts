@@ -1,10 +1,11 @@
 /**
- * Redirects, generated from vacated slugs and `aliases:` frontmatter plus
- * whatever the config adds.
+ * Redirects, generated from vacated slugs, `permalink:`, `oldUrls:` and
+ * `aliases:` frontmatter, plus whatever the config adds.
  *
  * An alias is a promise that a name still works. Obsidian honours it inside the
  * vault; on the web it has to become a real redirect or the promise is only
- * kept for people who never left the app.
+ * kept for people who never left the app. An old URL is a stronger promise
+ * still: somebody else published it.
  *
  * Pure, so `astro.config.ts` (which emits the host files) and `src/lib/site.ts`
  * (which is bundled) compute the same set without importing each other.
@@ -95,6 +96,22 @@ export function buildRedirects({
    */
   for (const note of notes) {
     for (const permalink of note.permalinks.slice(1)) claim(permalink, note.slug)
+  }
+
+  /**
+   * `oldUrls:`, which is the same rule again and the reason it is a rule.
+   *
+   * These are the addresses an Open Publish snapshot says this note used to be
+   * served at: its `legacyUrls` and every rename the plugin has recorded.
+   * `scripts/fetch-content.mjs` writes the key; nothing renders it.
+   *
+   * Before the aliases, because the paragraph above the vacated slugs already
+   * argues the general case: a URL somebody published outranks a name that only
+   * ever pointed at a note. This is that rule said out loud for the one key
+   * whose whole content is published URLs.
+   */
+  for (const note of notes) {
+    for (const url of note.oldUrls) claim(sourceFor(url, style), note.slug)
   }
 
   for (const note of notes) {
