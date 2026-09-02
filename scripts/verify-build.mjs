@@ -590,17 +590,25 @@ section('Links')
   demo(deadLinkPages.length > 0, 'the demo actually exercises dead links', 'no dead-link span found anywhere')
 
   /**
-   * Every link off the site carries `rel="noopener"`.
+   * Every link off the site carries `rel="noopener"`, and none is `nofollow`ed.
    *
-   * An invariant rather than an observation: the author writes the URL, jotter
-   * writes the attributes, so a link that leaves without one is this theme's
-   * mistake. `<a href>` is deliberately outside the third-party-origin sweep
-   * further down (a link is not a subresource; nothing is fetched until a
-   * reader clicks), which is exactly why this belongs here instead.
+   * `<a href>` is deliberately outside the third-party-origin sweep further
+   * down (a link is not a subresource; nothing is fetched until a reader
+   * clicks), which is why this belongs here instead.
    *
    * `noopener` only. `nofollow` is Obsidian Publish's answer and it is the
    * wrong one for a knowledge garden: those links are citations, and stripping
    * their credit is not a theme's call. See `config.externalLinks`.
+   *
+   * **An observation on a vault, an invariant on the demo**, and the split is
+   * the whole point. Every anchor jotter *generates* carries the attributes,
+   * so on this repository's own garden a miss is a regression and fails. On
+   * somebody's vault the same measurement reads differently: a note containing
+   * raw HTML (`<a href="https://…" rel="nofollow">`, pasted from anywhere)
+   * never passes through the markdown pipeline that adds them, and refusing to
+   * deploy over it would be this script failing a build for content the author
+   * is entitled to write. That is how a user came to delete this script from
+   * their build command.
    */
   const OFF_SITE_ANCHOR = /<a\b[^>]*\bhref="(?:https?:)?\/\/[^"]*"[^>]*>/gi
   const unprotected = []
@@ -613,15 +621,17 @@ section('Links')
       if (/\brel="[^"]*\bnofollow\b[^"]*"/i.test(tag)) nofollowed.push(`${file}: ${tag}`)
     }
   }
-  check(
+  observe(
     unprotected.length === 0,
     'every link off the site carries rel="noopener"',
     unprotected.slice(0, 5).join('\n        '),
+    { strictInDemo: true },
   )
-  check(
+  observe(
     nofollowed.length === 0,
     'and none of them is nofollowed, so a cited source keeps the credit',
     nofollowed.slice(0, 5).join('\n        '),
+    { strictInDemo: true },
   )
   demo(offSiteCount > 0, 'the demo actually links off the site', 'no external anchor found anywhere')
 
@@ -1715,27 +1725,39 @@ function thirdPartyOrigins(pages) {
   /**
    * No `<iframe>` anywhere in `dist/` points at somebody else's origin.
    *
-   * A `check` rather than the `observe` above it, and in a note's prose as well
-   * as in the chrome, because unlike a CDN image this is never the author's
-   * doing: nothing an author can write in markdown asks jotter for a
-   * cross-origin frame. A remote document is a link card, and a remote video is
-   * a facade whose player is built by `src/scripts/embed.ts` **after a click**.
+   * Nothing an author writes in *markdown* asks jotter for a cross-origin
+   * frame: a remote document is a link card, and a remote video is a facade
+   * whose player is built by `src/scripts/embed.ts` **after a click**. That is
+   * exactly what the facade buys, and this states the price of losing it. An
+   * `<iframe src="https://www.youtube.com/embed/…">` in the markup would put
+   * Google's frame, its cookies and its scripts on the page of every reader who
+   * never pressed play, which is precisely what pasting a URL must not do.
    *
-   * That is exactly what the facade buys and this is what states the price of
-   * losing it. An `<iframe src="https://www.youtube.com/embed/…">` in the
-   * markup would put Google's frame, its cookies and its scripts on the page of
-   * every reader who never pressed play, which is precisely what pasting a URL
-   * into a note must not do.
+   * Split the way `noteOrigins` above is split, and for the same reason. In
+   * jotter's own chrome a cross-origin frame is this theme's defect and stops
+   * the build. In a note it is an author who pasted raw HTML into their
+   * markdown, which is a thing people do and their business to decide; on this
+   * repository's demo, where every page is jotter's own, it fails.
    */
-  const framed = authored.flatMap(({ file, html }) =>
-    tagsOf(html, 'iframe')
-      .filter((tag) => REMOTE.test(attr(tag, 'src')))
-      .map((tag) => `${file}: ${attr(tag, 'src')}`),
+  const framesIn = (html) =>
+    tagsOf(html, 'iframe').filter((tag) => REMOTE.test(attr(tag, 'src'))).map((tag) => attr(tag, 'src'))
+
+  const framedChrome = authored.flatMap(({ file, html }) =>
+    framesIn(chromeOf(html)).map((src) => `${file}: ${src}`),
+  )
+  const framedNotes = authored.flatMap(({ file, html }) =>
+    framesIn(proseOf(html)).map((src) => `${file}: ${src}`),
   )
   check(
-    framed.length === 0,
-    'no <iframe> in dist/ points at another origin: a player arrives on a click',
-    framed.join('\n        '),
+    framedChrome.length === 0,
+    'no <iframe> jotter emits points at another origin',
+    framedChrome.join('\n        '),
+  )
+  observe(
+    framedNotes.length === 0,
+    'no <iframe> in a note points at another origin: a player arrives on a click',
+    framedNotes.join('\n        '),
+    { strictInDemo: true },
   )
   // Without this the assertion above is loudest on a build that embeds nothing
   // at all, which is every build that could not possibly have failed it.
