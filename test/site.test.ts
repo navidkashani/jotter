@@ -17,7 +17,13 @@ import { liveLabel } from '../src/lib/resolve.js'
 import { svgIntrinsicSize, isOptimizable } from '../src/lib/embed.js'
 import { sectionOf, preresolveLinks, expandTransclusions } from '../src/lib/transclude.js'
 import { defineConfig, jotterConfigSchema } from '../src/lib/config.js'
-import { buildRedirects, toNetlify, toVercel, robotsTxt } from '../src/lib/redirects.js'
+import {
+  buildRedirects,
+  buildRedirectRules,
+  toNetlify,
+  toVercel,
+  robotsTxt,
+} from '../src/lib/redirects.js'
 import { feedXml, MAX_ITEMS, FEED_PATH } from '../src/lib/feed.js'
 import { frontmatterImage, resolveSocialImage, socialImageUrl } from '../src/lib/social.js'
 import type { VaultNote } from '../src/lib/vault.js'
@@ -893,6 +899,7 @@ describe('redirects', () => {
       path: `${fields.slug}.md`,
       aliases: [],
       oldUrls: [],
+      renamedFrom: [],
       permalinks: [],
       ...fields,
     }) as VaultNote
@@ -1037,11 +1044,94 @@ describe('redirects', () => {
     expect(Object.keys(out)).toEqual(['/leading/slash'])
   })
 
-  it('renders the Netlify and Vercel formats', () => {
-    const redirects = { '/old': '/new' }
-    expect(toNetlify(redirects)).toBe('/old /new 301\n')
-    const vercel = JSON.parse(toVercel(redirects))
-    expect(vercel.redirects).toEqual([{ source: '/old', destination: '/new', permanent: true }])
+  /**
+   * The status split, source by source.
+   *
+   * A `301` says "never ask me again", and nothing bounds one this build writes
+   * with a `Cache-Control`. Every rule below but the two frozen ones is
+   * recomputed from current frontmatter on every build, so the next build can
+   * *withdraw* it — and a browser holding a withdrawn `301` never finds out.
+   * Where the withdrawal is a note moving back, it is holding one half of a
+   * loop the server completes on request. See `RedirectRule`.
+   */
+  describe('promises permanence only where a later build cannot retract it', () => {
+    it('301s the address Obsidian Publish served, which nothing takes back', () => {
+      const migrated = [note({ slug: 'notes/plain', oldUrls: ['Notes/Plain'] })]
+      const out = buildRedirectRules({ notes: migrated, taken: [], slugs: 'preserve' })
+      expect(out['/Notes/Plain']).toEqual({ to: '/notes/plain', permanent: true })
+    })
+
+    it('301s a redirect the author wrote into the config by hand', () => {
+      const out = buildRedirectRules({ notes: [], taken: [], extra: { old: 'new' } })
+      expect(out['/old']).toEqual({ to: '/new', permanent: true })
+    })
+
+    it('302s a slug a permalink or a promotion vacated', () => {
+      const out = buildRedirectRules({ notes: [note({ slug: 'perma', path: 'Derived.md' })], taken: [] })
+      expect(out['/derived']).toEqual({ to: '/perma', permanent: false })
+    })
+
+    it('302s every permalink after the first, which the author can reorder', () => {
+      const moved = [note({ slug: 'perma', path: 'perma.md', permalinks: ['perma', 'older'] })]
+      expect(buildRedirectRules({ notes: moved, taken: [] })['/older']?.permanent).toBe(false)
+    })
+
+    it('302s a rename, and 302s an alias the author can simply delete', () => {
+      const moved = [note({ slug: 'now', renamedFrom: ['then'], aliases: ['Nickname'] })]
+      const out = buildRedirectRules({ notes: moved, taken: [] })
+      expect(out['/then']).toEqual({ to: '/now', permanent: false })
+      expect(out['/nickname']).toEqual({ to: '/now', permanent: false })
+    })
+
+    /**
+     * An address can arrive by both routes: Obsidian Publish served it *and*
+     * the plugin has since recorded a move away from it. The frozen claim is
+     * the true one, so it wins the first write and the stronger status.
+     */
+    it('keeps the 301 where an address is both published and renamed', () => {
+      const both = [note({ slug: 'now', oldUrls: ['then'], renamedFrom: ['then'] })]
+      expect(buildRedirectRules({ notes: both, taken: [] })['/then']?.permanent).toBe(true)
+    })
+
+    /**
+     * The loop this all exists to break, in the two builds that produced it.
+     * Neither rule is wrong on its own; both being permanent is what left a
+     * browser bouncing between them until `ERR_TOO_MANY_REDIRECTS`.
+     */
+    it('pins neither half of a pair that reverses when a permalink is dropped', () => {
+      const withPermalink = buildRedirectRules({
+        notes: [note({ slug: 'perma', path: 'Derived.md' })],
+        taken: [],
+      })
+      const afterItWasDropped = buildRedirectRules({
+        notes: [note({ slug: 'derived', path: 'Derived.md', renamedFrom: ['perma'] })],
+        taken: [],
+      })
+      expect(withPermalink['/derived']).toEqual({ to: '/perma', permanent: false })
+      expect(afterItWasDropped['/perma']).toEqual({ to: '/derived', permanent: false })
+    })
+  })
+
+  /**
+   * `buildRedirects` is the same map with the statuses dropped, for callers
+   * that only want to know where an address goes.
+   */
+  it('answers where an address goes without its status', () => {
+    const migrated = [note({ slug: 'now', oldUrls: ['then'] })]
+    expect(buildRedirects({ notes: migrated, taken: [] })['/then']).toBe('/now')
+  })
+
+  it('renders the Netlify and Vercel formats, each rule at its own status', () => {
+    const rules = {
+      '/old': { to: '/new', permanent: true },
+      '/vacated': { to: '/new', permanent: false },
+    }
+    expect(toNetlify(rules)).toBe('/old /new 301\n/vacated /new 302\n')
+    const vercel = JSON.parse(toVercel(rules))
+    expect(vercel.redirects).toEqual([
+      { source: '/old', destination: '/new', permanent: true },
+      { source: '/vacated', destination: '/new', permanent: false },
+    ])
     expect(vercel.cleanUrls).toBe(true)
   })
 

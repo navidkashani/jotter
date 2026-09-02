@@ -290,32 +290,52 @@ A vault moving off Obsidian Publish carries `legacyUrls`: the addresses each
 note used to answer at, like `Wisdom+&+Approaches/Critical+Thinking`. The plugin
 also records every rename it has seen.
 
-Both arrive in the note's frontmatter as **`oldUrls:`**, never as `permalink:`
-and never as `aliases:`:
+Both arrive in the note's frontmatter, never as `permalink:` and never as
+`aliases:`, and under **two keys**:
 
 ```yaml
 ---
 title: "Critical Thinking"
 aliases: ["Crit"]
 oldUrls: ["Wisdom+&+Approaches/Critical+Thinking"]
+renamedFrom: ["notes/critical-thinking"]
 ---
 ```
 
-`buildRedirects` runs an old URL through `sourceFor(url, 'preserve')` (NFC and
-nothing else), and then through the one URL encoder in the build, so that line
-becomes a 301 from `/Wisdom+%26+Approaches/Critical+Thinking` to the slug the
-plugin published, and **the note stays where it is**. Written to `permalink:`
-instead it would be the other way round: the address the plugin published would
-301 to the address the site used to have, backwards.
+`buildRedirectRules` runs an old address through `sourceFor(url, 'preserve')`
+(NFC and nothing else), and then through the one URL encoder in the build, so
+the first line becomes a redirect from `/Wisdom+%26+Approaches/Critical+Thinking`
+to the slug the plugin published, and **the note stays where it is**. Written to
+`permalink:` instead it would be the other way round: the address the plugin
+published would redirect to the address the site used to have, backwards.
 
-**And a key of its own, not more `aliases:`.** Both become 301s, so routing
-never told them apart; the page did. `src/components/Frontmatter.astro` prints
-`aliases` under the heading "Also known as", so every note on a vault migrated
-from Obsidian Publish displayed `About/How+to+Communicate` as human metadata.
-An alias is a name the author gave the note. An old URL is routing data that
-somebody happened to publish. `oldUrls` is written whole rather than merged,
-because unlike `aliases` it holds no author content: the snapshot is the
-authority on which addresses this note used to answer at.
+**Two keys, because only one of the two is frozen.** `oldUrls:` is a 301 and
+`renamedFrom:` is a 302, and the difference is whether jotter could ever take
+the address back. Nothing retracts what publish.obsidian.md served. A rename is
+this site's own history: rename the note back and the plugin records the
+opposite move, and the rule reverses.
+
+That matters because a 301 outlives the build that wrote it. Browsers cache one
+indefinitely and nothing here bounds it with a `Cache-Control`, so a browser
+holding the withdrawn half of a reversed pair asks for `d`, replays its pinned
+`d → p`, is answered `p → d`, and loops until it gives up with
+`ERR_TOO_MANY_REDIRECTS` — clearing only when its cache does. `resolveChain` in
+the plugin collapses chains within one snapshot and cannot see this one: the
+stale half is in somebody's browser. Merged into a single list, as they were,
+the two kinds were indistinguishable by the time the redirect writer read them,
+so every rule was permanent, including the ones a later build withdraws. **The
+SEO this protects is the SEO that matters**: a migrated site's search equity is
+in its Obsidian Publish addresses, and those still answer 301.
+
+**And keys of their own, not more `aliases:`.** All of them become redirects, so
+routing never told them apart; the page did.
+`src/components/Frontmatter.astro` prints `aliases` under the heading "Also
+known as", so every note on a vault migrated from Obsidian Publish displayed
+`About/How+to+Communicate` as human metadata. An alias is a name the author gave
+the note. An old URL is routing data that somebody happened to publish. Both
+address keys are written whole rather than merged, because unlike `aliases` they
+hold no author content: the snapshot is the authority on which addresses this
+note used to answer at.
 
 This is why nothing in this pipeline writes `_redirects` of its own. jotter had
 a redirect writer already; it just needed to be told the names.

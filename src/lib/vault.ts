@@ -45,15 +45,27 @@ export interface VaultNote extends ResolvableNote {
    */
   permalinks: string[]
   /**
-   * Addresses this note used to be served at, from `oldUrls:`. Redirect
-   * sources and nothing else: they are not names, so they do not resolve a
-   * wikilink (which is why they are here rather than on `ResolvableNote`
-   * beside `aliases`) and nothing renders them.
+   * Addresses this note used to be served at **somewhere else**, from
+   * `oldUrls:`. Redirect sources and nothing else: they are not names, so they
+   * do not resolve a wikilink (which is why they are here rather than on
+   * `ResolvableNote` beside `aliases`) and nothing renders them.
    *
-   * `scripts/fetch-content.mjs` writes the key from an Open Publish snapshot.
-   * A hand-written vault has none, and an author is free to write one.
+   * `scripts/fetch-content.mjs` writes the key from an Open Publish snapshot's
+   * `legacyUrls`: what publish.obsidian.md served, frozen for ever. A
+   * hand-written vault has none, and an author is free to write one.
    */
   oldUrls: string[]
+  /**
+   * Addresses this note used to be served at **on this site**, from
+   * `renamedFrom:`: the same kind of redirect source, recorded by the plugin
+   * each time it saw the note move.
+   *
+   * A key of its own rather than more `oldUrls:` because only one of the two is
+   * frozen. Rename the note back and this one reverses, so `buildRedirectRules`
+   * emits it as a `302` while `oldUrls:` stays a `301`. See `RedirectRule` in
+   * `src/lib/redirects.ts` for the loop that split them.
+   */
+  renamedFrom: string[]
   frontmatter: Record<string, unknown>
   /** Raw markdown with frontmatter removed. */
   body: string
@@ -287,6 +299,7 @@ export function scanVault(options: ScanOptions): Vault {
       slug: slugs.get(path) ?? path,
       permalinks: [],
       oldUrls: normalizeAliases(frontmatter.oldUrls),
+      renamedFrom: normalizeAliases(frontmatter.renamedFrom),
       filename,
       title: resolveTitle(frontmatter, body, filename),
       aliases,
@@ -427,8 +440,8 @@ function measureAssets(
 /**
  * A frontmatter key holding one name or a list of them, as a clean list.
  *
- * Used for `aliases`/`alias` and for `oldUrls`: three keys, one shape, and YAML
- * lets any of them be written as a bare scalar.
+ * Used for `aliases`/`alias`, `oldUrls` and `renamedFrom`: four keys, one
+ * shape, and YAML lets any of them be written as a bare scalar.
  */
 function normalizeAliases(value: unknown): string[] {
   if (value == null) return []

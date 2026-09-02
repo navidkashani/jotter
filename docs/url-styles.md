@@ -58,14 +58,24 @@ permalink: Company/About+us
 ---
 ```
 
-The note is served **there**, and its derived slug 301s to it.
+The note is served **there**, and its derived slug 302s to it.
 
 ```
 Company/About us.md   +   permalink: Company/About+us
 
   served at   /Company/About+us     ← canonical, sitemap, search, every link
-  301 from    /company/about-us
+  302 from    /company/about-us
 ```
+
+**A 302 rather than a 301, and on purpose.** That rule is recomputed from your
+frontmatter on every build, so editing this `permalink:` away withdraws it — and
+the note is then served at `/company/about-us` again, with the old address
+redirecting the *other* way. A 301 is a promise a browser keeps after the build
+stops making it: it caches one indefinitely, nothing here bounds that with a
+`Cache-Control`, and a browser holding the withdrawn half of that pair bounces
+between the two until it gives up with `ERR_TOO_MANY_REDIRECTS`. Only an address
+jotter cannot take back is permanent: `oldUrls:` below, and the `redirects` you
+write into the config by hand.
 
 Honoured character for character in every mode: no lowercasing, no dashes, no
 substitutions. Leading and trailing slashes are stripped, so `/company/about`
@@ -185,12 +195,23 @@ one that leaves the note where the plugin put it.
 
 | the old URL written as | `/Wisdom+%26+Approaches/Critical+Thinking` becomes | the note is served at |
 | --- | --- | --- |
-| `permalink:` | the note's own address | the old URL, and its slug 301s to it |
-| `oldUrls:` | a 301 to the note | the slug the plugin published |
+| `permalink:` | the note's own address | the old URL, and its slug 302s to it |
+| `oldUrls:` | a **301** to the note | the slug the plugin published |
 
-`oldUrls:` and `aliases:` produce the same redirect, and they are separate keys
-anyway, because the header block prints `aliases` under "Also known as". An
-alias is a name the author gave the note; `About/How+to+Communicate` is not.
+`oldUrls:` is the one generated rule that is permanent, and the reason is in the
+row above it: everything else on this page is recomputed from what your
+frontmatter says today, so the next build can withdraw it. An address
+publish.obsidian.md served cannot be withdrawn by anybody. It is also the row
+carrying a migrated site's entire search history, so the softening elsewhere
+costs nothing worth keeping.
+
+The plugin also records **renames**, and those arrive as a key of their own,
+`renamedFrom:`. Same shape, same redirect, one difference: rename the note back
+and the rule reverses, so it is a 302 while `oldUrls:` is a 301.
+
+`oldUrls:`, `renamedFrom:` and `aliases:` all produce a redirect, and they are
+separate keys because the header block prints `aliases` under "Also known as".
+An alias is a name the author gave the note; `About/How+to+Communicate` is not.
 
 The second row is what a site moving *onto* clean slugs wants: the old address
 keeps answering, and every new link, canonical and sitemap entry spells the

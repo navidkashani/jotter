@@ -19,14 +19,16 @@
  * ## What it writes, and what it deliberately does not
  *
  * Note bodies are written **byte for byte as their author wrote them**, plus a
- * `title:`, an `aliases:`, an `oldUrls:` and the note's dates in the
+ * `title:`, an `aliases:`, its old addresses and the note's dates in the
  * frontmatter. No link in any note is rewritten.
  * The Quartz starter has to rewrite them because Quartz cannot be told what a
  * wikilink resolves to; jotter can, so the plugin's own answers go to
  * `<vault>/.jotter/links.json` and `src/lib/links-index.ts` reads them.
  *
- * Old addresses become `oldUrls:`, which `buildRedirects` turns into 301s
- * without moving the note, and which nothing renders. See `oldAddressesFor` in
+ * Old addresses become `oldUrls:` and `renamedFrom:`, which
+ * `buildRedirectRules` turns into redirects without moving the note, and which
+ * nothing renders: a 301 for the frozen Obsidian Publish addresses, a 302 for
+ * the renames, which a later build can reverse. See `oldAddressesFor` in
  * `lib/snapshot.mjs`.
  *
  * Markdown is written at its **slug**; everything else is written at its
@@ -235,13 +237,21 @@ async function main() {
         {
           title: file.title,
           /**
-           * Two keys, not one list. Both become 301s, so routing never told
-           * them apart; the page does. `aliases` is printed on every note under
-           * "Also known as", and an old Obsidian Publish URL
-           * (`About/How+to+Communicate`) is not a name anybody gave the note.
+           * Three keys, not one list, and the splits are two different
+           * arguments.
+           *
+           * `aliases` is separate because the *page* tells them apart: it is
+           * printed on every note under "Also known as", and an old Obsidian
+           * Publish URL (`About/How+to+Communicate`) is not a name anybody gave
+           * the note.
+           *
+           * `oldUrls` and `renamedFrom` are separate because the *status* does:
+           * an address publish.obsidian.md served is frozen and stays a 301,
+           * and a rename this plugin recorded reverses the moment the note is
+           * renamed back, so it is a 302. See `oldAddressesFor`.
            */
           aliases: file.aliases ?? [],
-          oldUrls: oldAddressesFor(file, file.slug, redirects),
+          ...oldAddressesFor(file, file.slug, redirects),
           /**
            * The dates the note would otherwise not have. Every fallback in
            * `src/lib/dates.ts` collapses on a vault written fresh by this

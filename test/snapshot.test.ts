@@ -45,7 +45,7 @@ import { resolveSiteUrl } from '../scripts/lib/site-url.mjs'
 import { parseLinksIndex } from '../src/lib/links-index.js'
 import { FRONTMATTER_CREATED, FRONTMATTER_UPDATED, resolveDates } from '../src/lib/dates.js'
 import { analyticsProviders, defineConfig } from '../src/lib/config.js'
-import { buildRedirects } from '../src/lib/redirects.js'
+import { buildRedirects, buildRedirectRules } from '../src/lib/redirects.js'
 import type { VaultNote } from '../src/lib/vault.js'
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
@@ -264,19 +264,25 @@ describe('the link index is re-keyed to the path jotter looks notes up by', () =
 })
 
 /**
- * The decision this whole layer turns on: an old address is an `aliases:`
- * entry, never a `permalink:`. A permalink is where a note is *served*, so
- * writing the old URL there would move the note onto its own history: the
- * address the plugin published would 301 to the address the site used to have,
- * backwards. As an alias it is a 301 **to** the published slug, and the note
- * does not move.
+ * The decision this whole layer turns on: an old address is a redirect *source*,
+ * never a `permalink:`. A permalink is where a note is *served*, so writing the
+ * old URL there would move the note onto its own history: the address the
+ * plugin published would redirect to the address the site used to have,
+ * backwards. As an old address it points **at** the published slug, and the
+ * note does not move.
+ *
+ * Which of jotter's two address keys it lands in decides the status, and
+ * nothing else: `oldUrls:` for what publish.obsidian.md served, which is frozen
+ * and stays a 301, and `renamedFrom:` for a rename, which reverses if the note
+ * is renamed back and so is a 302.
  */
-describe('an old address 301s to the note without moving it', () => {
+describe('an old address redirects to the note without moving it', () => {
   const note = (fields: Partial<VaultNote> & { slug: string }): VaultNote =>
     ({
       path: `${fields.slug}.md`,
       aliases: [],
       oldUrls: [],
+      renamedFrom: [],
       permalinks: [],
       ...fields,
     }) as VaultNote
@@ -297,13 +303,45 @@ describe('an old address 301s to the note without moving it', () => {
     expect(out['/wisdom-approaches/critical-thinking']).toBeUndefined()
   })
 
-  it('collects old addresses from the file and from every rename', () => {
+  /**
+   * Two keys, because only one of the two kinds is frozen. What
+   * publish.obsidian.md served stays a 301; a rename reverses the moment the
+   * note is renamed back, so it is a 302 and lands under its own key for
+   * `buildRedirectRules` to tell apart. See `RedirectRule`.
+   */
+  it('separates the addresses another site published from this site’s renames', () => {
     const file = { slug: 'notes/plain', legacyUrls: ['Notes/Plain'] }
     const redirects = [
       { from: '/old/name', to: 'notes/plain' },
       { from: 'other', to: 'somewhere/else' },
     ]
-    expect(oldAddressesFor(file, 'notes/plain', redirects)).toEqual(['Notes/Plain', 'old/name'])
+    expect(oldAddressesFor(file, 'notes/plain', redirects)).toEqual({
+      oldUrls: ['Notes/Plain'],
+      renamedFrom: ['old/name'],
+    })
+  })
+
+  it('writes an address that arrived both ways once, under the stronger key', () => {
+    const file = { slug: 'notes/plain', legacyUrls: ['Notes/Plain'] }
+    const redirects = [{ from: 'Notes/Plain', to: 'notes/plain' }]
+    expect(oldAddressesFor(file, 'notes/plain', redirects)).toEqual({
+      oldUrls: ['Notes/Plain'],
+      renamedFrom: [],
+    })
+  })
+
+  it('301s the published address and 302s the rename, in one build', () => {
+    const notes = [
+      note({
+        slug: 'notes/plain',
+        oldUrls: ['Notes/Plain'],
+        renamedFrom: ['notes/older-name'],
+      }),
+    ]
+    const out = buildRedirectRules({ notes, taken: [notes[0].slug], slugs: 'preserve' })
+
+    expect(out['/Notes/Plain']).toEqual({ to: '/notes/plain', permanent: true })
+    expect(out['/notes/older-name']).toEqual({ to: '/notes/plain', permanent: false })
   })
 })
 
@@ -339,6 +377,29 @@ describe('frontmatter carries the title and every name the note answers to', () 
     })
     expect(out).toContain('oldUrls: ["Old/Address"]')
     expect(out).not.toContain('aliases')
+  })
+
+  /**
+   * And a rename under its own key, which is the whole reason there are two.
+   * Both are routing data the page never prints; only one of them is a promise
+   * a later build cannot withdraw.
+   */
+  it('keeps a rename out of the key reserved for frozen addresses', () => {
+    const out = applyNoteMetadata('# Plain\n\nBody.\n', {
+      oldUrls: ['About/How+to+Communicate'],
+      renamedFrom: ['notes/older-name'],
+    })
+    expect(out).toContain('oldUrls: ["About/How+to+Communicate"]')
+    expect(out).toContain('renamedFrom: ["notes/older-name"]')
+  })
+
+  it('replaces a renamedFrom key rather than writing a second one', () => {
+    const out = applyNoteMetadata('---\nrenamedFrom: [stale]\n---\n\nBody.\n', {
+      renamedFrom: ['notes/current'],
+    })
+    expect(out).toContain('notes/current')
+    expect(out).not.toContain('stale')
+    expect(out.match(/renamedFrom/g)).toHaveLength(1)
   })
 
   /**
@@ -1135,7 +1196,9 @@ describe('fetch-content, against a bucket', () => {
     const home = await readFile(join(vault, 'index.md'), 'utf8')
     expect(home).toContain('title: "Home"')
     expect(home).toContain('See [[Critical Thinking]]') // the body is never rewritten
-    expect(home).toContain('oldUrls: ["notes/home"]') // the rename, as an old address
+    // The rename, under the key that gets a 302: rename it back and this reverses.
+    expect(home).toContain('renamedFrom: ["notes/home"]')
+    expect(home).not.toContain('oldUrls') // which is for addresses another site froze
     expect(home).not.toContain('aliases') // and never as a name the page prints
     // The dates the vault directory cannot supply: it was written seconds ago.
     expect(home).toContain('created: "2024-03-14T00:00:00.000Z"')

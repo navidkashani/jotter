@@ -120,34 +120,48 @@ export function redirectFromsFor(slug, redirects = []) {
 }
 
 /**
- * The old addresses that should 301 to this note: the ones the plugin recorded
- * on the file, plus every rename it has seen since.
+ * The old addresses that should redirect to this note, **as two keys**: the
+ * ones the plugin recorded on the file, and every rename it has seen since.
  *
- * These become `oldUrls:` rather than `permalink:`, and that decision is the
+ * These become frontmatter rather than `permalink:`, and that decision is the
  * whole of why this layer needs no redirect writer of its own.
- * `buildRedirects` runs an old URL through `sourceFor(url, 'preserve')` (NFC
- * and nothing else), and then through the single `encodeSlug` at the end of
- * that function, so `Wisdom+&+Approaches/Critical+Thinking` arrives at
- * `/Wisdom+%26+Approaches/Critical+Thinking` as a 301 **and the note does not
- * move**. Writing them to `permalink:` would move it: the first permalink is
- * where a note is *served*, so the address the plugin published would 301 to
- * the address the site used to have, backwards.
+ * `buildRedirectRules` runs an old address through `sourceFor(url, 'preserve')`
+ * (NFC and nothing else), and then through the single `encodeSlug` at the end
+ * of that function, so `Wisdom+&+Approaches/Critical+Thinking` arrives at
+ * `/Wisdom+%26+Approaches/Critical+Thinking` as a redirect **and the note does
+ * not move**. Writing them to `permalink:` would move it: the first permalink
+ * is where a note is *served*, so the address the plugin published would
+ * redirect to the address the site used to have, backwards.
  *
- * And `oldUrls:` rather than `aliases:`, which is where these used to go. Both
- * keys become redirects, so routing was never the difference; display was.
- * `src/components/Frontmatter.astro` prints `aliases` on the page under "Also
- * known as", so every note on a vault migrated from Obsidian Publish showed a
- * `+`-encoded routing artifact as human metadata. An alias is a name the
- * author gave the note. This is a URL somebody published.
+ * And keys of their own rather than `aliases:`, which is where these used to
+ * go. All of them become redirects, so routing was never the difference;
+ * display was. `src/components/Frontmatter.astro` prints `aliases` on the page
+ * under "Also known as", so every note on a vault migrated from Obsidian
+ * Publish showed a `+`-encoded routing artifact as human metadata. An alias is
+ * a name the author gave the note. This is a URL somebody published.
+ *
+ * **Two keys and not one**, which is the only thing downstream cannot work out
+ * for itself. `legacyUrls` is what publish.obsidian.md served: frozen, and
+ * `oldUrls:` keeps its `301`. A rename is this site's own history and reverses
+ * the moment the note is renamed back, so it goes to `renamedFrom:` and gets a
+ * `302`. Merged into one list they were indistinguishable, every rule was
+ * `301`, and a retracted one left browsers looping between two builds' answers.
+ * See `RedirectRule` in `src/lib/redirects.ts`.
+ *
+ * An address that is both is written once, under the stronger key.
+ *
+ * @returns {{oldUrls: string[], renamedFrom: string[]}} spread straight into
+ *   `applyNoteMetadata`'s `meta`, whose keys these are.
  */
 export function oldAddressesFor(file, slug, redirects = []) {
-  return [
-    ...new Set(
-      [...legacyUrlsOf(file), ...redirectFromsFor(slug, redirects)]
-        .map(stripSlashes)
-        .filter(Boolean),
+  const clean = (values) => [...new Set(values.map(stripSlashes).filter(Boolean))]
+  const oldUrls = clean(legacyUrlsOf(file))
+  return {
+    oldUrls,
+    renamedFrom: clean(redirectFromsFor(slug, redirects)).filter(
+      (url) => !oldUrls.includes(url),
     ),
-  ]
+  }
 }
 
 /**
@@ -296,12 +310,12 @@ const hasKey = (lines, key) => lines.some((line) => new RegExp(`^${key}\\s*:`).t
  * note's own frontmatter by the plugin, so the merged list is a superset of
  * what the author typed, never a replacement for it.
  *
- * `oldUrls` is jotter's own key and holds no author content at all, so it is
- * written whole. A note that happens to carry one already (a hand-written
- * redirect, a previous build's output left in a vault) has it replaced rather
- * than appended to, because the snapshot is the authority on which addresses
- * this note used to answer at, and two spellings of the same key in one YAML
- * block is not a document either parser reads the same way.
+ * `oldUrls` and `renamedFrom` are jotter's own keys and hold no author content
+ * at all, so they are written whole. A note that happens to carry one already
+ * (a hand-written redirect, a previous build's output left in a vault) has it
+ * replaced rather than appended to, because the snapshot is the authority on
+ * which addresses this note used to answer at, and two spellings of the same
+ * key in one YAML block is not a document either parser reads the same way.
  *
  * `created` and `updated` are the strictest of the four: written **only** when
  * the note declares no date of its own under any of the ten spellings
@@ -315,7 +329,17 @@ const hasKey = (lines, key) => lines.some((line) => new RegExp(`^${key}\\s*:`).t
 export function applyNoteMetadata(text, meta = {}, warnings = []) {
   const clean = (values) => [...new Set((values ?? []).map((v) => String(v)).filter(Boolean))]
   const aliases = clean(meta.aliases)
-  const oldUrls = clean(meta.oldUrls)
+  /**
+   * jotter's two address keys, in the order they are written, each present only
+   * if it has something to say. One list rather than two locals because every
+   * step below treats them identically: written whole, replaced not merged, and
+   * printed in this order. What separates them is the status
+   * `buildRedirectRules` gives each, and that is decided in `oldAddressesFor`.
+   */
+  const addresses = [
+    ['oldUrls', clean(meta.oldUrls)],
+    ['renamedFrom', clean(meta.renamedFrom)],
+  ].filter(([, values]) => values.length > 0)
   const lines = text.split('\n')
 
   const list = (key, values) => `${key}: [${values.map(quote).join(', ')}]`
@@ -338,7 +362,7 @@ export function applyNoteMetadata(text, meta = {}, warnings = []) {
     if (meta.title) additions.push(`title: ${quote(meta.title)}`)
     additions.push(...dateLines(null))
     if (aliases.length > 0) additions.push(list('aliases', aliases))
-    if (oldUrls.length > 0) additions.push(list('oldUrls', oldUrls))
+    for (const [key, values] of addresses) additions.push(list(key, values))
     return additions.length === 0 ? text : ['---', ...additions, '---', '', text].join('\n')
   }
 
@@ -354,14 +378,14 @@ export function applyNoteMetadata(text, meta = {}, warnings = []) {
 
   const block = lines.slice(1, close)
   const mergingAliases = aliases.length > 0 && (hasKey(block, 'aliases') || hasKey(block, 'alias'))
-  const replacingOldUrls = oldUrls.length > 0 && hasKey(block, 'oldUrls')
+  const replacingAddresses = addresses.some(([key]) => hasKey(block, key))
 
-  if (!mergingAliases && !replacingOldUrls) {
+  if (!mergingAliases && !replacingAddresses) {
     const additions = []
     if (meta.title && !hasKey(block, 'title')) additions.push(`title: ${quote(meta.title)}`)
     additions.push(...dateLines(block))
     if (aliases.length > 0) additions.push(list('aliases', aliases))
-    if (oldUrls.length > 0) additions.push(list('oldUrls', oldUrls))
+    for (const [key, values] of addresses) additions.push(list(key, values))
     if (additions.length === 0) return text
     return [...lines.slice(0, close), ...additions, ...lines.slice(close)].join('\n')
   }
@@ -387,7 +411,7 @@ export function applyNoteMetadata(text, meta = {}, warnings = []) {
       .filter(Boolean)
     doc.set(key, [...kept, ...aliases.filter((alias) => !kept.includes(alias))])
   }
-  if (oldUrls.length > 0) doc.set('oldUrls', oldUrls)
+  for (const [key, values] of addresses) doc.set(key, values)
   if (meta.title && !doc.has('title')) doc.set('title', String(meta.title))
   if (meta.created && !FRONTMATTER_CREATED.some((key) => doc.has(key))) {
     doc.set('created', String(meta.created))

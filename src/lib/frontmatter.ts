@@ -124,11 +124,12 @@ export const noteFrontmatterSchema = z
     permalink: z.union([textish, z.array(textish)]).optional(),
 
     /**
-     * Addresses this note used to be served at, which should 301 to it.
+     * Addresses this note used to be served at *elsewhere*, which should 301
+     * to it.
      *
      * Written by `scripts/fetch-content.mjs` from the snapshot's `legacyUrls`
-     * and every rename the plugin has recorded, and read back by
-     * `buildRedirects`. It exists as a key of its own rather than as more
+     * — what publish.obsidian.md served — and read back by
+     * `buildRedirectRules`. It exists as a key of its own rather than as more
      * `aliases:` because the two are not the same thing and were never the same
      * thing: an alias is a *name* the author gave the note, and
      * `Frontmatter.astro` prints it on the page under "Also known as". An old
@@ -139,6 +140,18 @@ export const noteFrontmatterSchema = z
      * Not in `DISPLAYED_FIELDS`, and it should stay out of it.
      */
     oldUrls: z.union([z.string(), z.array(z.string())]).optional(),
+
+    /**
+     * Addresses this note used to be served at *here*, which should 302 to it:
+     * every rename the plugin has recorded, written by the same script.
+     *
+     * Same shape as `oldUrls:`, same absence from `DISPLAYED_FIELDS`, and split
+     * from it over one word in the sentence above. An Obsidian Publish address
+     * is frozen; a rename is not, and renaming the note back reverses the rule.
+     * A `301` there is a promise a later build takes away, which browsers do
+     * not re-ask about. See `RedirectRule` in `src/lib/redirects.ts`.
+     */
+    renamedFrom: z.union([z.string(), z.array(z.string())]).optional(),
 
     /**
      * The card a link to this note unfurls as. `socialImage` and `cover` are

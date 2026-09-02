@@ -159,9 +159,10 @@ deployed is worse than a site that says nothing.
 That list is an **allow-list**, not a deny-list. Frontmatter is whatever its
 owner typed: a private URL, a note to self, a `publish: false` you forgot to
 remove, so anything unrecognised stays off the page rather than leaking by
-default. `oldUrls`, which the Open Publish pipeline writes, is deliberately not
-on it: those are addresses, not names, and printing them under "Also known as"
-put `About/How+to+Communicate` on every page of a migrated site.
+default. `oldUrls` and `renamedFrom`, which the Open Publish pipeline writes,
+are deliberately not on it: those are addresses, not names, and printing them
+under "Also known as" put `About/How+to+Communicate` on every page of a migrated
+site.
 
 `author` is display only. The name on the feed is `author` in
 `jotter.config.ts`, which is a claim about who publishes the site rather than
@@ -396,8 +397,10 @@ That is not a special case with links to remember. The note claiming `/` is
 given the slug `index`, which is how jotter has always spelled “this note lives
 at the root”, so every link to it (in a note, a card, the nav tree, backlinks,
 the graph and the feed) is `/`. Its previous URL keeps working: `/<old-slug>`
-301s to `/` in `_redirects` and `vercel.json`, so bookmarks and inbound links
-survive the promotion.
+302s to `/` in `_redirects` and `vercel.json`, so bookmarks and inbound links
+survive the promotion. A 302 because unsetting `homepage:` withdraws that rule
+and points it the other way, and a 301 a browser has cached is not a rule the
+next build can withdraw.
 
 Three ways to claim it, in this order:
 
@@ -449,12 +452,14 @@ permalink: Company/About+us    # frontmatter: the per-note override
 ```
 
 The note is served **there**, honoured character for character in every mode,
-and its derived slug 301s to it. A list gives one page and a redirect from each
+and its derived slug 302s to it. A list gives one page and a redirect from each
 of the rest. This is the same key the Open Publish Quartz starter already writes
 a note's old Obsidian URL into, so a vault it prepared needs no changes.
 
-Building straight from an Open Publish bucket instead? That path uses `aliases:`
-rather than `permalink:`, so an old URL 301s to the note without moving it. See
+Building straight from an Open Publish bucket instead? That path uses `oldUrls:`
+and `renamedFrom:` rather than `permalink:`, so an old URL redirects to the note
+without moving it — and the address Obsidian Publish served keeps a **301**,
+where every rule jotter recomputes from your frontmatter is a 302. See
 [`docs/open-publish.md`](docs/open-publish.md).
 
 One caveat before you deploy: **Netlify 301s mixed-case paths to lowercase**,
@@ -675,7 +680,7 @@ carry a vault path to the URL untouched. `obsidian` reproduces Obsidian
 Publish's own addresses, space to `+` and all, so a site moving onto the domain
 those URLs were served from keeps every inbound link and every search ranking it
 had. One note overrides all three with `permalink:` in its frontmatter, and its
-derived slug 301s to it.
+derived slug 302s to it.
 
 The idea holding that up is that **a slug is not a URL**: the path in `dist/`
 carries a literal `&`, and every link, canonical, sitemap entry and search
@@ -701,12 +706,14 @@ Two things it deliberately does not do. It **never rewrites a link in a note
 body**: the plugin resolved every wikilink inside Obsidian against the whole
 vault, and those answers go to `.jotter/links.json`, which jotter has read since
 v1, so the markdown on disk is what its author wrote. And it writes **no
-redirects**, because an old address arrives as `oldUrls:` and jotter already
-turns one into a 301 (to the note, without moving it), which is the half a
-`permalink:` would have got backwards. A key of its own rather than more
-`aliases:`, because both become redirects but only one of them is a *name*, and
-the header block prints names. See
-[`docs/open-publish.md`](docs/open-publish.md).
+redirects**, because an old address arrives as `oldUrls:` or `renamedFrom:` and
+jotter already turns one into a redirect (to the note, without moving it), which
+is the half a `permalink:` would have got backwards. Keys of their own rather
+than more `aliases:`, because all of them become redirects but only one is a
+*name*, and the header block prints names — and two of them rather than one,
+because an Obsidian Publish address is frozen and keeps its 301, while a rename
+reverses if you rename the note back, so it is a 302 that leaves a browser
+asking. See [`docs/open-publish.md`](docs/open-publish.md).
 
 ### What "no network" means now
 

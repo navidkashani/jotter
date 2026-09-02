@@ -17,7 +17,7 @@ import { buildGraph } from './src/lib/graph'
 import { jotterPlugins, jotterHastPlugins, satteriFeatures } from './src/markdown'
 import { jotterVault } from './src/integrations/vault'
 import { jotterSearch } from './src/integrations/search'
-import { buildRedirects } from './src/lib/redirects'
+import { buildRedirectRules } from './src/lib/redirects'
 import { buildTree, folders, shadowedFolders } from './src/lib/tree'
 import { decodeSlug, encodeSlug } from './src/lib/url'
 
@@ -85,7 +85,7 @@ const feed = jotter.features.rss
     }
   : undefined
 
-const redirects = buildRedirects({
+const redirects = buildRedirectRules({
   notes: published,
   slugs: vault.slugs,
   taken: [

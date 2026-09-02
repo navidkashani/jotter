@@ -361,8 +361,8 @@ console.log('')
  * Three kinds of target count as resolving, because all three are things a
  * reader following the link would actually get: a built page, a real file in
  * `dist/` (`/_vault/x.pdf`, `/rss.xml`, `/pagefind/*`), and a redirect source
- * in `_redirects`: a 301 is a working link, and a note's vacated URL is
- * exactly that.
+ * in `_redirects`: a redirect is a working link whatever its status, and a
+ * note's vacated URL is exactly that.
  *
  * Written as a function, like `thirdPartyOrigins()` below and for the same
  * reason: `--full` re-runs it against a build with `homepage:` set, which is
@@ -2883,9 +2883,16 @@ if (FULL) {
         )
 
         const netlify = await readFile(join(DIST, '_redirects'), 'utf8').catch(() => '')
+        /**
+         * A 302, and the status is half the assertion. This rule is recomputed
+         * from `homepage:` on every build, so unsetting that key withdraws it
+         * and points the plugin's recorded move the other way. A 301 here is a
+         * promise a browser keeps after the build stops making it, and the two
+         * halves together are `ERR_TOO_MANY_REDIRECTS`. See `RedirectRule`.
+         */
         check(
-          netlify.includes(`${VACATED} / 301`),
-          `${VACATED} still works, as a 301 to /`,
+          netlify.includes(`${VACATED} / 302`),
+          `${VACATED} still works, as a 302 to /`,
           netlify.trim().split('\n').join(' | '),
         )
 
@@ -3076,9 +3083,14 @@ if (FULL) {
          * working link to the wrong URL is still the wrong URL.
          */
         const netlify = onOutputs.find((o) => o.file === '_redirects')?.text ?? ''
+        /**
+         * A 302 for the same reason the homepage's is: delete the `permalink:`
+         * and this rule reverses. It is the exact pair that produced the
+         * intermittent redirect loop on a real deploy.
+         */
         check(
-          netlify.includes(`${PERMALINK.vacated} /${PERMALINK.slug} 301`),
-          `${PERMALINK.vacated} still works, as a 301 to /${PERMALINK.slug}`,
+          netlify.includes(`${PERMALINK.vacated} /${PERMALINK.slug} 302`),
+          `${PERMALINK.vacated} still works, as a 302 to /${PERMALINK.slug}`,
           netlify.trim().split('\n').join(' | '),
         )
 
@@ -3345,6 +3357,18 @@ if (FULL) {
           'no wikilink in a note body was rewritten',
         )
         check(home.includes('title: "Home"'), 'the snapshot’s resolved title reached the note')
+        /**
+         * Both address keys, on the one note that has both kinds. Merged into a
+         * single `oldUrls:` they were indistinguishable by the time
+         * `buildRedirectRules` read them, so every rule it wrote was permanent,
+         * including the ones a later build withdraws.
+         */
+        check(
+          home.includes('oldUrls: ["Notes/Home"]') &&
+            home.includes('renamedFrom: ["notes/home"]'),
+          'the published address and the rename arrived under separate keys',
+          home.split('\n').slice(0, 8).join(' | '),
+        )
 
         const critical = await readFile(
           join(VAULT, 'wisdom-approaches', 'critical-thinking.md'),
@@ -3482,7 +3506,7 @@ if (FULL) {
            * is now the front page 404s, with nothing else in the build noticing.
            */
           check(
-            netlify.includes('/notes/home / 301'),
+            netlify.includes('/notes/home / 302'),
             'a note renamed into the homepage still answers at its old slug',
             netlify.trim().split('\n').join(' | '),
           )
@@ -3497,8 +3521,24 @@ if (FULL) {
             netlify.trim().split('\n').join(' | '),
           )
           check(
-            !/^\/index /m.test(netlify) && !/ \/index 301$/m.test(netlify),
+            !/^\/index /m.test(netlify) && !/ \/index 30\d$/m.test(netlify),
             'and nothing redirects to or from /index, which is not a URL this site serves',
+            netlify.trim().split('\n').join(' | '),
+          )
+
+          /**
+           * The status split, end to end and on one note. Both rules above
+           * point at `/`, both were `301` until a browser holding a withdrawn
+           * one started looping, and the difference between them is not
+           * visible anywhere else in this build: `Notes/Home` is an address
+           * publish.obsidian.md served and cannot un-serve, while
+           * `notes/home` is this site's own history and reverses the moment
+           * the note is renamed back. See `RedirectRule` in
+           * `src/lib/redirects.ts`.
+           */
+          check(
+            !netlify.includes('/notes/home / 301') && !netlify.includes('/Notes/Home / 302'),
+            'and the frozen address is the permanent one, not the rename',
             netlify.trim().split('\n').join(' | '),
           )
 

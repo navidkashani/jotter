@@ -20,7 +20,7 @@ import type { AstroIntegration } from 'astro'
 
 import { VAULT_ASSET_BASE } from '../lib/href.js'
 import { decodeSlug } from '../lib/url.js'
-import { toNetlify, toVercel, robotsTxt } from '../lib/redirects.js'
+import { toNetlify, toVercel, robotsTxt, type RedirectRule } from '../lib/redirects.js'
 import { feedXml, FEED_PATH, type FeedOptions } from '../lib/feed.js'
 import type { Vault } from '../lib/vault.js'
 import type { Graph } from '../lib/graph.js'
@@ -65,8 +65,13 @@ async function attachments(root: string, prefix = ''): Promise<string[]> {
 export interface VaultIntegrationOptions {
   vault: Vault
   graph: Graph
-  /** `from` -> `to`, already merged from aliases and config. */
-  redirects: Record<string, string>
+  /**
+   * `from` -> where it goes and how firmly, already merged from aliases and
+   * config. Built by `buildRedirectRules` in `astro.config.ts`, where the vault
+   * and the config both exist, and written out below in both host formats. The
+   * `permanent` flag is why this is not a plain string map: see `RedirectRule`.
+   */
+  redirects: Record<string, RedirectRule>
   /**
    * Folders whose slug a note already owns, so the folder has no index page.
    *
