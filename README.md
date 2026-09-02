@@ -432,8 +432,17 @@ Full detail, including the slug/URL split and what the build asserts about it:
 npm run dev          # http://localhost:4321
 npm run build        # fetch (if configured), astro build, the build assertions, then finalize
 npm run verify       # the assertions alone, against the current dist/
-npm run verify:full  # also rebuilds with features off, analytics on, RSS on, a homepage set, from an Open Publish snapshot, and at 1,000 notes
-npm test             # 520 unit tests
+npm run verify:full  # also rebuilds with features off, analytics on, RSS on, a homepage set, from an Open Publish snapshot, at 1,000 notes, and over a vault with none of the demo's fixtures
+```
+
+`verify` prints three kinds of line and only one of them stops a build: `FAIL`
+is an invariant jotter guarantees about every site, `note` is an observation
+about your own content, and `skip` is a guard on this repository's demo
+fixtures, which runs only under `JOTTER_DEMO=1`, as CI runs it. See
+[docs/open-publish.md](docs/open-publish.md#two-kinds-of-verify-failure).
+
+```bash
+npm test             # 525 unit tests
 npm run check        # astro check
 npm run clean        # see the note below
 ```

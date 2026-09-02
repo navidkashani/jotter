@@ -304,6 +304,37 @@ Every failure names the file or the setting that caused it.
 
 ---
 
+## Two kinds of verify failure
+
+`verify-build.mjs` runs between `astro build` and `finalize.mjs`, so anything it
+fails on is a site that does not go live. It therefore says out loud which kind
+of thing each line is, and only one of the three can stop a deploy.
+
+| Line | What it means | Stops the build |
+| --- | --- | --- |
+| `FAIL` | An **invariant**: something jotter guarantees about every site it builds. A page without a `<main>`, a dead link rendered as a working `<a>`, a canonical that spells a URL differently from the links pointing at it | Yes |
+| `note` | An **observation**: something true of your content that you decided. Notes embedding files from another origin, an image whose dimensions jotter cannot know, a hand-written link to a page that is not there | No |
+| `skip` | A **demo-integrity guard**: a check that this repository's own demo garden still exercises some case, so the assertions beside it are not passing on an empty set. Meaningless on your vault, and skipped there | No |
+
+So: a `note` is yours to act on, in your own time, and your site is live either
+way. A `FAIL` is a bug in the theme. The vault did not cause it, and no change
+to a note will fix it. Open an issue with the line it printed.
+
+The line at the top of the run says which mode it is in. `JOTTER_DEMO=1` marks
+a build as this repository's own demo, which is what turns the `skip` lines into
+real checks; CI sets it, and nothing about a site built from a snapshot should.
+
+A worked example of the distinction, because it is what the split was written
+for. A vault kept its notes in a folder called `notes`, embedded two PDFs with
+`![[Integrity.pdf]]`, and pasted a tweet and a YouTube URL as `![](…)`. That
+built correctly and then failed eight checks, five of which were about fixtures
+that only exist in `src/content/notes/`. None of the eight was a reason not to
+publish. Today the demo guards skip, the content facts report, and the two real
+bugs in that list are fixed: a PDF emitted as an `<img>` no browser draws, and
+a listing check that read any folder called `notes` as jotter's own index.
+
+---
+
 ## Testing it without a bucket
 
 `test/snapshot.test.ts` runs the real `fetch-content.mjs` against a synthetic
@@ -313,3 +344,10 @@ snapshot, builds it, and asserts on the finished `dist/` that each note is at
 the slug the plugin published, that the old Obsidian address 301s to it without
 moving the note, that an unpublished link is inert, and that `_publish.json`
 carries the snapshot `current.json` named.
+
+It also builds a deliberately unremarkable vault (a folder called `notes`, two
+PDF embeds, a tweet URL, a YouTube URL, and none of the demo's dead links, SVG
+or probe pages) and runs the real `verify-build.mjs` over it with `JOTTER_DEMO`
+removed from the environment. Its exit code is the assertion. That section is
+what stops a check that only the demo can satisfy from ever again being one your
+deploy has to satisfy.

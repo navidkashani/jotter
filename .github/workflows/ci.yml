@@ -54,8 +54,14 @@ jobs:
       - name: Unit tests
         run: npm test
 
-      # JOTTER_DEMO builds /library too, so the component page is covered by
-      # the same assertions as everything else rather than rotting unbuilt.
+      # JOTTER_DEMO marks this as jotter's own demo garden, which does two
+      # things. /library is built, so the component page is covered by the same
+      # assertions as everything else rather than rotting unbuilt. And the
+      # demo-integrity guards in verify-build.mjs run: the checks that the demo
+      # still has a dead link, an SVG, a whitespace probe and a frontmatter
+      # block for the assertions beside them to bite on. Off a demo build those
+      # guards are skipped, because a vault without them is an ordinary vault
+      # and has to be able to deploy. This is the only place they are enforced.
       - name: Build and verify
         run: npm run verify:full
         env:

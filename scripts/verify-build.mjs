@@ -8,9 +8,41 @@
  * ships no JavaScript, and that Astro 7's `compressHTML: 'jsx'` default did not
  * quietly eat the spaces between inline elements.
  *
- *   npm run verify          the checks above, over the current dist/
+ *   npm run verify          the checks below, over the current dist/
  *   npm run verify:full     also rebuilds with features off, analytics on, RSS on,
  *                           a homepage set, and at scale
+ *
+ * ## Three kinds of claim, and only one of them stops a deploy
+ *
+ * This script runs in `npm run build`, ahead of `finalize.mjs`, so whatever it
+ * fails on is a site that does not go live. That makes the distinction below
+ * the most important thing in the file:
+ *
+ *   check()    an **invariant**. Something jotter guarantees about every site
+ *              it builds: a dead link is inert, a page has a `<main>`, the
+ *              canonical spells the URL the links do. A failure is a defect in
+ *              this theme, and the build stops.
+ *
+ *   observe()  an **observation**. Something true of the built site that the
+ *              author decided: how many origins their notes embed from,
+ *              whether every image they wrote carries dimensions. Reported,
+ *              named, and then the build carries on.
+ *
+ *   demo()     a **demo-integrity guard**. "The demo still exercises this, so
+ *              the assertion beside it is not passing on an empty set." A claim
+ *              about *this repository*, and it runs only when this repository's
+ *              own demo garden is what was built.
+ *
+ * The distinction is not decoration. A gate that fails a deploy over content
+ * the author is entitled to write teaches people to delete the gate, and a
+ * user of this theme did exactly that: 96 notes, 114 pages, every content check
+ * green, and eight failures. Five of them were anti-vacuity guards about
+ * fixtures that only exist in this repository; three were true statements
+ * about a vault that embeds a YouTube link and keeps its notes in a folder
+ * called `notes`. Their site is live because they removed this script from
+ * their build command. Every check added here should be able to answer: *whose
+ * fault is it when this fails, and should that person's site stop shipping
+ * over it?*
  */
 import { readFile, readdir, stat, mkdir, writeFile, rm } from 'node:fs/promises'
 import { gunzipSync } from 'node:zlib'
@@ -28,19 +60,63 @@ const ROOT = join(import.meta.dirname, '..')
 const DIST = join(ROOT, 'dist')
 const FULL = process.argv.includes('--full')
 
+/**
+ * Is the build being verified this repository's own demo garden?
+ *
+ * `JOTTER_DEMO` already meant this, one step narrower.
+ * `src/pages/library/[...slug].astro` returns no paths without it, so the
+ * component gallery is a page in CI and absent from a reader's site. The
+ * variable was never "build one more page". It was "this build is jotter
+ * showing itself off", and an extra route is what that implied for routing.
+ * The demo-integrity guards below are what it implies for verification.
+ *
+ * Read exactly the way that page reads it, bare truthiness so `JOTTER_DEMO=`
+ * is off, because the two must never disagree about whether the demo's own
+ * pages are in `dist/`.
+ */
+const DEMO = Boolean(process.env.JOTTER_DEMO)
+
 let failures = 0
-let warnings = 0
+let observations = 0
+let skipped = 0
 
 const pass = (label, detail = '') => console.log(`  ok    ${label}${detail ? `  ${detail}` : ''}`)
 const fail = (label, detail = '') => {
   failures++
   console.log(`  FAIL  ${label}${detail ? `\n        ${detail}` : ''}`)
 }
-const warn = (label, detail = '') => {
-  warnings++
-  console.log(`  warn  ${label}${detail ? `\n        ${detail}` : ''}`)
+const note = (label, detail = '') => {
+  observations++
+  console.log(`  note  ${label}${detail ? `\n        ${detail}` : ''}`)
 }
+const skip = (label) => {
+  skipped++
+  console.log(`  skip  ${label}`)
+}
+
+/** An invariant jotter guarantees. A failure is jotter's, and stops the build. */
 const check = (ok, label, detail = '') => (ok ? pass(label) : fail(label, detail))
+
+/**
+ * An observation about the author's content. Reported and never fatal.
+ *
+ * `strictInDemo` is for the statements that are an author's business on their
+ * site and jotter's own on the demo, because there the content *is* jotter's:
+ * every image in the demo garden is one this repository put there, so "every
+ * image declares its dimensions" is a promise here and a remark elsewhere.
+ * That is what keeps a real regression failing CI while the same measurement,
+ * over a vault full of GIFs and remote images, only reports.
+ */
+const observe = (ok, label, detail = '', { strictInDemo = false } = {}) =>
+  strictInDemo && DEMO ? check(ok, label, detail) : ok ? pass(label) : note(label, detail)
+
+/**
+ * A guard that this repository's demo still covers the case the assertions
+ * beside it are about. Meaningless anywhere else: a vault with no SVG, no dead
+ * links and no `kitchen-sink` page is an ordinary vault, and it must deploy.
+ */
+const demo = (ok, label, detail = '') => (DEMO ? check(ok, label, detail) : skip(label))
+
 const section = (title) => console.log(`\n${title}`)
 
 async function walk(dir, filter, out = []) {
@@ -134,13 +210,121 @@ const decodePath = (path) =>
     })
     .join('/')
 
-/** Everything inside the rendered note body, where our markdown output lands. */
-const proseOf = (html) =>
-  [...html.matchAll(/<div class="note-body prose">([\s\S]*?)<nav class="prev-next"|<div class="note-body prose">([\s\S]*?)<\/div>/g)]
-    .map((m) => m[1] ?? m[2] ?? '')
-    .join('\n')
+/**
+ * The pages jotter wrote.
+ *
+ * `src/integrations/vault.ts` copies every non-markdown file in the vault to
+ * `dist/_vault/` with no extension allowlist, so an `.html` attachment a reader
+ * dropped in their own vault is in `pages` and is *not* jotter's markup. Three
+ * sections named this exemption separately and the rest quietly did not, which
+ * is how "every page has a `<main>` landmark" came to be a check a saved web
+ * page in somebody's vault could fail a deploy with.
+ */
+const authoredOf = (pages) => pages.filter(({ file }) => !file.startsWith(`_vault${sep}`))
+const authored = authoredOf(pages)
 
-console.log(`Verifying ${pages.length} page(s) in dist/\n`)
+/**
+ * Everything inside the rendered note body, where our markdown output lands,
+ * and everything outside it.
+ *
+ * The split is the answer to "whose markup is this?", and several checks below
+ * need it to say anything useful. A dangling `<a href="/gone">` in the nav is
+ * jotter emitting a link to a page it did not build; the same tag inside the
+ * prose is an author who typed a path that is not there. One is a defect in
+ * this theme and one is a typo in a note, they look identical in `dist/`, and
+ * only this tells them apart.
+ */
+const NOTE_BODY = '<div class="note-body prose">'
+
+function proseParts(html) {
+  const parts = []
+  let from = 0
+  for (;;) {
+    const open = html.indexOf(NOTE_BODY, from)
+    if (open === -1) return parts
+
+    /**
+     * To the matching close, counting depth, rather than to the first
+     * `</div>`.
+     *
+     * The first `</div>` is the end of the note body only on a note with no
+     * `<div>` of its own, and a callout is a `<div>`. The regex this replaces
+     * stopped at the callout's close, which put every paragraph after it on
+     * jotter's side of the line: a perfectly ordinary note that opens with a
+     * callout and then embeds a GIF would have failed the build for it.
+     */
+    let depth = 1
+    let i = open + NOTE_BODY.length
+    const body = i
+    while (depth > 0) {
+      const nested = html.indexOf('<div', i)
+      const close = html.indexOf('</div>', i)
+      if (close === -1) {
+        // Unbalanced markup. The rest of the page is the safer answer: this
+        // decides what is *not* asserted against, so over-reaching here would
+        // fail somebody's build rather than under-report on it.
+        parts.push(html.slice(body))
+        return parts
+      }
+      if (nested !== -1 && nested < close) {
+        depth++
+        i = nested + '<div'.length
+        continue
+      }
+      depth--
+      i = close + '</div>'.length
+      if (depth === 0) {
+        /**
+         * `<PrevNext>` renders inside the body div and is not markdown output,
+         * so the region ends where it begins. That boundary was the whole of
+         * the previous rule and is kept: those links are jotter's, and a
+         * dangling one is jotter's to answer for.
+         */
+        const region = html.slice(body, close)
+        const nav = region.indexOf('<nav class="prev-next"')
+        parts.push(nav === -1 ? region : region.slice(0, nav))
+      }
+    }
+    from = i
+  }
+}
+
+const proseOf = (html) => proseParts(html).join('\n')
+
+/** The page minus the note body: nav, breadcrumb, rail, listings, `<head>`. */
+const chromeOf = (html) =>
+  proseParts(html).reduce((rest, part) => (part ? rest.replace(part, '') : rest), html)
+
+/**
+ * Offenders in a set of pages, kept apart by which half of the page they were
+ * found in. `find` is given one region and returns what is wrong with it.
+ */
+function byRegion(pages, find) {
+  const chrome = []
+  const prose = []
+  for (const { file, html } of pages) {
+    for (const hit of find(chromeOf(html))) chrome.push(`${file}: ${hit}`)
+    for (const hit of find(proseOf(html))) prose.push(`${file}: ${hit}`)
+  }
+  return { chrome, prose }
+}
+
+console.log(`Verifying ${pages.length} page(s) in dist/`)
+console.log(
+  DEMO
+    ? "  as this repository's own demo garden, because JOTTER_DEMO is set"
+    : '  as a site built from a vault',
+)
+console.log('')
+console.log('  FAIL  a claim jotter guarantees about every site is broken. The build stops.')
+console.log('  note  something true of this site’s own content. The build carries on.')
+if (!DEMO) console.log('  skip  a guard on this repository’s demo fixtures, which this build is not.')
+if (FULL && !DEMO) {
+  console.log('')
+  console.log('  --full without JOTTER_DEMO=1: the demo-integrity guards below are skipped.')
+  console.log('  CI sets it, and that is what makes a green run mean the demo still covers them.')
+}
+console.log('')
 
 /* ------------------------------------------------------------------ links */
 
@@ -185,36 +369,45 @@ async function internalLinks(pages) {
     if (from.startsWith('/')) served.add(decodePath(from))
   }
 
-  /**
-   * The same exemption `thirdPartyOrigins` names: `dist/_vault/` holds files
-   * the user put in their own vault, and an `.html` attachment among them is
-   * not jotter's markup. Failing over a link somebody else wrote would be this
-   * check inventing a bug.
-   */
-  const authored = pages.filter(({ file }) => !file.startsWith(`_vault${sep}`))
+  const authored = authoredOf(pages)
 
-  const offenders = []
   let checked = 0
-  for (const { file, html } of authored) {
-    for (const [, href] of html.matchAll(/<a\b[^>]*\bhref="([^"]*)"/g)) {
+  const offenders = byRegion(authored, (region) => {
+    const dangling = []
+    for (const [, href] of region.matchAll(/<a\b[^>]*\bhref="([^"]*)"/g)) {
       // Site-absolute only. `//host/x` is another origin, `#x` is this page,
       // and a scheme is somebody else's problem.
       if (!href.startsWith('/') || href.startsWith('//')) continue
       const path = decodePath(href.split('#')[0].split('?')[0])
       const target = path.length > 1 ? path.replace(/\/$/, '') : path
       checked++
-      if (!served.has(target)) offenders.push(`${file}: ${href}`)
+      if (!served.has(target)) dangling.push(href)
     }
-  }
+    return dangling
+  })
 
   check(
-    offenders.length === 0,
-    'every internal link points at a page, a file or a redirect',
-    offenders.slice(0, 12).join('\n        '),
+    offenders.chrome.length === 0,
+    'every internal link jotter emits points at a page, a file or a redirect',
+    offenders.chrome.slice(0, 12).join('\n        '),
+  )
+  /**
+   * The same sweep over the note body, reported rather than asserted. A
+   * hand-written `[see](/notes/moved)` pointing at a page that is not there is
+   * a typo in a note. It is the author's to fix, and not a reason their whole
+   * site cannot deploy. jotter's own guarantee is narrower and is kept
+   * elsewhere: a `[[wikilink]]` that resolves to nothing renders as an inert
+   * span, which is the check three lines above this function's call.
+   */
+  observe(
+    offenders.prose.length === 0,
+    'every internal link a note writes points at a page, a file or a redirect',
+    offenders.prose.slice(0, 12).join('\n        '),
+    { strictInDemo: true },
   )
   // Without this the check above passes loudest on a `dist/` with no links in
   // it at all.
-  check(checked > 0, 'the demo actually has internal links to resolve')
+  demo(checked > 0, 'the demo actually has internal links to resolve')
 }
 
 /**
@@ -238,7 +431,7 @@ async function internalLinks(pages) {
  * the hrefs alone and says how much it covered. `--full` sets both.
  */
 async function producersAgree(pages) {
-  const authored = pages.filter(({ file }) => !file.startsWith(`_vault${sep}`))
+  const authored = authoredOf(pages)
 
   /** The URL each page ought to be spelled as, keyed by its route on disk. */
   const expected = new Map(
@@ -249,24 +442,39 @@ async function producersAgree(pages) {
   )
 
   const offenders = []
+  /**
+   * An `<a href>` inside the note body is the one producer here the author
+   * writes by hand, and `/Wisdom & Approaches/Integrity` typed literally into a
+   * note is a link that works and a spelling that differs. It is collected
+   * apart and reported rather than asserted; the other three are jotter's.
+   */
+  const proseOffenders = []
   const counted = { href: 0, canonical: 0, ogUrl: 0, sitemap: 0, search: 0 }
 
-  const compare = (kind, route, spelling, where) => {
+  const compare = (kind, route, spelling, where, mine = true) => {
     const want = expected.get(route)
     if (want === undefined) return // Not a page; `internalLinks` owns that half.
     counted[kind]++
-    if (spelling !== want) offenders.push(`${kind} ${where}: ${spelling} != ${want}`)
+    if (spelling !== want) (mine ? offenders : proseOffenders).push(`${kind} ${where}: ${spelling} != ${want}`)
   }
 
   /** The path part of a URL that may be absolute or site-relative. */
   const pathOf = (url) => (url.startsWith('/') ? url : new URL(url).pathname)
 
   for (const { file, html } of authored) {
-    for (const [, href] of html.matchAll(/<a\b[^>]*\bhref="([^"]*)"/g)) {
-      if (!href.startsWith('/') || href.startsWith('//')) continue
-      const path = href.split('#')[0].split('?')[0]
-      const route = decodePath(path.length > 1 ? path.replace(/\/$/, '') : path)
-      compare('href', route, path, file)
+    // Walked as two regions rather than filtered afterwards: the same href can
+    // legitimately appear in the nav and in a note, and asking which one a
+    // misspelling came from has to be answered by where it was found.
+    for (const [region, jotters] of [
+      [chromeOf(html), true],
+      [proseOf(html), false],
+    ]) {
+      for (const [, href] of region.matchAll(/<a\b[^>]*\bhref="([^"]*)"/g)) {
+        if (!href.startsWith('/') || href.startsWith('//')) continue
+        const path = href.split('#')[0].split('?')[0]
+        const route = decodePath(path.length > 1 ? path.replace(/\/$/, '') : path)
+        compare('href', route, path, file, jotters)
+      }
     }
 
     const canonical = /<link rel="canonical" href="([^"]*)"/.exec(html)
@@ -320,10 +528,16 @@ async function producersAgree(pages) {
     'every producer of a page’s URL spells it identically',
     offenders.slice(0, 12).join('\n        '),
   )
+  observe(
+    proseOffenders.length === 0,
+    'every link a note writes spells its target the way the page spells itself',
+    proseOffenders.slice(0, 12).join('\n        '),
+    { strictInDemo: true },
+  )
   const covered = Object.entries(counted).filter(([, n]) => n > 0).map(([k, n]) => `${k} ${n}`)
   // Without this the check above passes loudest on a build that emitted none of
-  // them — and three of the four are behind a config key.
-  check(counted.href > 0, 'the demo actually has URLs to compare', covered.join(', '))
+  // them, and three of the four are behind a config key.
+  demo(counted.href > 0, 'the demo actually has URLs to compare', covered.join(', '))
 
   /**
    * Which producers this config actually has, said out loud rather than left to
@@ -344,19 +558,19 @@ async function producersAgree(pages) {
 
 section('Links')
 {
-  const emptyHref = pages.filter(({ html }) =>
+  const emptyHref = authored.filter(({ html }) =>
     /<a\b[^>]*href=(""|'')/.test(html) || /href="undefined"/.test(html) || /href="null"/.test(html),
   )
   check(emptyHref.length === 0, 'no <a> with an empty, undefined or null href', emptyHref.map((p) => p.file).join(', '))
 
-  const anchorDeadLinks = pages.filter(({ html }) => /<a\b[^>]*class="[^"]*dead-link/.test(html))
+  const anchorDeadLinks = authored.filter(({ html }) => /<a\b[^>]*class="[^"]*dead-link/.test(html))
   check(anchorDeadLinks.length === 0, 'every dead link is a <span>, never an <a>', anchorDeadLinks.map((p) => p.file).join(', '))
 
-  const hrefOnSpan = pages.filter(({ html }) => /<span\b[^>]*\bhref=/.test(html))
+  const hrefOnSpan = authored.filter(({ html }) => /<span\b[^>]*\bhref=/.test(html))
   check(hrefOnSpan.length === 0, 'no href attribute left on a dead-link span', hrefOnSpan.map((p) => p.file).join(', '))
 
-  const deadLinkPages = pages.filter(({ html }) => html.includes('class="dead-link"'))
-  check(deadLinkPages.length > 0, 'the demo actually exercises dead links', 'no dead-link span found anywhere')
+  const deadLinkPages = authored.filter(({ html }) => html.includes('class="dead-link"'))
+  demo(deadLinkPages.length > 0, 'the demo actually exercises dead links', 'no dead-link span found anywhere')
 
   await internalLinks(pages)
   await producersAgree(pages)
@@ -366,36 +580,83 @@ section('Links')
 
 section('Images')
 {
-  const offenders = []
-  for (const { file, html } of pages) {
-    for (const [tag] of html.matchAll(/<img\b[^>]*>/g)) {
-      if (!/\bwidth=/.test(tag) || !/\bheight=/.test(tag)) offenders.push(`${file}: ${tag.slice(0, 120)}`)
-    }
-  }
-  check(offenders.length === 0, 'every <img> declares width and height', offenders.join('\n        '))
+  /**
+   * Reserved space, so nothing below the image moves when it arrives.
+   *
+   * jotter fills the dimensions in for every embed it can measure: Astro's
+   * pipeline supplies them for the rasters it processes, `svgIntrinsicSize`
+   * reads them out of an SVG, and an author's `![[x.png|320]]` pipe overrides
+   * both. What is left over is genuinely outside its reach: a GIF, a remote
+   * URL, an `<img>` an author hand-wrote in raw HTML. None of those is a
+   * reason a site cannot go live. Split accordingly.
+   */
+  const missing = byRegion(authored, (region) =>
+    [...region.matchAll(/<img\b[^>]*>/g)]
+      .map(([tag]) => tag)
+      .filter((tag) => !/\bwidth=/.test(tag) || !/\bheight=/.test(tag))
+      .map((tag) => tag.slice(0, 120)),
+  )
+  check(
+    missing.chrome.length === 0,
+    'every <img> jotter emits declares width and height',
+    missing.chrome.join('\n        '),
+  )
+  observe(
+    missing.prose.length === 0,
+    'every <img> in a note declares width and height',
+    missing.prose.join('\n        '),
+    { strictInDemo: true },
+  )
 
-  const total = pages.reduce((n, p) => n + [...p.html.matchAll(/<img\b/g)].length, 0)
-  check(total > 0, 'the demo actually renders images')
+  const total = authored.reduce((n, p) => n + [...p.html.matchAll(/<img\b/g)].length, 0)
+  demo(total > 0, 'the demo actually renders images')
 
-  const optimized = pages.some(({ html }) => /<img[^>]+src="\/_astro\/[^"]+\.(webp|avif)"/.test(html))
-  check(optimized, 'raster embeds go through Astro’s image pipeline')
+  /**
+   * And that they are pictures. This used to pass on a build whose only
+   * `<img>` tags were two PDFs and a tweet URL. `<img src="Integrity.pdf">`
+   * renders in no browser, so the guard above it was satisfied by exactly the
+   * bug the width and height check was reporting.
+   */
+  demo(
+    authored.every(({ html }) =>
+      [...html.matchAll(/<img\b[^>]*\bsrc="([^"]*)"/g)].every(
+        ([, src]) => !/\.(pdf|mp4|webm|mov|mp3|wav|m4a|ogg|flac)(?:[?#]|$)/i.test(src),
+      ),
+    ),
+    'no <img> points at something that is not an image',
+  )
 
-  const svgPassthrough = pages.some(({ html }) => /<img[^>]+src="\/_vault\/[^"]+\.svg"/.test(html))
-  check(svgPassthrough, 'SVG is passed through rather than re-encoded')
+  const optimized = authored.some(({ html }) => /<img[^>]+src="\/_astro\/[^"]+\.(webp|avif)"/.test(html))
+  demo(optimized, 'raster embeds go through Astro’s image pipeline')
+
+  const svgPassthrough = authored.some(({ html }) => /<img[^>]+src="\/_vault\/[^"]+\.svg"/.test(html))
+  demo(svgPassthrough, 'SVG is passed through rather than re-encoded')
 }
 
 /* ------------------------------------------------------- the privacy gate */
 
+/**
+ * Every check in this section names a fixture: `Half-formed.md` and the title
+ * inside it, which exist in `src/content/notes/` and nowhere else. On a vault
+ * that is not this one they are four green ticks over an empty set, the exact
+ * false green this file's header is about, so they say so instead.
+ *
+ * The general form, "no note the gate excluded appears in `dist/`", is a real
+ * and much better check, and it is not this one: it would have to read the
+ * vault's frontmatter rather than `dist/`. `test/vault.test.ts` holds the
+ * publish gate's own logic; what runs here is the end-to-end proof that the
+ * decision survives the build, and that proof needs a known excluded note.
+ */
 section('Publish gate')
 {
   const PRIVATE_TITLE = 'A title that must never reach the site'
   // Over `outputs`, not `pages`: this is jotter's strongest privacy claim and
   // it should read every file that could carry a title out of the vault.
   const leaked = outputs.filter(({ text }) => text.includes(PRIVATE_TITLE))
-  check(leaked.length === 0, 'no unpublished note’s title appears anywhere in dist/', leaked.map((p) => p.file).join(', '))
+  demo(leaked.length === 0, 'no unpublished note’s title appears anywhere in dist/', leaked.map((p) => p.file).join(', '))
 
   const routed = htmlFiles.some((f) => /half-formed/i.test(f))
-  check(!routed, 'no unpublished note has a page of its own')
+  demo(!routed, 'no unpublished note has a page of its own')
 
   /**
    * Anchored on the ways a *URL* is written rather than on the slug alone. The
@@ -408,16 +669,22 @@ section('Publish gate')
   const linkedTo = outputs.filter(({ text }) =>
     /(?:href="|<link>|<guid[^>]*>)[^"<]*half-formed/i.test(text),
   )
-  check(!linkedTo.length, 'nothing links to an unpublished note', linkedTo.map((p) => p.file).join(', '))
+  demo(!linkedTo.length, 'nothing links to an unpublished note', linkedTo.map((p) => p.file).join(', '))
 }
 
 /* -------------------------------------------- the compressHTML: jsx trap */
 
 section('Inline whitespace (the compressHTML: \'jsx\' trap)')
 {
-  const kitchenSink = pages.find((p) => p.file.includes('kitchen-sink'))
+  const kitchenSink = authored.find((p) => p.file.includes('kitchen-sink'))
   if (!kitchenSink) {
-    fail('the whitespace probe page exists', 'kitchen-sink not found in dist/')
+    /**
+     * The probe is a note in this repository's demo garden carrying one line
+     * written to catch the trap. There is nothing for it to be on a vault that
+     * does not have it, and the trap it catches is jotter-wide:
+     * `test/inline.test.ts` covers the same ground on a fixture, every build.
+     */
+    demo(false, 'the whitespace probe page exists', 'kitchen-sink not found in dist/')
   } else {
     const { html } = kitchenSink
     // Source line: `Probe: word *emphasis* [[Zettelkasten]] `code` **strong** end.`
@@ -429,7 +696,7 @@ section('Inline whitespace (the compressHTML: \'jsx\' trap)')
       ['space after </strong>', /<\/strong> end\./],
     ]
     for (const [label, pattern] of expected) {
-      check(pattern.test(html), label, 'whitespace was stripped between inline elements')
+      demo(pattern.test(html), label, 'whitespace was stripped between inline elements')
     }
   }
 
@@ -437,42 +704,60 @@ section('Inline whitespace (the compressHTML: \'jsx\' trap)')
   // separator is suspicious, but a user's own prose can do this legitimately,
   // so it is reported rather than failed.
   const adjacency = /<\/(a|em|strong|code|mark)><(a|em|strong|code|mark)[\s>]/g
-  const suspicious = pages.filter((p) => adjacency.test(proseOf(p.html)))
-  if (suspicious.length) {
-    warn('inline elements touching with no separator', suspicious.map((p) => p.file).join(', '))
-  } else {
-    pass('no inline elements touching with no separator')
-  }
+  const suspicious = authored.filter((p) => adjacency.test(proseOf(p.html)))
+  observe(
+    suspicious.length === 0,
+    'no inline elements touching with no separator',
+    suspicious.map((p) => p.file).join(', '),
+  )
 }
 
 /* -------------------------------------------------------------- structure */
 
 section('Markup')
 {
-  const nested = pages.filter(({ html }) =>
+  /**
+   * Astro 7's compiler no longer silently repairs invalid nesting, so this is
+   * jotter's markdown output to get right, and an author writing raw HTML in
+   * a note can produce the same shape, which is not jotter's to fail them for.
+   */
+  const nested = authored.filter(({ html }) =>
     /<p>(?:(?!<\/p>)[\s\S])*?<(figure|div class="callout"|details|aside|blockquote|table|pre)/.test(proseOf(html)),
   )
-  check(nested.length === 0, 'no block element nested inside a <p>', nested.map((p) => p.file).join(', '))
+  observe(
+    nested.length === 0,
+    'no block element nested inside a <p>',
+    nested.map((p) => p.file).join(', '),
+    { strictInDemo: true },
+  )
 
-  const landmarks = pages.filter(({ html }) => !/<main\b/.test(html))
+  const landmarks = authored.filter(({ html }) => !/<main\b/.test(html))
   check(landmarks.length === 0, 'every page has a <main> landmark', landmarks.map((p) => p.file).join(', '))
 
-  const skip = pages.filter(({ html }) => !/class="skip-link"/.test(html))
-  check(skip.length === 0, 'every page has a skip link', skip.map((p) => p.file).join(', '))
+  const noSkipLink = authored.filter(({ html }) => !/class="skip-link"/.test(html))
+  check(noSkipLink.length === 0, 'every page has a skip link', noSkipLink.map((p) => p.file).join(', '))
 
-  const lang = pages.filter(({ html }) => !/<html[^>]+lang="/.test(html))
+  const lang = authored.filter(({ html }) => !/<html[^>]+lang="/.test(html))
   check(lang.length === 0, 'every page declares a lang')
 
-  const titled = pages.filter(({ html }) => !/<title>[^<]+<\/title>/.test(html))
+  const titled = authored.filter(({ html }) => !/<title>[^<]+<\/title>/.test(html))
   check(titled.length === 0, 'every page has a non-empty title')
 
-  const altless = []
-  for (const { file, html } of pages) {
-    for (const [tag] of html.matchAll(/<img\b[^>]*>/g)) {
-      if (!/\balt=/.test(tag)) altless.push(`${file}: ${tag.slice(0, 100)}`)
-    }
-  }
-  check(altless.length === 0, 'every <img> has an alt attribute', altless.join('\n        '))
+  const altless = byRegion(authored, (region) =>
+    [...region.matchAll(/<img\b[^>]*>/g)]
+      .map(([tag]) => tag)
+      .filter((tag) => !/\balt=/.test(tag))
+      .map((tag) => tag.slice(0, 100)),
+  )
+  check(altless.chrome.length === 0, 'every <img> jotter emits has an alt attribute', altless.chrome.join('\n        '))
+  // jotter always writes one, empty for a decorative embed. A hand-written
+  // `<img>` in a note is the author's, and so is its accessibility.
+  observe(
+    altless.prose.length === 0,
+    'every <img> in a note has an alt attribute',
+    altless.prose.join('\n        '),
+    { strictInDemo: true },
+  )
 
   /**
    * No page shows a reader an i18n *key*.
@@ -491,7 +776,7 @@ section('Markup')
    */
   const keys = Object.keys(JSON.parse(await readFile(join(ROOT, 'src/i18n/en.json'), 'utf8')))
   const leakedKeys = []
-  for (const { file, html } of pages) {
+  for (const { file, html } of authored) {
     for (const key of keys) if (html.includes(key)) leakedKeys.push(`${file}: ${key}`)
   }
   check(
@@ -505,10 +790,10 @@ section('Markup')
    * check above is not passing because nothing renders one. `Kitchen sink.md`
    * sets all four optional fields; the `<dt>` labels come from `en.json`.
    */
-  const fieldRows = pages.filter(({ html }) =>
+  const fieldRows = authored.filter(({ html }) =>
     /<dt>Status<\/dt>/.test(html) && /<dt>Source<\/dt>/.test(html) && /<dt>Series<\/dt>/.test(html),
   )
-  check(
+  demo(
     fieldRows.length > 0,
     'the demo renders a frontmatter field block',
     'no page sets status, source and series, so the label checks are vacuous',
@@ -609,7 +894,7 @@ function directionSection(pages, outputs) {
    * direction. Every per-block `dir` below is stated relative to this one, so
    * a page missing it has no baseline for anything else here to mean.
    */
-  const undeclared = pages.filter(({ html }) => !/<html[^>]+\bdir="(?:ltr|rtl)"/.test(html))
+  const undeclared = authoredOf(pages).filter(({ html }) => !/<html[^>]+\bdir="(?:ltr|rtl)"/.test(html))
   check(
     undeclared.length === 0,
     'every page declares ltr or rtl on <html>',
@@ -625,13 +910,14 @@ function directionSection(pages, outputs) {
    * the feed or a bundled script counts too.
    */
   const auto = outputs.filter(({ text }) => /\bdir="auto"/.test(text))
-  check(
+  observe(
     auto.length === 0,
     'no dir="auto" anywhere in dist/',
     auto.map((p) => p.file).join(', '),
+    { strictInDemo: true },
   )
 
-  const authored = pages.filter(({ file }) => !file.startsWith(`_vault${sep}`))
+  const authored = authoredOf(pages)
   const attributes = authored.map(({ file, html }) => ({
     file,
     html,
@@ -664,7 +950,14 @@ function directionSection(pages, outputs) {
     }
   }
 
-  check(illegal.length === 0, 'no dir with a value other than ltr or rtl', illegal.join('\n        '))
+  /**
+   * The three below walk the note body as well as the chrome, and `dir` is an
+   * attribute an author can write in raw HTML like any other. Where jotter is
+   * the only author, which is the demo, they are enforced.
+   */
+  observe(illegal.length === 0, 'no dir with a value other than ltr or rtl', illegal.join('\n        '), {
+    strictInDemo: true,
+  })
 
   /**
    * The zero-cost claim, and the check that catches a future "simplification"
@@ -675,16 +968,18 @@ function directionSection(pages, outputs) {
    * `dir="ltr"` on an English paragraph is the *correct* answer and marking
    * the Persian would be the bug.
    */
-  check(
+  observe(
     redundant.length === 0,
     'no block repeats the direction it already inherits',
     redundant.slice(0, 12).join('\n        '),
+    { strictInDemo: true },
   )
 
-  check(
+  observe(
     unfounded.length === 0,
     'every rtl block actually contains right-to-left characters',
     unfounded.slice(0, 8).join('\n        '),
+    { strictInDemo: true },
   )
 
   /**
@@ -693,7 +988,7 @@ function directionSection(pages, outputs) {
    * as "blocks that differ from the page" rather than "Persian blocks",
    * because on the RTL rebuild the blocks that differ are the English ones.
    */
-  check(
+  demo(
     marked > 0 && markedTags.size > 1,
     'the demo has blocks running the other way for these checks to bite on',
     `${marked} marked block(s) across ${markedTags.size} kind(s): ${[...markedTags].join(', ')}`,
@@ -705,6 +1000,15 @@ directionSection(pages, outputs)
 
 /* ------------------------------------------------------------------- CSS */
 
+/**
+ * Source lints, not assertions about a built site.
+ *
+ * These read `src/`, and on anyone else's build `src/` is jotter upstream,
+ * unmodified and already green in jotter's own CI, so running them there
+ * checks nothing and can only misfire on the one file the config says is
+ * theirs: `src/styles/custom.css`. A hex colour in a reader's own stylesheet is
+ * not a defect in this theme, and it certainly is not a deploy failure.
+ */
 section('Design tokens')
 {
   const cssFiles = await walk(join(ROOT, 'src', 'styles'), (n) => n.endsWith('.css'))
@@ -716,7 +1020,8 @@ section('Design tokens')
     // tokens.css *is* the palette. print.css deliberately uses device-absolute
     // black and white: a printed page is not themed, and mapping ink to a
     // screen token would put grey text on paper.
-    if (name === 'tokens.css' || name === 'print.css') continue
+    // `custom.css` is the reader's, named as theirs in `jotter.config.ts`.
+    if (name === 'tokens.css' || name === 'print.css' || name === 'custom.css') continue
 
     const source = await readFile(file, 'utf8')
     source.split('\n').forEach((line, i) => {
@@ -727,7 +1032,7 @@ section('Design tokens')
       }
     })
   }
-  check(offenders.length === 0, 'no colour literal outside tokens.css', offenders.join('\n        '))
+  demo(offenders.length === 0, 'no colour literal outside tokens.css', offenders.join('\n        '))
 
   /**
    * Physical properties are how RTL support rots. Logical ones cost nothing.
@@ -743,7 +1048,7 @@ section('Design tokens')
   const physical = []
   for (const file of [...cssFiles, ...(await walk(join(ROOT, 'src'), (n) => n.endsWith('.astro')))]) {
     const name = relative(ROOT, file)
-    if (name.endsWith('print.css')) continue
+    if (name.endsWith('print.css') || name.endsWith('custom.css')) continue
     const source = await readFile(file, 'utf8')
     source.split('\n').forEach((line, i) => {
       const code = line.replace(/\/\*[\s\S]*?\*\//g, '')
@@ -751,7 +1056,7 @@ section('Design tokens')
       if (PHYSICAL.test(code)) physical.push(`${name}:${i + 1}  ${line.trim()}`)
     })
   }
-  check(physical.length === 0, 'no physical inset or spacing properties (RTL safety)', physical.join('\n        '))
+  demo(physical.length === 0, 'no physical inset or spacing properties (RTL safety)', physical.join('\n        '))
 
   const tokensCss = await readFile(join(ROOT, 'src', 'styles', 'tokens.css'), 'utf8')
   const light = readTokens(tokensCss, ':root {')
@@ -781,7 +1086,16 @@ section('Design tokens')
       const ratio = contrastOklch(tokens[fg], tokens[bg])
       if (ratio < min) bad.push(`${fg} on ${bg}: ${ratio.toFixed(2)} (needs ${min})`)
     }
-    check(bad.length === 0, `WCAG AA contrast holds in the ${theme} theme`, bad.join('\n        '))
+    /**
+     * Reported rather than asserted off the demo, because a fork may have
+     * chosen its own palette and that is a choice, not a bug. What this reads
+     * is `tokens.css` alone: an override in `custom.css` changes the shipped
+     * site and is invisible here, so a green line means jotter's own palette
+     * holds, and nothing more.
+     */
+    observe(bad.length === 0, `WCAG AA contrast holds in the ${theme} theme`, bad.join('\n        '), {
+      strictInDemo: true,
+    })
   }
 }
 
@@ -797,8 +1111,22 @@ section('Design tokens')
 async function redirectsAndRobots() {
   const netlify = await readFile(join(DIST, '_redirects'), 'utf8').catch(() => null)
   const vercel = await readFile(join(DIST, 'vercel.json'), 'utf8').catch(() => null)
-  check(netlify !== null, '_redirects was written')
-  check(vercel !== null, 'vercel.json was written')
+
+  /**
+   * Both formats or neither, which is what `src/integrations/vault.ts`
+   * actually promises: which host this lands on is not knowable at build time,
+   * so a site that redirects on Netlify and 404s on Vercel is the failure. A
+   * vault where no note declares an `aliases:` or a `permalink:` has nothing to
+   * redirect and correctly writes no file at all. Asserting the files exist
+   * unconditionally made a vault with no aliases, which is most of them,
+   * unable to deploy.
+   */
+  if (netlify === null && vercel === null) {
+    pass('no redirects in dist/', 'no note declares an alias or a permalink')
+  } else {
+    check(netlify !== null, '_redirects was written', 'vercel.json was, so a Netlify deploy would 404')
+    check(vercel !== null, 'vercel.json was written', '_redirects was, so a Vercel deploy would 404')
+  }
 
   if (netlify && vercel) {
     const fromNetlify = netlify.trim().split('\n').filter(Boolean)
@@ -824,9 +1152,20 @@ async function redirectsAndRobots() {
     )
     check(dangling.length === 0, 'every redirect points at a real page', dangling.map((r) => `${r.source} -> ${r.destination}`).join(', '))
 
-    // And one that shadows a real page would make that page unreachable.
+    /**
+     * And one that shadows a real page would make that page unreachable. Every
+     * redirect jotter writes comes from an `aliases:` or a `permalink:` an
+     * author typed, so an alias that collides with another note's slug is
+     * content: reported, named, and the site still ships with one of the two
+     * addresses working.
+     */
     const shadowing = fromVercel.filter((r) => routes.has(decodePath(r.source)))
-    check(shadowing.length === 0, 'no redirect shadows a real page', shadowing.map((r) => r.source).join(', '))
+    observe(
+      shadowing.length === 0,
+      'no redirect shadows a real page',
+      shadowing.map((r) => r.source).join(', '),
+      { strictInDemo: true },
+    )
   }
 
   const robots = await readFile(join(DIST, 'robots.txt'), 'utf8').catch(() => null)
@@ -1114,21 +1453,7 @@ function thirdPartyOrigins(pages) {
   const attr = (tag, name) => tag.match(new RegExp(`\\b${name}="([^"]*)"`))?.[1] ?? ''
   const has = (tag, name) => new RegExp(`\\b${name}(?=[\\s>=])`).test(tag)
 
-  /**
-   * `src/integrations/vault.ts` copies every non-markdown file in the vault to
-   * `dist/_vault/`, with no extension allowlist — so an `.html` attachment a
-   * note links to is in `pages` and is *not* jotter's markup. Failing over a
-   * `<script src>` in a file the user put in their own vault would be this
-   * check inventing a bug.
-   *
-   * Named separately from the Pagefind exemption above rather than shared with
-   * it. They exempt different things for different reasons — that one exempts a
-   * directory of code from *fetching*, this one exempts a directory of user
-   * files from being read as *jotter's markup* — and one shared predicate would
-   * let a single future edit widen both at once.
-   */
-  const authoredPage = ({ file }) => !file.startsWith(`_vault${sep}`)
-  const authored = pages.filter(authoredPage)
+  const authored = authoredOf(pages)
 
   /**
    * Only the attributes that actually *fetch*. `<a href>` is deliberately not
@@ -1154,13 +1479,27 @@ function thirdPartyOrigins(pages) {
     return urls.filter((url) => url && REMOTE.test(url))
   }
 
+  /**
+   * Split by who wrote the tag, because the two halves are different claims.
+   *
+   * jotter's own chrome must fetch from nowhere but the configured analytics
+   * vendor. That is the promise the README makes, and nothing an author does
+   * to a note can excuse breaking it. A note that embeds a picture from a CDN,
+   * or an author who pasted a YouTube URL, is describing their own page: worth
+   * saying out loud, never worth refusing to publish over. The first version of
+   * this check made no distinction and failed a real deploy over a note with a
+   * YouTube link and a Twitter link in it.
+   */
   const external = authored.flatMap(({ file, html }) =>
-    subresources(html).map((url) => ({ file, url, origin: originOf(url) })),
+    subresources(chromeOf(html)).map((url) => ({ file, url, origin: originOf(url) })),
+  )
+  const inNotes = authored.flatMap(({ file, html }) =>
+    subresources(proseOf(html)).map((url) => ({ file, url, origin: originOf(url) })),
   )
 
-  /** Every external `<script>`, marked or not — the set the marker rule polices. */
+  /** Every external `<script>` jotter's own markup carries, marked or not. */
   const externalScripts = authored.flatMap(({ file, html }) =>
-    tagsOf(html, 'script')
+    tagsOf(chromeOf(html), 'script')
       .filter((tag) => REMOTE.test(attr(tag, 'src')))
       .map((tag) => ({ file, tag, provider: attr(tag, 'data-jotter-analytics') })),
   )
@@ -1168,7 +1507,7 @@ function thirdPartyOrigins(pages) {
   const unmarked = externalScripts.filter((s) => !s.provider)
   check(
     unmarked.length === 0,
-    'every external script in dist/ is one jotter emitted',
+    'every external script jotter emits is one it meant to',
     unmarked.map((s) => `${s.file}: ${attr(s.tag, 'src')}`).join(', '),
   )
 
@@ -1180,8 +1519,18 @@ function thirdPartyOrigins(pages) {
   const origins = [...new Set(external.map((e) => e.origin))]
   check(
     origins.length <= 1,
-    'a page talks to at most one origin that is not its own',
+    'jotter’s own markup talks to at most one origin that is not this site',
     origins.join(', '),
+  )
+
+  const noteOrigins = [...new Set(inNotes.map((e) => e.origin))]
+  observe(
+    noteOrigins.length === 0,
+    'no note loads a file from another origin',
+    noteOrigins.length
+      ? `${noteOrigins.join(', ')}; a reader of those pages is seen by those hosts`
+      : '',
+    { strictInDemo: true },
   )
 
   const providers = [...new Set(externalScripts.map((s) => s.provider))]
@@ -1307,7 +1656,7 @@ section('Search')
     for (const file of indexFiles) if ((await stat(file)).size === 0) emptyFiles.push(relative(DIST, file))
     check(emptyFiles.length === 0, 'no file in the search index is empty', emptyFiles.join(', '))
 
-    const indexed = pages.filter(({ html }) => html.includes('data-pagefind-body'))
+    const indexed = authored.filter(({ html }) => html.includes('data-pagefind-body'))
     check(indexed.length > 0, 'at least one page is marked as indexable')
 
     /**
@@ -1317,12 +1666,30 @@ section('Search')
      * its own. `data-pagefind-body` is site-wide sticky, so this is what
      * enforces it — one stray attribute on a listing template and the whole
      * decision quietly reverses.
+     *
+     * Asked of the attribute's *position*, not the page's path. This used to
+     * read `^(?:notes|tags)/`, which is a guess at which routes are listings
+     * and is wrong the moment a vault has a folder called `notes`, a normal
+     * thing to call a folder. It failed a real deploy over `notes/000-notes`
+     * and `notes/999-openai-o1-models`, two ordinary note pages that were
+     * correctly indexed. `src/layouts/Note.astro` is the only template that
+     * emits the attribute, on its own `<article class="note-layout">`, so
+     * "somewhere else" is exactly the regression this was ever guarding
+     * against, and a folder name cannot look like one.
      */
-    // Anchored on a path separator, not a prefix: a note legitimately slugged
-    // `tags-and-folders` builds `tags-and-folders/index.html`, which a bare
-    // `^tags` would have failed this check over.
-    const listings = indexed.filter((p) => /^(?:notes|tags)[/\\]/.test(p.file) || p.file === '404.html')
-    check(listings.length === 0, 'no listing page is marked as indexable', listings.map((p) => p.file).join(', '))
+    const strays = []
+    for (const { file, html } of indexed) {
+      for (const [tag] of html.matchAll(/<[a-z][^>]*\bdata-pagefind-body\b[^>]*>/gi)) {
+        if (!/^<article\b/i.test(tag) || !/\bclass="note-layout"/.test(tag)) {
+          strays.push(`${file}: ${tag.slice(0, 90)}`)
+        }
+      }
+    }
+    check(
+      strays.length === 0,
+      'nothing but a note is marked as indexable',
+      strays.join('\n        '),
+    )
 
     /**
      * Reported, not asserted, because it is the number the byte budget
@@ -1646,12 +2013,7 @@ async function socialCards(pages) {
   const content = (html, kind, key) =>
     metas(html).filter((tag) => attr(tag, kind) === key).map((tag) => attr(tag, 'content'))
 
-  /**
-   * The same exemption `thirdPartyOrigins` and `internalLinks` name: an `.html`
-   * file a reader put in their own vault is copied to `dist/_vault/` verbatim
-   * and is not jotter's markup.
-   */
-  const authored = pages.filter(({ file }) => !file.startsWith(`_vault${sep}`))
+  const authored = authoredOf(pages)
   const cards = authored.map(({ file, html }) => ({
     file,
     og: content(html, 'property', 'og:image'),
@@ -1748,8 +2110,9 @@ async function socialCards(pages) {
     unserved.join('\n        '),
   )
   // Without this the check above passes loudest on a build whose every card
-  // image points at somebody else's host.
-  check(ours.length > 0, 'at least one card image is served from dist/ itself')
+  // image points at somebody else's host, which is a perfectly ordinary thing
+  // for a vault to do, and only the demo owes an image of its own.
+  demo(ours.length > 0, 'at least one card image is served from dist/ itself')
 
   const wrongCard = cards.filter((c) => c.card !== (c.og.length > 0 ? 'summary_large_image' : 'summary'))
   check(
@@ -1767,9 +2130,9 @@ async function socialCards(pages) {
   const OWN = '/_vault/attachments/slipbox.png'
   const sink = cards.find((c) => c.file.includes('kitchen-sink'))
   if (!sink) {
-    fail('the note that sets image: in frontmatter has a page', 'kitchen-sink not found in dist/')
+    demo(false, 'the note that sets image: in frontmatter has a page', 'kitchen-sink not found in dist/')
   } else {
-    check(
+    demo(
       decodeURIComponent(sink.og[0] ?? '').endsWith(OWN),
       'a note’s own image: beats the site-wide default',
       `${sink.file}: ${sink.og[0] || '(none)'}, wanted one ending ${OWN}`,
@@ -2937,6 +3300,103 @@ if (FULL) {
   }
 
   /**
+   * The regression this whole vocabulary exists for: an ordinary vault, holding
+   * none of this repository's fixtures, verifies clean.
+   *
+   * It is built from the shape that actually failed. A real site published from
+   * the Open Publish plugin, with 96 notes, 114 pages and every content
+   * assertion green, was refused by this script with eight failures, and its
+   * author's fix was to delete `verify-build.mjs` from their build command.
+   * Five of the eight were guards on fixtures that exist only in
+   * `src/content/notes/`; the other three were true statements about content
+   * they were entitled to write. So the vault below has a folder called
+   * `notes`, two PDF embeds, a tweet URL and a YouTube URL written as
+   * `![](…)`, and none of the demo's dead links, SVG, `kitchen-sink` probe or
+   * excluded note.
+   *
+   * The real script is spawned rather than re-entered, with `JOTTER_DEMO`
+   * removed from its environment. CI sets it, and a check on the demo running
+   * here would test the opposite of what this section is for. Its exit code is
+   * the assertion: `0`, or the deploy this is standing in for would not happen.
+   */
+  section('A vault with none of the demo fixtures verifies clean')
+  {
+    const MINIMAL = join(tmpdir(), `jotter-minimal-${process.pid}`)
+    const files = {
+      'index.md': '---\ntitle: Home\n---\n\n# Home\n\nNotes: [[000 Notes]] and [[Integrity]].\n',
+      // A folder called `notes`, which the listing check used to read as its
+      // own `/notes` page and fail every note underneath it.
+      'notes/000 Notes.md':
+        '---\ntitle: Notes\n---\n\n# Notes\n\nOne of them is [[999 OpenAI o1 models]].\n',
+      // The callout is load-bearing. It is a `<div>` inside the note body, and
+      // the embeds come after it: if `proseParts` ever goes back to ending the
+      // body at the first `</div>`, both land on jotter's side of the split and
+      // fail this build instead of reporting.
+      'notes/999 OpenAI o1 models.md':
+        '---\ntitle: OpenAI o1 models\n---\n\n# o1\n\n' +
+        '> [!note] Worth a look\n> A callout, which is a div.\n\n' +
+        '![](https://twitter.com/someone/status/1834417901081694320?s=4)\n\n' +
+        '![](https://www.youtube.com/watch?v=l7TONauJGfc)\n' +
+        '\n![](https://cdn.example.com/no-dimensions.gif)\n',
+      'Wisdom & Approaches/Integrity.md':
+        '---\ntitle: Integrity\n---\n\n# Integrity\n\n![[Integrity.pdf]]\n\n![[Integrity-fa.pdf]]\n',
+      // Never opened by anything: what is being verified is the markup a `.pdf`
+      // in the vault produces, not the document.
+      'Wisdom & Approaches/attachments/Integrity.pdf': '%PDF-1.4\n',
+      'Wisdom & Approaches/attachments/Integrity-fa.pdf': '%PDF-1.4\n',
+    }
+
+    await rm(MINIMAL, { recursive: true, force: true })
+    await mkdir(MINIMAL, { recursive: true })
+    for (const [path, body] of Object.entries(files)) {
+      const parts = path.split('/')
+      if (parts.length > 1) await mkdir(join(MINIMAL, ...parts.slice(0, -1)), { recursive: true })
+      await writeFile(join(MINIMAL, ...parts), body)
+    }
+
+    await clearContentStores(ROOT)
+    const built = await run(['astro', 'build'], {
+      env: { ...process.env, JOTTER_VAULT_OVERRIDE: MINIMAL },
+    })
+
+    if (built.code !== 0) {
+      fail('a vault with none of the demo fixtures builds', built.out.slice(-800))
+    } else {
+      const { JOTTER_DEMO: _demo, ...withoutDemo } = process.env
+      const verified = await runNode([join(ROOT, 'scripts', 'verify-build.mjs')], {
+        env: withoutDemo,
+      })
+      check(
+        verified.code === 0,
+        'and passes verification, with nothing skipped that should have failed',
+        verified.out
+          .split('\n')
+          .filter((line) => /^\s*(FAIL|\s{8}\S)/.test(line))
+          .join('\n        ')
+          .slice(0, 900),
+      )
+      /**
+       * And the PDF embeds are file cards. Without this the check above would
+       * still pass on the `<img src="Integrity.pdf">` this section was written
+       * for: no browser renders it, and no assertion here would have noticed
+       * once the width and height claim stopped being fatal.
+       */
+      const integrity = await readFile(
+        join(DIST, 'wisdom-approaches', 'integrity', 'index.html'),
+        'utf8',
+      ).catch(() => '')
+      check(
+        /<a class="file-embed"[^>]+\.pdf"/.test(integrity) && !/<img[^>]+\.pdf/.test(integrity),
+        'a PDF embed is a file card rather than an <img> no browser can draw',
+        integrity ? '' : 'no page was built for the note that embeds them',
+      )
+    }
+
+    await rm(MINIMAL, { recursive: true, force: true })
+    await clearContentStores(ROOT)
+  }
+
+  /**
    * At whatever `jotter.config.ts` currently says, which is the honest thing
    * for it to do: a forker running this gets their own feature set measured.
    *
@@ -2990,9 +3450,24 @@ if (FULL) {
 /* ------------------------------------------------------------- summary */
 
 console.log('')
-if (warnings) console.log(`${warnings} warning(s).`)
+if (skipped) {
+  console.log(
+    `${skipped} check(s) skipped: they guard this repository's own demo fixtures, ` +
+      'and this build is a vault. CI runs them with JOTTER_DEMO=1.',
+  )
+}
+if (observations) {
+  console.log(
+    `${observations} observation(s) about this site's content. None of them is a defect in ` +
+      'jotter and none of them stopped this build; they are listed above as `note`.',
+  )
+}
 if (failures) {
-  console.error(`${failures} check(s) failed.`)
+  console.error(
+    `${failures} invariant(s) broken. These are claims jotter makes about every site it ` +
+      'builds, so this is a bug in the theme rather than in the vault. ' +
+      'See "Two kinds of verify failure" in docs/open-publish.md.',
+  )
   process.exit(1)
 }
 console.log(FULL ? 'All checks passed, including the full suite.' : 'All checks passed.')

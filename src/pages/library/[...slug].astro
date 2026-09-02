@@ -8,6 +8,11 @@
  * forked site: not a hidden page, not a redirect, not a byte.
  *
  *   JOTTER_DEMO=1 npm run build     builds it at /library
+ *
+ * The variable is not this page's. It marks a build as jotter's own demo
+ * garden, and `scripts/verify-build.mjs` reads it for the same reason: the
+ * anti-vacuity guards there assert that the demo still exercises a case, which
+ * is a claim about this repository rather than about anybody's site.
  */
 import Base from '../../layouts/Base.astro'
 import NoteList from '../../components/NoteList.astro'
