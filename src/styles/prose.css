@@ -262,6 +262,48 @@
   border-radius: var(--radius-l);
 }
 
+.prose :is(video, audio) {
+  inline-size: 100%;
+  max-inline-size: 100%;
+}
+
+/**
+ * A PDF, or any embed whose target is a file rather than a picture.
+ *
+ * A card rather than a viewer (see `embedNode` in `src/markdown/wikilinks.ts`)
+ * for why a published PDF is a link. The extension rides in `data-file` and is
+ * drawn as the card's own label, so a reader knows what they are about to open
+ * before they open it, and nothing here needs an icon font to say so.
+ */
+.prose .file-embed {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-s);
+  border: var(--hairline) solid var(--rule);
+  border-radius: var(--radius-l);
+  background: var(--surface);
+  color: var(--ink-strong);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.prose .file-embed::before {
+  content: attr(data-file);
+  flex: none;
+  font-family: var(--font-code);
+  font-size: var(--step-code);
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  border-inline-end: var(--hairline) solid var(--rule);
+  padding-inline-end: var(--space-xs);
+}
+
+.prose .file-embed:hover {
+  border-color: var(--rule-strong);
+  color: var(--accent);
+}
+
 .prose .embed-figure {
   margin-block: 2em;
   display: flex;

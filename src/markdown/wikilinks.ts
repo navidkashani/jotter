@@ -14,7 +14,7 @@
  * basename of the target they typed. `My Very Private Title` stays in the vault.
  */
 import { resolveLink, resolveAsset, displayFor, liveLabel, splitTarget } from '../lib/resolve.js'
-import { parseEmbedPipe, isMediaTarget, isOptimizable } from '../lib/embed.js'
+import { parseEmbedPipe, isMediaTarget, isOptimizable, mediaKind, fileName, type MediaKind } from '../lib/embed.js'
 import { noteHref, assetHref, relativeAssetPath } from '../lib/href.js'
 import { decodeSlug } from '../lib/url.js'
 import { anchorFor } from '../lib/protected.js'
@@ -44,6 +44,12 @@ interface ImageNode extends Positioned {
 
 const EXTERNAL = /^(?:[a-z][a-z0-9+.-]*:|\/\/|#|\/)/i
 
+/**
+ * An embed target on somebody else's origin. A single leading slash is ours and
+ * a `data:` URI is nobody's, so both are left exactly as the author wrote them.
+ */
+const REMOTE = /^(?:[a-z][a-z0-9+.-]*:)?\/\//i
+
 /** Mark a node inert. `href: null` stops the link->hast step emitting an href. */
 const deadLink = (ctx: VisitorContext, node: unknown, label?: string) => {
   ctx.setProperty(node, 'data', {
@@ -68,6 +74,16 @@ interface Embed {
   assetPath?: string
   width?: number
   height?: number
+}
+
+/** What the embed visitors need to know about one `![[…]]` or `![](…)`. */
+interface DescribedEmbed extends Embed {
+  wiki: boolean
+  remote: boolean
+  target: string
+  kind: MediaKind | undefined
+  caption?: string
+  alt: string
 }
 
 /**
@@ -136,19 +152,99 @@ export function wikilinks(doc: DocumentContext) {
   }
 
   /** Shared by the `image` visitor and the lone-image `paragraph` visitor. */
-  const describeEmbed = (node: ImageNode, ctx: VisitorContext) => {
+  const describeEmbed = (node: ImageNode, ctx: VisitorContext): DescribedEmbed | undefined => {
     const wiki = isWikiSyntax(node, ctx)
     const target = node.url
-    if (!wiki && EXTERNAL.test(target)) return undefined
+    const remote = !wiki && REMOTE.test(target)
+    // A site-absolute `/x.png`, a `data:` URI, a bare `#fragment`: an address
+    // the author wrote in full, pointing at something the vault does not hold.
+    if (!wiki && !remote && EXTERNAL.test(target)) return undefined
 
     // Only a wikilink embed carries Obsidian's pipe rule; a markdown image's
     // `alt` is just alt text.
     const pipe = wiki ? wikiPipe(node, ctx) : undefined
     const { width, height, caption } = parseEmbedPipe(pipe)
 
-    const assetPath = resolveAsset(target, fromPath, vault)
+    const assetPath = remote ? undefined : resolveAsset(target, fromPath, vault)
     const alt = caption ?? (wiki ? displayFor(target) : (node.alt ?? ''))
-    return { wiki, target, assetPath, width, height, caption, alt }
+    /**
+     * A local target with an extension jotter does not recognise is still an
+     * image, which is what `![](notes/scan.tiff)` has always rendered as, and
+     * the file is in the vault either way. A *remote* one is not: nothing says
+     * `https://twitter.com/user/status/123` is a picture, and an `<img>` of it
+     * is a broken-image icon on every reader's screen.
+     */
+    const kind = mediaKind(target) ?? (remote ? undefined : 'image')
+    return { wiki, remote, target, kind, assetPath, width, height, caption, alt }
+  }
+
+  /**
+   * What a file embed is labelled: the author's caption, then the alt text they
+   * wrote, then the file's own name. For a remote target with none of those it
+   * is the URL itself, because there is nothing else honest to call it.
+   */
+  const embedLabel = (embed: DescribedEmbed): string =>
+    embed.caption ||
+    (embed.wiki ? '' : embed.alt) ||
+    (embed.remote ? embed.target : fileName(embed.assetPath ?? embed.target))
+
+  /**
+   * The element an embed becomes, for every kind except a picture: an `image`
+   * node is left alone so Astro's pipeline still sees one.
+   *
+   * **A PDF is a link, not an `<object>` or an `<iframe>`.** Obsidian shows an
+   * inline viewer, and three things make that the wrong translation to a
+   * published page: an embedded PDF downloads the whole file on page load,
+   * which is megabytes charged to a reader who was skimming; mobile browsers
+   * render it as a blank box or a first page with no way to turn it; and the
+   * browser's own full-window viewer, which a link opens, is better than a
+   * 400px pane in every way that matters to somebody who actually wants to read
+   * the document. The author's intent, *put this document here*, is served by
+   * a named, clickable card that says what the file is.
+   *
+   * Video and audio keep their players, because those elements exist, cost no
+   * JavaScript and stream rather than download. `preload="metadata"` is what
+   * keeps the promise the byte budget makes: a header, not the file.
+   */
+  const embedNode = (embed: DescribedEmbed) => {
+    const src = embed.remote
+      ? embed.target
+      : embedSrc(embed.assetPath as string, fromPath, config.images)
+    const size = embedSize(embed, vault)
+
+    if (embed.kind === 'video' || embed.kind === 'audio') {
+      return {
+        type: 'mediaEmbed',
+        data: {
+          hName: embed.kind,
+          hProperties: {
+            src,
+            controls: true,
+            preload: 'metadata',
+            ...(embed.kind === 'video' ? size : {}),
+          },
+        },
+        children: [],
+      }
+    }
+
+    if (embed.kind === 'image') return undefined
+
+    return {
+      type: 'fileEmbed',
+      data: {
+        hName: 'a',
+        hProperties: {
+          className: ['file-embed'],
+          href: src,
+          'data-file': fileName(embed.target).split('.').slice(1).pop()?.toLowerCase() ?? 'link',
+          // A remote embed is a link off the site, and gets what every other
+          // link off the site gets.
+          ...(embed.remote ? { rel: 'noopener' } : {}),
+        },
+      },
+      children: [{ type: 'text', value: embedLabel(embed) }],
+    }
   }
 
   return {
@@ -212,7 +308,7 @@ export function wikilinks(doc: DocumentContext) {
         if (parent?.type === 'paragraph' && parent.children?.length === 1) return
       }
 
-      if (!embed.assetPath) {
+      if (!embed.remote && !embed.assetPath) {
         ctx.replaceNode(node, {
           type: 'missingEmbed',
           data: { hName: 'span', hProperties: { className: ['dead-link', 'dead-embed'] } },
@@ -225,7 +321,15 @@ export function wikilinks(doc: DocumentContext) {
         return
       }
 
-      ctx.setProperty(node, 'url', embedSrc(embed.assetPath, fromPath, config.images))
+      // A player or a file card replaces the node outright; a picture stays an
+      // `image`, because Astro's pipeline only processes the node type it knows.
+      const replacement = embedNode(embed)
+      if (replacement) {
+        ctx.replaceNode(node, replacement)
+        return
+      }
+
+      ctx.setProperty(node, 'url', embed.remote ? embed.target : embedSrc(embed.assetPath as string, fromPath, config.images))
       // A numeric pipe is a size, not alt text: Satteri puts the pipe value in
       // `alt` either way, so `![[x.png|320]]` would otherwise read as "320".
       ctx.setProperty(node, 'alt', embed.alt)
@@ -247,19 +351,27 @@ export function wikilinks(doc: DocumentContext) {
       if (only?.type !== 'image') return
 
       const embed = describeEmbed(only, ctx)
-      if (!embed?.assetPath || !embed.caption) return
+      if (!embed || (!embed.remote && !embed.assetPath) || !embed.caption) return
       if (embed.wiki && !isMediaTarget(embed.target)) return
+
+      /**
+       * The caption is dropped from the embed itself before it is built: it is
+       * about to be the `<figcaption>`, and a file card labelled with the same
+       * words directly above it reads as a stutter. Its own name is what the
+       * card should say.
+       */
+      const inner = embedNode({ ...embed, caption: undefined }) ?? {
+        type: 'image',
+        url: embed.remote ? embed.target : embedSrc(embed.assetPath as string, fromPath, config.images),
+        alt: embed.alt,
+        ...((size) => (size ? { data: { hProperties: size } } : {}))(embedSize(embed, vault)),
+      }
 
       ctx.replaceNode(node, {
         type: 'figure',
         data: { hName: 'figure', hProperties: { className: ['embed-figure'] } },
         children: [
-          {
-            type: 'image',
-            url: embedSrc(embed.assetPath, fromPath, config.images),
-            alt: embed.alt,
-            ...((size) => (size ? { data: { hProperties: size } } : {}))(embedSize(embed, vault)),
-          },
+          inner,
           {
             type: 'figcaption',
             data: { hName: 'figcaption' },

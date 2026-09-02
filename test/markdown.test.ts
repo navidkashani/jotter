@@ -85,6 +85,46 @@ describe('embeds', () => {
     // which Astro 7's compiler no longer silently repairs.
     expect(html).not.toMatch(/<p>(?:(?!<\/p>)[\s\S])*?<figure/)
   })
+
+  /**
+   * Every one of these used to be an `<img>`. Four of the five render as a
+   * broken-image icon in every browser there is, and the fifth, the PDF, was
+   * what let the build assertion "the demo actually renders images" pass while
+   * the page showed nothing.
+   */
+  it('renders a PDF embed as a named file card, not an <img>', () => {
+    expect(html).toContain(
+      '<a class="file-embed" href="/_vault/attachments/paper.pdf" data-file="pdf">paper.pdf</a>',
+    )
+    expect(html).not.toMatch(/<img[^>]+\.pdf/)
+  })
+
+  it('gives a captioned PDF its own name on the card and the caption below', () => {
+    expect(html).toContain(
+      '<figure class="embed-figure"><a class="file-embed" href="/_vault/attachments/paper.pdf"' +
+        ' data-file="pdf">paper.pdf</a><figcaption>The paper itself</figcaption></figure>',
+    )
+  })
+
+  it('gives video and audio their own players, preloading only metadata', () => {
+    expect(html).toContain('<video src="/_vault/attachments/clip.mp4" controls preload="metadata">')
+    expect(html).toContain('<audio src="/_vault/attachments/sound.mp3" controls preload="metadata">')
+    expect(html).not.toMatch(/<img[^>]+\.(?:mp4|mp3)/)
+  })
+
+  it('links a remote embed that names no image, rather than fetching it', () => {
+    // `![](https://twitter.com/…)` is an address, not a picture. An <img> of it
+    // is a broken icon; an <iframe> of it would put another origin in the page.
+    expect(html).toContain(
+      '<a class="file-embed" href="https://twitter.com/someone/status/1834417901081694320?s=4"' +
+        ' data-file="link" rel="noopener">',
+    )
+    expect(html).not.toMatch(/<img[^>]+twitter\.com/)
+  })
+
+  it('still renders a remote embed that does name an image', () => {
+    expect(html).toContain('<img src="https://cdn.example.com/photo.png" alt="">')
+  })
 })
 
 describe('callouts', () => {

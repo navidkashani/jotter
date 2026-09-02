@@ -29,3 +29,13 @@ See [[private/Secret Log|the private one]] and [[Nothing At All]].
 ```
 
 Inline `[[AlsoLiteral]]` too.
+
+![[paper.pdf]]
+
+![[clip.mp4]] and ![[sound.mp3]]
+
+![[paper.pdf|The paper itself]]
+
+![](https://twitter.com/someone/status/1834417901081694320?s=4)
+
+![](https://cdn.example.com/photo.png)

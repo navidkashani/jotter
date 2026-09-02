@@ -27,10 +27,50 @@ export function parseEmbedPipe(pipe: string | undefined | null): EmbedPipe {
   }
 }
 
-/** Extensions Obsidian embeds as media rather than transcluding as a note. */
-const MEDIA = /\.(png|jpe?g|gif|webp|avif|svg|bmp|mp4|webm|ogv|mov|mp3|wav|m4a|ogg|flac|pdf)$/i
+/**
+ * What kind of thing an embed target is, by its extension.
+ *
+ * Obsidian dispatches on exactly this: `![[x.png]]` is a picture, `![[x.mp4]]`
+ * a player, `![[x.pdf]]` a document, `![[Note]]` a transclusion. jotter used to
+ * collapse the first three into an `<img>`, which is a broken image icon for
+ * two of them: `<img src="Integrity.pdf">` renders in no browser.
+ *
+ * `undefined` means "not a file kind this knows", which for a local target is
+ * a note to transclude and for a remote one is a page to link to.
+ */
+export type MediaKind = 'image' | 'video' | 'audio' | 'document'
 
-export const isMediaTarget = (target: string): boolean => MEDIA.test(target.split('#')[0].trim())
+const KINDS: ReadonlyArray<readonly [RegExp, MediaKind]> = [
+  [/\.(png|jpe?g|gif|webp|avif|svg|bmp)$/i, 'image'],
+  [/\.(mp4|webm|ogv|mov)$/i, 'video'],
+  [/\.(mp3|wav|m4a|ogg|flac)$/i, 'audio'],
+  [/\.pdf$/i, 'document'],
+]
+
+/**
+ * The query string is cut as well as the fragment, because this is asked of
+ * remote URLs too: `![](https://twitter.com/user/status/123?s=4)` has no
+ * extension either way, but `https://cdn.example.com/photo.png?v=2` is a
+ * picture and a `#`-only split would miss it.
+ */
+export function mediaKind(target: string): MediaKind | undefined {
+  const path = target.split('#')[0].split('?')[0].trim()
+  return KINDS.find(([pattern]) => pattern.test(path))?.[1]
+}
+
+/** Targets Obsidian embeds as media rather than transcluding as a note. */
+export const isMediaTarget = (target: string): boolean => mediaKind(target) !== undefined
+
+/** The file's own name, which is what a document or download card is labelled. */
+export function fileName(target: string): string {
+  const path = target.split('#')[0].split('?')[0].trim()
+  const base = path.split('/').pop() ?? path
+  try {
+    return decodeURIComponent(base)
+  } catch {
+    return base
+  }
+}
 
 /** Images Astro must not attempt to re-encode. */
 const UNOPTIMIZABLE = /\.(svg|gif)$/i

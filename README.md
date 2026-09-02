@@ -267,6 +267,10 @@ which is what every link to a jotter site was until you set one.
 | `![[image.png]]` | Optimized to AVIF/WebP with intrinsic dimensions |
 | `![[image.png\|300]]`, `\|400x200` | A number is a **size** |
 | `![[image.png\|Caption]]` | Anything else is a **caption** → `<figure>` |
+| `![[clip.mp4]]`, `![[song.mp3]]` | `<video>` / `<audio controls preload="metadata">` |
+| `![[paper.pdf]]` | A named file card linking to the document. See below |
+| `![](https://…/photo.png)` | A remote `<img>`, left exactly where the author pointed it |
+| `![](https://youtube.com/watch?v=…)` | A link. jotter embeds no third-party player. See below |
 | `![[Note]]`, `![[Note#Section]]` | Transcluded inline, depth-limited, cycle-guarded |
 | `> [!note] Title`, `[!x]-`, `[!x]+` | Callouts, collapsible variants native `<details>` |
 | `==highlight==` | `<mark>` |
@@ -278,6 +282,23 @@ which is what every link to a jotter site was until you set one.
 **Out of scope, deliberately:** Dataview, `.canvas`, Excalidraw, stacked notes,
 comments, Mermaid, KaTeX rendering. Listed here rather than left to be
 discovered.
+
+**An embed renders as the kind of thing its target is**, which is the one place
+jotter reads Obsidian's behaviour rather than copying it.
+
+A PDF is a link, not an inline viewer. Obsidian shows one because it is a
+desktop app opening a local file; a published page is not, and an `<object>`
+downloads the whole document on page load for a reader who was skimming, renders
+as a blank box or an unturnable first page on mobile, and gives them a 400px
+pane where the browser's own full-window viewer is one click away. The card
+carries the file's name and extension, so a reader knows what they are opening.
+
+A remote URL that names no image is a link for the same reason the analytics
+feature is opt-in: `![](https://youtube.com/watch?v=…)` renders an embedded
+player in Obsidian, and doing that here would put Google's script on a page
+whose author only pasted a URL. Anything ending in an image extension is still
+an `<img>`. What is never emitted is `<img src="…/watch?v=x">`, which was the
+old behaviour and is a broken-image icon on every screen.
 
 ### An authoritative link index
 
