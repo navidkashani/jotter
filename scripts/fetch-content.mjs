@@ -325,7 +325,7 @@ async function main() {
 
   const { options, notes, warnings: siteWarnings } = mapSite(snapshot.site, {
     url,
-    folderNames: folderNamesFor(entries),
+    folderNames: folderNamesFor(entries, snapshot.site?.folders),
   })
   for (const message of notes) note(message)
   for (const message of siteWarnings) warn(message)

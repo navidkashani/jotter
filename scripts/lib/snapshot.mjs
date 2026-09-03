@@ -177,9 +177,15 @@ export function oldAddressesFor(file, slug, redirects = []) {
  * `wisdom-approaches`, `wp-statistics` where Obsidian Publish reads `About`,
  * `Wisdom & Approaches`, `WP Statistics`.
  *
- * The real names never left, though: the manifest is keyed by the original
- * vault path. So this zips each key's directory segments against its slug's,
- * and no plugin change is needed.
+ * The plugin now answers this outright, in `site.folders`, and that answer wins
+ * where it exists: it is the panel's own labels, so the sidebar reads exactly
+ * what the Customize navigation dialog showed, and it can carry a name jotter
+ * has no way to see, like the title an index page gave its folder.
+ *
+ * The zip below stays as the fallback, because a snapshot published before
+ * `site.folders` existed still has to build. The real names never left it: the
+ * manifest is keyed by the original vault path, so this zips each key's
+ * directory segments against its slug's and needs nothing from the plugin.
  *
  * **A pair whose segment counts differ is skipped**, which is the one case that
  * would otherwise be worse than doing nothing: a `permalink:` can move a note
@@ -191,9 +197,12 @@ export function oldAddressesFor(file, slug, redirects = []) {
  * correction, and the map is written into a config file somebody reads.
  *
  * @param entries `Object.entries(snapshot.files)`
+ * @param {unknown} [published] `snapshot.site.folders`, keyed by the slug of a
+ *   folder's index page, which is how every folder in that contract is named.
+ *   Absent on any snapshot published before that key existed.
  * @returns {Record<string, string>} slug path -> display name
  */
-export function folderNamesFor(entries) {
+export function folderNamesFor(entries, published) {
   /** @type {Record<string, string>} */
   const names = {}
   for (const [path, file] of entries) {
@@ -207,6 +216,18 @@ export function folderNamesFor(entries) {
       const key = slugFolders.slice(0, i + 1).join('/')
       if (!key || names[key] !== undefined || slugFolders[i] === folders[i]) continue
       names[key] = folders[i]
+    }
+  }
+
+  // The plugin's answer last, so it wins where it has one. Strings only, and
+  // only the `<folder>/index` shape the contract specifies: this is data off
+  // the network on its way into a config file and then into a page.
+  if (published && typeof published === 'object' && !Array.isArray(published)) {
+    for (const [key, name] of Object.entries(published)) {
+      if (typeof key !== 'string' || typeof name !== 'string' || name.length === 0) continue
+      if (!key.endsWith('/index')) continue
+      const folder = key.slice(0, -'/index'.length)
+      if (folder.length > 0) names[folder] = name
     }
   }
   return names

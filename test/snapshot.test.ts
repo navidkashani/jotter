@@ -563,6 +563,48 @@ describe('folders keep the names the vault gave them', () => {
     expect(folderNamesFor(entries({ 'notes/Plain.md': 'notes/plain' }))).toEqual({})
   })
 
+  it('takes the plugin\'s own answer where the snapshot carries one', () => {
+    // `site.folders` is the panel's labels, so the sidebar reads exactly what
+    // Customize navigation showed.
+    expect(
+      folderNamesFor(entries({ 'Notes/Alpha.md': 'notes/alpha' }), {
+        'notes/index': 'Field Guide',
+      }),
+    ).toEqual({ notes: 'Field Guide' })
+  })
+
+  it('still zips the paths when the snapshot predates that key', () => {
+    expect(
+      folderNamesFor(entries({ 'Wisdom & Approaches/Integrity.md': 'wisdom-approaches/integrity' }), undefined),
+    ).toEqual({ 'wisdom-approaches': 'Wisdom & Approaches' })
+  })
+
+  it('fills the gaps from the zip, so half an answer is not half a sidebar', () => {
+    expect(
+      folderNamesFor(
+        entries({
+          'Notes/Alpha.md': 'notes/alpha',
+          'WP Statistics/Setup.md': 'wp-statistics/setup',
+        }),
+        { 'notes/index': 'Field Guide' },
+      ),
+    ).toEqual({ notes: 'Field Guide', 'wp-statistics': 'WP Statistics' })
+  })
+
+  it('refuses anything that is not a folder key naming a string', () => {
+    // On its way into a config file and then into a page, so a snapshot off the
+    // network is not trusted to have put the right shapes in it.
+    expect(
+      folderNamesFor(entries({ 'Notes/Alpha.md': 'notes/alpha' }), {
+        'notes/index': 'Notes',
+        'loose-key': 'Not A Folder',
+        '/index': 'Nameless',
+        'bad/index': 42,
+        'empty/index': '',
+      } as Record<string, unknown>),
+    ).toEqual({ notes: 'Notes' })
+  })
+
   it('ignores attachments, which are written at their vault path', () => {
     expect(
       folderNamesFor(entries({ 'My Attachments/Diagram.png': 'my-attachments/diagram.png' })),
