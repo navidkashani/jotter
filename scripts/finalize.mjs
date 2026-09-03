@@ -33,6 +33,31 @@ const ROOT = process.cwd()
 const STATE_FILE = join(ROOT, '.op-build-state.json')
 const DIST = join(ROOT, 'dist')
 
+/**
+ * Which jotter built this site, read off `package.json` rather than written
+ * here, so a release bumps one number in one file.
+ *
+ * The reason it goes on the wire at all: a site made from this repository is a
+ * *copy*, and a copy has no link back. When jotter fixes something, nothing
+ * tells the person running it, and nothing ever will unless the site says which
+ * version it is. The plugin already fetches this file on every publish
+ * (`plugin/src/builders/webhook.ts`), so this is the one channel that exists,
+ * costs nothing and reaches every deployed site. See `docs/updating.md`.
+ *
+ * Never fatal. A missing or unreadable `package.json` means the marker goes out
+ * without the field, which is exactly what an older starter's marker looks like,
+ * and the plugin already has to handle that.
+ */
+async function starter() {
+  try {
+    const pkg = JSON.parse(await readFile(join(ROOT, 'package.json'), 'utf8'))
+    if (typeof pkg?.name !== 'string' || typeof pkg?.version !== 'string') return undefined
+    return { name: pkg.name, version: pkg.version }
+  } catch {
+    return undefined
+  }
+}
+
 const log = (message) => console.log(`[open-publish] ${message}`)
 
 function fail(message) {
@@ -61,11 +86,22 @@ async function main() {
    * (`plugin/src/builders/webhook.ts`), to know that the snapshot it just
    * pushed is the one being served. Without it every publish ends in "still
    * waiting" on a site that went live minutes earlier.
+   *
+   * `starter` rides along on the same request. It is not needed to answer "is
+   * my publish live", which is what the poll is for; it answers the question
+   * nothing else can reach a deployed site to ask, which is "is the theme this
+   * site runs the current one".
    */
+  const running = await starter()
+
   try {
     await writeFile(
       join(DIST, '_publish.json'),
-      JSON.stringify({ snapshot: state.snapshot, builtAt: Date.now() }, null, 2) + '\n',
+      JSON.stringify(
+        { snapshot: state.snapshot, builtAt: Date.now(), ...(running ? { starter: running } : {}) },
+        null,
+        2,
+      ) + '\n',
       'utf8',
     )
   } catch (error) {
@@ -100,7 +136,11 @@ async function main() {
   const merged = existing.trim() ? `${existing.trimEnd()}\n\n${rules.join('\n')}\n` : `${rules.join('\n')}\n`
   await writeFile(join(DIST, '_headers'), merged, 'utf8')
 
-  log(`published snapshot ${state.snapshot}`)
+  log(
+    running
+      ? `published snapshot ${state.snapshot} on ${running.name} ${running.version}`
+      : `published snapshot ${state.snapshot}`,
+  )
 }
 
 main().catch((error) => fail(error.stack ?? String(error)))

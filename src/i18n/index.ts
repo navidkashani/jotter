@@ -11,13 +11,28 @@ import { config } from '../lib/site.js'
 
 type Strings = Record<string, string>
 
-const locales: Record<string, Strings> = { en }
-
 /**
- * Add a locale by dropping `src/i18n/<code>.json` beside `en.json` and
- * registering it here. Kept explicit rather than a glob import so an unused
- * translation never reaches the bundle.
+ * Add a locale by dropping `src/i18n/<code>.json` beside `en.json`. That is the
+ * whole procedure: nothing is registered here, so a translation is a file you
+ * add rather than a file you add *and* a line you edit in a file upstream owns.
+ * Which matters more than the keystroke it saves: that line was in a tracked
+ * file every update touches, so shipping a translation meant taking a merge
+ * conflict for it later.
+ *
+ * The pattern must be a static string literal; Vite resolves it at build time.
+ *
+ * The explicit list this replaced was justified as keeping an unused
+ * translation out of the bundle, and that reason does not hold: this module is
+ * imported only from `.astro` frontmatter, so every line of it runs during the
+ * build and none of it is shipped to a reader. What a glob adds to `dist/` is
+ * nothing at all.
  */
+const locales: Record<string, Strings> = Object.fromEntries(
+  Object.entries(
+    import.meta.glob('./*.json', { eager: true }) as Record<string, { default: Strings }>,
+  ).map(([path, module]) => [path.slice('./'.length, -'.json'.length), module.default]),
+)
+
 /**
  * The translation for a tag, trying the whole tag before its language alone.
  *

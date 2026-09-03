@@ -23,6 +23,19 @@ permissions:
 
 jobs:
   verify:
+    # This repository only. Everything below is jotter's own maintenance: it
+    # rewrites `jotter.config.ts`, builds a synthetic 1,000-note vault and
+    # asserts against fixtures that exist in the demo garden and nowhere else.
+    # None of it is a claim about a *user's* site, and all of it would run on
+    # every push to one.
+    #
+    # Guarded rather than deleted, because a fork or a template copy that
+    # deletes this file turns every future upstream change to it into a
+    # conflict, and the whole point of the surrounding work is that updates
+    # stay mergeable. Guarded rather than left to GitHub, too: GitHub disables
+    # *scheduled* workflows on forks and nothing else, so a push-triggered job
+    # runs in a user's repository on the first commit they make.
+    if: github.repository == 'navidkashani/jotter'
     runs-on: ubuntu-latest
 
     steps:

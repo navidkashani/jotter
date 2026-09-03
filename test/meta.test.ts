@@ -110,6 +110,45 @@ describe('nothing in src/lib is written for nobody', () => {
   })
 })
 
+/**
+ * The third comparison of the same shape, one directory over.
+ *
+ * `src/user/` is the seam that makes jotter updatable: a component dropped in
+ * there replaces one of jotter's without editing one of jotter's, so nothing
+ * a person customises has to live in a file upstream also edits. Its whole
+ * interface is a filename, which means there is nothing to typecheck and
+ * nothing that fails loudly: a slot documented but never wired is a file
+ * somebody writes, deploys, and never sees render.
+ */
+describe('every override slot jotter documents is a slot jotter looks for', () => {
+  const layouts = ['src/layouts/Base.astro', 'src/layouts/Note.astro'].map(read).join('\n')
+
+  /** `override('Header')` in a layout: the only thing that makes a slot real. */
+  const wired = new Set([...layouts.matchAll(/\boverride\('(\w+)'\)/g)].map(([, name]) => name))
+
+  /** The first column of the table in `src/user/README.md`, as `Header.astro`. */
+  const documented = new Set(
+    [...read(join('src', 'user', 'README.md')).matchAll(/^\| `(\w+)\.astro` \|/gm)].map(
+      ([, name]) => name,
+    ),
+  )
+
+  it('has slots at all, so neither list below can pass by being empty', () => {
+    expect(wired.size).toBeGreaterThan(3)
+  })
+
+  it('documents every slot it looks for', () => {
+    expect([...wired].filter((name) => !documented.has(name)), 'wired and undocumented').toEqual([])
+  })
+
+  it('looks for every slot it documents', () => {
+    expect(
+      [...documented].filter((name) => !wired.has(name)),
+      'documented and never looked for: a file somebody would write and never see render',
+    ).toEqual([])
+  })
+})
+
 describe('nothing in en.json is translated for nobody', () => {
   const strings = Object.keys(JSON.parse(read(join('src', 'i18n', 'en.json'))))
 

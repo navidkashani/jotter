@@ -6,10 +6,8 @@
  * rebuilding them per page is the difference between a fast build and a slow
  * one.
  */
-import { resolve } from 'node:path'
-
 import jotter from '../../jotter.config'
-import { scanVault, type VaultNote } from './vault.js'
+import { resolveVaultRoot, scanVault, type VaultNote } from './vault.js'
 import { buildGraph } from './graph.js'
 import { buildTree, folders, neighbours } from './tree.js'
 import { tagTree, expandTag } from './tags.js'
@@ -22,8 +20,7 @@ export const config = jotter
  * anything importing this module outside an Astro build, where `cwd` is the
  * project root.
  */
-const vaultRoot: string =
-  import.meta.env?.JOTTER_VAULT_ROOT ?? resolve(process.cwd(), jotter.vault)
+const vaultRoot: string = import.meta.env?.JOTTER_VAULT_ROOT ?? resolveVaultRoot(jotter.vault)
 
 export const vault = scanVault({
   root: vaultRoot,

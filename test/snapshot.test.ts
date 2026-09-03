@@ -38,7 +38,7 @@ import {
   reKeyLinks,
   snapshotDates,
 } from '../scripts/lib/snapshot.mjs'
-import { ANALYTICS_PROVIDERS, mapSite, renderConfig } from '../scripts/lib/site-config.mjs'
+import { ANALYTICS_PROVIDERS, mapSite, renderSiteJson } from '../scripts/lib/site-config.mjs'
 import { fetchTweet, findRemoteEmbeds, textOf } from '../scripts/lib/embeds.mjs'
 import { resolveSiteUrl } from '../scripts/lib/site-url.mjs'
 
@@ -859,9 +859,9 @@ describe('site options become a jotter config', () => {
 
   /**
    * The two Navid asked for, and the reason they are site options at all rather
-   * than jotter config keys: `fetch-content.mjs` regenerates `jotter.config.ts`
-   * on every build, so a key `mapSite` does not emit is frozen at its schema
-   * default and unreachable from Obsidian forever.
+   * than jotter config keys: on an Open Publish build `.jotter/site.json`
+   * replaces `jotter.config.ts`'s literal outright, so a key `mapSite` does not
+   * emit is frozen at its schema default and unreachable from Obsidian forever.
    */
   it('carries the metadata and prev/next switches across', () => {
     const on = mapSite({ ...site, showPageMetadata: true, showPrevNext: false }).options
@@ -1036,17 +1036,37 @@ describe('site options become a jotter config', () => {
     expect(notes.join(' ')).toMatch(/showStackedNotes/)
   })
 
-  it('produces a config that parses, banner and all', () => {
+  it('produces an overlay that parses, snapshot and all', () => {
     const { options } = mapSite(site, { url: 'https://notes.example.com' })
     expect(() => defineConfig(options)).not.toThrow()
 
-    const source = renderConfig(options, { snapshot: '2026-08-29T00-00-00Z-abc123' })
-    expect(source).toMatch(/Do not hand-edit/)
-    expect(source).toMatch(/2026-08-29T00-00-00Z-abc123/)
-    expect(source).toMatch(/import \{ defineConfig \} from '\.\/src\/lib\/config'/)
-    const call = 'defineConfig('
-    const body = source.slice(source.indexOf(call) + call.length, source.lastIndexOf(')'))
-    expect(JSON.parse(body)).toEqual(options)
+    const overlay = JSON.parse(renderSiteJson(options, { snapshot: '2026-08-29T00-00-00Z-abc123' }))
+    expect(overlay.generatedFrom).toBe('2026-08-29T00-00-00Z-abc123')
+    /**
+     * Everything under `options` is exactly what `defineConfig` takes, with
+     * nothing beside it to strip: `src/lib/generated.ts` hands this straight to
+     * the schema, which is `.strict()` and would name any extra key as an error
+     * on somebody's live build.
+     */
+    expect(overlay.options).toEqual(options)
+    expect(() => defineConfig(overlay.options)).not.toThrow()
+  })
+
+  /**
+   * The bug this closes: `fetch-content.mjs` wrote a hardcoded
+   * `src/content/notes` while `astro.config.ts`, `src/content.config.ts` and
+   * `src/lib/site.ts` all read `jotter.vault`, so a configured vault was a site
+   * with no notes on it. The script now passes the directory it actually wrote
+   * to, and it lands here.
+   */
+  it('carries the directory the build wrote the notes to', () => {
+    const { options } = mapSite(site, { vault: '.jotter/vault' })
+    expect(options.vault).toBe('.jotter/vault')
+    expect(() => defineConfig(options)).not.toThrow()
+  })
+
+  it('omits the vault entirely when the caller names none', () => {
+    expect(mapSite(site).options).not.toHaveProperty('vault')
   })
 })
 
@@ -1251,6 +1271,7 @@ describe('fetch-content, against a bucket', () => {
     expect(code).toBe(0)
     expect(out).toBe('')
     expect(existsSync(join(cwd, 'src', 'content', 'notes', 'Kept.md'))).toBe(true)
+    expect(existsSync(join(cwd, '.jotter'))).toBe(false)
     expect(existsSync(join(cwd, 'jotter.config.ts'))).toBe(false)
     expect(existsSync(join(cwd, '.op-build-state.json'))).toBe(false)
   })
@@ -1361,14 +1382,25 @@ describe('fetch-content, against a bucket', () => {
       { status: 'published', slug: 'wisdom-approaches/critical-thinking' },
     )
 
-    const config = await readFile(join(cwd, 'jotter.config.ts'), 'utf8')
-    expect(config).toMatch(/Do not hand-edit/)
-    expect(config).toMatch(/"slugs": "preserve"/)
-    expect(config).toMatch(/"layout": "panels"/) // showGraph came with it
+    const overlay = JSON.parse(await readFile(join(cwd, '.jotter', 'site.json'), 'utf8'))
+    expect(overlay.generatedFrom).toBe(store.snapshotId)
+    expect(overlay.options.slugs).toBe('preserve')
+    expect(overlay.options.layout).toBe('panels') // showGraph came with it
     // The folder the vault calls `Wisdom & Approaches` and disk calls
     // `wisdom-approaches`, recovered from the manifest's own keys.
-    expect(config).toMatch(/"wisdom-approaches": "Wisdom & Approaches"/)
+    expect(overlay.options.folderNames['wisdom-approaches']).toBe('Wisdom & Approaches')
+    // The directory this run actually wrote to, so nothing downstream has to
+    // guess it. That guess used to be a hardcoded `src/content/notes`.
+    expect(overlay.options.vault).toBe(vault)
     expect(out).toMatch(/REGENERATED/)
+
+    /**
+     * The whole point of the move. `jotter.config.ts` is tracked and named in
+     * the README as a file its owner edits; a build that rewrites it hands back
+     * a dirty tree and turns every future upstream change to that path into a
+     * conflict. Nothing outside `.jotter/` is written at all.
+     */
+    expect(existsSync(join(cwd, 'jotter.config.ts'))).toBe(false)
 
     expect(JSON.parse(await readFile(join(cwd, '.op-build-state.json'), 'utf8'))).toEqual({
       snapshot: store.snapshotId,

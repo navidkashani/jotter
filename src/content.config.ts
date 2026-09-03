@@ -19,6 +19,7 @@
  */
 import { defineCollection } from 'astro:content'
 import { glob } from 'astro/loaders'
+import { isAbsolute } from 'node:path'
 
 import jotter from '../jotter.config'
 import { noteFrontmatterSchema } from './lib/frontmatter'
@@ -30,7 +31,17 @@ import { noteFrontmatterSchema } from './lib/frontmatter'
  * `astro.config.ts`, or the scan and the collection would read different
  * directories and every note would fail to find its rendered content.
  */
-const vaultBase = process.env.JOTTER_VAULT_OVERRIDE ?? `./${jotter.vault}`
+const vaultBase =
+  process.env.JOTTER_VAULT_OVERRIDE ??
+  /**
+   * `./` only where it means something. `vault:` is documented as relative to
+   * the project root and normally is, but `scripts/fetch-content.mjs` writes
+   * the directory it actually used into the generated options, and a host that
+   * set `JOTTER_VAULT_OVERRIDE` for the fetch step alone would put an absolute
+   * path there. `.//Users/…` is not that path, and the collection would come
+   * back empty with nothing to read about why.
+   */
+  (isAbsolute(jotter.vault) ? jotter.vault : `./${jotter.vault}`)
 
 const notes = defineCollection({
   loader: glob({

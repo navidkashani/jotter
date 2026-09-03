@@ -9,10 +9,9 @@
 import { defineConfig, fontProviders } from 'astro/config'
 import { satteri } from '@astrojs/markdown-satteri'
 import sitemap from '@astrojs/sitemap'
-import { fileURLToPath } from 'node:url'
 
 import jotter from './jotter.config'
-import { scanVault } from './src/lib/vault'
+import { resolveVaultRoot, scanVault } from './src/lib/vault'
 import { buildGraph } from './src/lib/graph'
 import { jotterPlugins, jotterHastPlugins, satteriFeatures } from './src/markdown'
 import { jotterVault } from './src/integrations/vault'
@@ -26,9 +25,12 @@ import { decodeSlug, encodeSlug } from './src/lib/url'
  * `src/lib/site.ts` must not recompute this from `import.meta.url`: that file
  * is bundled by Vite, so by the time it runs its own URL no longer points at
  * the source tree and the scan silently finds an empty vault.
+ *
+ * Through `resolveVaultRoot` rather than inline, so that this file and
+ * `src/lib/site.ts` cannot resolve the same configured path against two
+ * different bases. They used to; see the docstring there.
  */
-const vaultRoot =
-  process.env.JOTTER_VAULT_OVERRIDE ?? fileURLToPath(new URL(jotter.vault, import.meta.url))
+const vaultRoot = resolveVaultRoot(jotter.vault)
 
 const vault = scanVault({
   root: vaultRoot,

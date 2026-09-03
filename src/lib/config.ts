@@ -194,8 +194,12 @@ export const jotterConfigSchema = z
      * There is deliberately no `custom` provider and no `src`. A field taking
      * an arbitrary script URL is one the origin assertion in
      * `scripts/verify-build.mjs` cannot check, and an assertion with a hole
-     * shaped like "anything the user typed" is not an assertion. Paste your own
-     * snippet into `src/layouts/Base.astro` instead.
+     * shaped like "anything the user typed" is not an assertion. Put your own
+     * snippet in `src/user/Head.astro`, which renders last in `<head>` and is
+     * in the one directory this theme never writes to. (It used to say
+     * `src/layouts/Base.astro`, which is among the files an update changes most
+     * often: that advice bought a working analytics tag at the price of a merge
+     * conflict on every upgrade.)
      */
     analytics: z
       .object({

@@ -7,14 +7,14 @@ repository can be that host.
 
 Two scripts do it, and both **no-op when the bucket is not configured**. With
 none of the `OP_*` variables set, `npm run build` builds the folder of markdown
-in `src/content/notes/` exactly as it always has: no manifest, no network, no
+at `vault:` exactly as it always has: no manifest, no network, no
 change to the demo garden. Everything below is opt-in by environment variable.
 
 ```
 npm run build
-  └─ node scripts/fetch-content.mjs     the snapshot becomes a vault
+  └─ node scripts/fetch-content.mjs     the snapshot becomes .jotter/vault
   └─ astro build                        jotter builds it
-  └─ node scripts/verify-build.mjs      jotter's own assertions
+  └─ node scripts/verify-build.mjs      the assertions over dist/
   └─ node scripts/finalize.mjs          the marker the plugin polls
 ```
 
@@ -136,19 +136,34 @@ run `npm test` and `npm run verify:full` on the new version before trusting it.
 
 ## What the fetch does to this repository
 
-This is the part to read before the first build.
+Nothing you can see in `git status`. That is the whole answer, and it is worth
+one paragraph of why, because it used to be the opposite.
 
-**`src/content/notes/` is emptied and rewritten.** A note removed from the
-snapshot has to disappear from a warm CI workspace, so the directory is deleted
-and recreated from the manifest. Anything you left in it locally is gone.
+**Everything the fetch generates goes into `.jotter/`**, which is git-ignored,
+which `npm run clean` removes, and which nothing else in the build writes to:
 
-**`jotter.config.ts` is regenerated**, from the site options you set in Obsidian
-under Settings → Open Publish → Site options. It arrives with a "do not
-hand-edit" banner and the build says so out loud. Edit it and your next publish
-overwrites the edit.
+| Path | What |
+| --- | --- |
+| `.jotter/vault/` | Your notes, deleted and rewritten on every build. A note dropped from the snapshot has to disappear from a warm CI workspace, so the directory is recreated from the manifest each time. |
+| `.jotter/site.json` | The site options from Obsidian, mapped to jotter's config. |
+| `.jotter/vault/.jotter/` | `links.json` and `embeds.json`, described below. |
 
-What stays yours: `src/styles/custom.css`, the strings in `src/i18n/*.json`, and
-every component in `src/`. Nothing in this pipeline touches them.
+`jotter.config.ts` reads `site.json` as `defineConfig(generated ?? { … })` — a
+replacement, not a merge, because the plugin has no site option for
+`description`, `author`, `linkResolution` or `publishGate` and a merge would
+leave the demo's own values showing under a real site. **The config file itself
+is never written.** Edit it freely: it is what a build with no snapshot uses,
+and a build with one leaves it byte-identical.
+
+Both halves used to be written onto tracked paths — the options into
+`jotter.config.ts`, the notes into `src/content/notes/` — and the cost was not
+the overwriting. It was that `git status` came back dirty after every build, the
+obvious response is `git commit -a`, and from then on every upstream change to
+those paths was a merge conflict. A site that cannot take an update keeps
+whatever bugs it shipped with. See [updating.md](updating.md).
+
+What stays yours, and is never written by anything here: `jotter.config.ts`,
+`src/styles/custom.css`, `src/user/*.astro`, `src/i18n/*.json`.
 
 **Two files are written into the vault beside your notes**, both under
 `.jotter/`, which the scan ignores as a directory and reads as data:
@@ -182,12 +197,17 @@ in `attachments/embeds/` and is served from your own site like any other image.
 | `homepage` | *nothing: already applied* |
 
 Two of those arrived to answer the same question twice, and it is worth knowing
-why they are site options rather than jotter config keys. **`fetch-content.mjs`
-regenerates `jotter.config.ts` on every build**, so a key `mapSite` does not
-emit is frozen at its schema default and cannot be changed from anywhere: not in
-Obsidian, and not by editing the file, because the next build overwrites it.
-Anything you need to flip has to travel in the snapshot. (`src/styles/custom.css`
-and `src/i18n/` are the two surfaces that survive regeneration.)
+why they are site options rather than jotter config keys. **`.jotter/site.json`
+replaces `jotter.config.ts`'s literal outright on an Open Publish build**, so a
+key `mapSite` does not emit is frozen at its schema default: not settable in
+Obsidian, and not settable by editing the config, because on this build path the
+config's literal is not what runs. Anything you need to flip has to travel in the
+snapshot.
+
+The escape hatch, for a key you need and the plugin has no option for, is to
+delete the `generated ??` and keep your own literal — at the price of the site
+options in Obsidian no longer reaching the site at all. It is your file; it just
+cannot be half of each.
 
 `showPageMetadata` is **off** by default, which is what Obsidian Publish does:
 it shows none of this. Turned on, jotter still prints a date only where it has a
@@ -458,10 +478,16 @@ A worked example of the distinction, because it is what the split was written
 for. A vault kept its notes in a folder called `notes`, embedded two PDFs with
 `![[Integrity.pdf]]`, and pasted a tweet and a YouTube URL as `![](…)`. That
 built correctly and then failed eight checks, five of which were about fixtures
-that only exist in `src/content/notes/`. None of the eight was a reason not to
-publish. Today the demo guards skip, the content facts report, and the two real
+that only exist in jotter's own demo garden. None of the eight was a reason not
+to publish; their site is live because they took the gate out of their build
+command. Today the demo guards skip, the content facts report, and the two real
 bugs in that list are fixed: a PDF emitted as an `<img>` no browser draws, and
 a listing check that read any folder called `notes` as jotter's own index.
+
+The durable half of that fix is that **the checks a user cannot pass are not in
+the script a user runs**. `scripts/verify-build.mjs` reads `dist/` and nothing
+else; the passes that rebuild this repository under configurations nobody ships
+are `scripts/verify-theme.mjs`, which `npm run build` never calls.
 
 ---
 

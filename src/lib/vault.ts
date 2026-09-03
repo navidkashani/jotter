@@ -12,7 +12,7 @@
  * it has to run before a processor exists. Everywhere else Satteri parses.
  */
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs'
-import { join, relative, sep } from 'node:path'
+import { join, relative, resolve, sep } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 
 import { protectedRanges, isProtected } from './protected.js'
@@ -26,6 +26,23 @@ import { normalizeDirection } from './bidi.js'
 import { loadLinksIndex, type LinkOverrides } from './links-index.js'
 import { loadEmbedsIndex, type EmbedIndex } from './embeds-index.js'
 import type { ResolvableNote, VaultIndex } from './resolve.js'
+
+/**
+ * The vault directory, resolved the one way every reader of it must resolve it.
+ *
+ * There were two, and they agreed only by accident. `astro.config.ts` resolved
+ * `jotter.vault` against `import.meta.url` (its own file) while
+ * `src/lib/site.ts` resolved it against `process.cwd()`, which is the same
+ * answer exactly as long as the config file sits at the repository root and
+ * nothing is ever run from a subdirectory. `scripts/fetch-content.mjs` uses cwd
+ * too, and it is the one that *writes* the directory, so cwd is what the other
+ * two follow.
+ *
+ * `JOTTER_VAULT_OVERRIDE` wins over both, and is absolute wherever it is used:
+ * `scripts/verify-build.mjs` points it at a synthetic vault in `tmpdir()`.
+ */
+export const resolveVaultRoot = (vault: string): string =>
+  process.env.JOTTER_VAULT_OVERRIDE ?? resolve(process.cwd(), vault)
 
 export interface LinkEdge {
   /** Target exactly as written, including any `#subpath`. */
