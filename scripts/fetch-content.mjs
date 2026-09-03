@@ -253,6 +253,15 @@ async function main() {
           aliases: file.aliases ?? [],
           ...oldAddressesFor(file, file.slug, redirects),
           /**
+           * Where the plugin publishes this note, so a `permalink:` naming a
+           * different address can be recognised as stale and dropped. Without
+           * it a note set as the homepage is written to `index.md` and then
+           * moved straight back out by its own frontmatter, because jotter
+           * honours `permalink:` before anything claims the root. See
+           * `applyNoteMetadata`.
+           */
+          servedAt: file.slug,
+          /**
            * The dates the note would otherwise not have. Every fallback in
            * `src/lib/dates.ts` collapses on a vault written fresh by this
            * script (no frontmatter date, no git history, an mtime of *now*), so

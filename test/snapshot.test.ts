@@ -393,6 +393,54 @@ describe('frontmatter carries the title and every name the note answers to', () 
     expect(out).toContain('renamedFrom: ["notes/older-name"]')
   })
 
+  /**
+   * The homepage bug, at the layer that caused it. The plugin gives the note
+   * set as the homepage the slug `index` and this script writes it to
+   * `index.md`, but the note's own `permalink:` was copied across with it, and
+   * `applyPermalinks` honours that key before anything claims the site root. So
+   * the note landed back at its old URL, `/` fell through to the generated
+   * index page, and no layer had done anything wrong.
+   */
+  it('drops a permalink that is not where the plugin publishes the note', () => {
+    const out = applyNoteMetadata('---\npermalink: welcome\n---\n\nBody.\n', {
+      servedAt: 'index',
+    })
+    expect(out).not.toContain('permalink')
+    // Not thrown away: the address it used to be served at still answers.
+    // Block style, because editing an existing block goes through the parser.
+    expect(out).toMatch(/renamedFrom:\n\s+- welcome/)
+  })
+
+  it('says out loud that it dropped one', () => {
+    const warnings: string[] = []
+    applyNoteMetadata('---\npermalink: welcome\n---\n\nBody.\n', { servedAt: 'index' }, warnings)
+    expect(warnings).toHaveLength(1)
+    expect(warnings[0]).toContain('welcome')
+    expect(warnings[0]).toContain('index')
+  })
+
+  it('keeps a permalink that agrees with the published address', () => {
+    const out = applyNoteMetadata('---\npermalink: Company/About\n---\n\nBody.\n', {
+      servedAt: 'Company/About',
+    })
+    expect(out).toContain('permalink: Company/About')
+    expect(out).not.toContain('renamedFrom')
+  })
+
+  /** Slashes are trimmed on both sides before comparing, as everywhere else. */
+  it('does not call a leading slash a disagreement', () => {
+    const out = applyNoteMetadata('---\npermalink: /welcome/\n---\n\nBody.\n', {
+      servedAt: 'welcome',
+    })
+    expect(out).toContain('permalink')
+  })
+
+  /** Nothing to compare against: a vault built without a snapshot is untouched. */
+  it('leaves a permalink alone when no published address was given', () => {
+    const out = applyNoteMetadata('---\npermalink: welcome\n---\n\nBody.\n', { title: 'W' })
+    expect(out).toContain('permalink: welcome')
+  })
+
   it('replaces a renamedFrom key rather than writing a second one', () => {
     const out = applyNoteMetadata('---\nrenamedFrom: [stale]\n---\n\nBody.\n', {
       renamedFrom: ['notes/current'],

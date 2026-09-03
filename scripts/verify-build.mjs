@@ -3195,8 +3195,17 @@ if (FULL) {
      */
     const FILES = {
       'Notes/Home.md': {
+        /**
+         * With a `permalink:` that disagrees with the slug the plugin gives it,
+         * because that combination is what silently broke a real site. The
+         * plugin promotes the homepage to `index` and this note is written to
+         * `index.md`; its own frontmatter then moved it straight back out,
+         * `applyPermalinks` running before anything claims the root, and `/`
+         * fell through to the generated index page with every layer having done
+         * what it was told.
+         */
         body:
-          '# Home\n\nSee [[Critical Thinking]], [[Plain]] and [[Draft Note]].\n\n' +
+          '---\npermalink: home\n---\n\n# Home\n\nSee [[Critical Thinking]], [[Plain]] and [[Draft Note]].\n\n' +
           '![[My Diagram.svg]]\n',
         entry: {
           slug: 'index',
@@ -3356,7 +3365,17 @@ if (FULL) {
           home.includes('[[Critical Thinking]]') && home.includes('![[My Diagram.svg]]'),
           'no wikilink in a note body was rewritten',
         )
-        check(home.includes('title: "Home"'), 'the snapshot’s resolved title reached the note')
+        check(/^title: "?Home"?$/m.test(home), 'the snapshot’s resolved title reached the note')
+        /**
+         * The stale instruction, gone. Everything below it depends on this: the
+         * note cannot be served at `/` while its own frontmatter names another
+         * address.
+         */
+        check(
+          !/^permalink:/m.test(home),
+          'the permalink the plugin overruled was dropped from the note',
+          home.split('\n').slice(0, 10).join(' | '),
+        )
         /**
          * Both address keys, on the one note that has both kinds. Merged into a
          * single `oldUrls:` they were indistinguishable by the time
@@ -3364,10 +3383,16 @@ if (FULL) {
          * including the ones a later build withdraws.
          */
         check(
-          home.includes('oldUrls: ["Notes/Home"]') &&
-            home.includes('renamedFrom: ["notes/home"]'),
+          /oldUrls:(\s*\n\s+-)? ?"?Notes\/Home"?/.test(home) &&
+            /renamedFrom:(\s*\n\s+-)? ?"?notes\/home"?/.test(home),
           'the published address and the rename arrived under separate keys',
-          home.split('\n').slice(0, 8).join(' | '),
+          home.split('\n').slice(0, 10).join(' | '),
+        )
+        /** And the overruled permalink kept working, as an address it moved from. */
+        check(
+          /renamedFrom:[\s\S]{0,80}home\b/.test(home),
+          'and the overruled permalink was kept as an address, not discarded',
+          home.split('\n').slice(0, 10).join(' | '),
         )
 
         const critical = await readFile(
@@ -3508,6 +3533,17 @@ if (FULL) {
           check(
             netlify.includes('/notes/home / 302'),
             'a note renamed into the homepage still answers at its old slug',
+            netlify.trim().split('\n').join(' | '),
+          )
+          /**
+           * The homepage bug, stated as the thing a reader would check: the
+           * note the plugin set as the homepage is served at `/`, and the
+           * address its own `permalink:` named still redirects there rather
+           * than holding the page hostage.
+           */
+          check(
+            netlify.includes('/home / 302'),
+            'and at the address its overruled permalink named',
             netlify.trim().split('\n').join(' | '),
           )
           /**

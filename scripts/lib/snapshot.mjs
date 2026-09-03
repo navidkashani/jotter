@@ -317,6 +317,17 @@ const hasKey = (lines, key) => lines.some((line) => new RegExp(`^${key}\\s*:`).t
  * which addresses this note used to answer at, and two spellings of the same
  * key in one YAML block is not a document either parser reads the same way.
  *
+ * `permalink` is the one key this pass can *remove*, and only when the snapshot
+ * disagrees with it. The plugin decides where a note is published and this
+ * script writes the note **at that address**, so a `permalink:` naming a
+ * different one is a stale instruction that the starter would otherwise obey:
+ * `applyPermalinks` in `src/lib/vault.ts` honours the key character for
+ * character and runs *before* anything can claim the site root. That is exactly
+ * how a note set as the homepage lands back at its old URL with `/` falling
+ * through to the generated index, silently, on a build where every layer did
+ * what it was told. The value is not thrown away: it moves to `renamedFrom:`,
+ * so the address the note used to be served at redirects to the new one.
+ *
  * `created` and `updated` are the strictest of the four: written **only** when
  * the note declares no date of its own under any of the ten spellings
  * `src/lib/dates.ts` recognises. The snapshot's are filesystem timestamps and
@@ -336,10 +347,14 @@ export function applyNoteMetadata(text, meta = {}, warnings = []) {
    * printed in this order. What separates them is the status
    * `buildRedirectRules` gives each, and that is decided in `oldAddressesFor`.
    */
-  const addresses = [
-    ['oldUrls', clean(meta.oldUrls)],
-    ['renamedFrom', clean(meta.renamedFrom)],
-  ].filter(([, values]) => values.length > 0)
+  const oldUrls = clean(meta.oldUrls)
+  const renamedFrom = clean(meta.renamedFrom)
+  /** The pair, as `[key, values]`, skipping whichever has nothing to say. */
+  const addresses = () =>
+    [
+      ['oldUrls', oldUrls],
+      ['renamedFrom', renamedFrom],
+    ].filter(([, values]) => values.length > 0)
   const lines = text.split('\n')
 
   const list = (key, values) => `${key}: [${values.map(quote).join(', ')}]`
@@ -362,7 +377,7 @@ export function applyNoteMetadata(text, meta = {}, warnings = []) {
     if (meta.title) additions.push(`title: ${quote(meta.title)}`)
     additions.push(...dateLines(null))
     if (aliases.length > 0) additions.push(list('aliases', aliases))
-    for (const [key, values] of addresses) additions.push(list(key, values))
+    for (const [key, values] of addresses()) additions.push(list(key, values))
     return additions.length === 0 ? text : ['---', ...additions, '---', '', text].join('\n')
   }
 
@@ -378,14 +393,20 @@ export function applyNoteMetadata(text, meta = {}, warnings = []) {
 
   const block = lines.slice(1, close)
   const mergingAliases = aliases.length > 0 && (hasKey(block, 'aliases') || hasKey(block, 'alias'))
-  const replacingAddresses = addresses.some(([key]) => hasKey(block, key))
+  const replacingAddresses = addresses().some(([key]) => hasKey(block, key))
+  /**
+   * Only a parse can tell whether the declared `permalink:` is the address the
+   * snapshot published or a different one, and only a parse can remove it, so a
+   * note carrying the key at all takes the slow path when a slug was given.
+   */
+  const checkingPermalink = Boolean(meta.servedAt) && hasKey(block, 'permalink')
 
-  if (!mergingAliases && !replacingAddresses) {
+  if (!mergingAliases && !replacingAddresses && !checkingPermalink) {
     const additions = []
     if (meta.title && !hasKey(block, 'title')) additions.push(`title: ${quote(meta.title)}`)
     additions.push(...dateLines(block))
     if (aliases.length > 0) additions.push(list('aliases', aliases))
-    for (const [key, values] of addresses) additions.push(list(key, values))
+    for (const [key, values] of addresses()) additions.push(list(key, values))
     if (additions.length === 0) return text
     return [...lines.slice(0, close), ...additions, ...lines.slice(close)].join('\n')
   }
@@ -411,7 +432,26 @@ export function applyNoteMetadata(text, meta = {}, warnings = []) {
       .filter(Boolean)
     doc.set(key, [...kept, ...aliases.filter((alias) => !kept.includes(alias))])
   }
-  for (const [key, values] of addresses) doc.set(key, values)
+  if (checkingPermalink) {
+    const declared = doc.toJS()?.permalink
+    const values = (Array.isArray(declared) ? declared : declared == null ? [] : [declared])
+      .map((value) => stripSlashes(String(value)))
+      .filter(Boolean)
+    // The first value is the one that moves a note; the rest are already only
+    // redirects, and they survive the same way this one does.
+    if (values.length > 0 && values[0] !== meta.servedAt) {
+      doc.delete('permalink')
+      for (const value of values) {
+        if (value === meta.servedAt || oldUrls.includes(value) || renamedFrom.includes(value)) continue
+        renamedFrom.push(value)
+      }
+      warnings.push(
+        `its permalink ("${values[0]}") is not where the plugin publishes it ` +
+          `("${meta.servedAt}"), so the key was dropped and the old address now redirects`,
+      )
+    }
+  }
+  for (const [key, values] of addresses()) doc.set(key, values)
   if (meta.title && !doc.has('title')) doc.set('title', String(meta.title))
   if (meta.created && !FRONTMATTER_CREATED.some((key) => doc.has(key))) {
     doc.set('created', String(meta.created))
