@@ -18,6 +18,12 @@
  *
  * ## What it writes, and what it deliberately does not
  *
+ * **Everything it writes lives under `.jotter/`**, which is git-ignored and
+ * which nothing else writes to. Not one tracked file is touched, so a site fed
+ * by this script has a clean working tree after every build and can take an
+ * upstream update as a merge rather than as a series of conflicts. See
+ * `GENERATED_DIR` below.
+ *
  * Note bodies are written **byte for byte as their author wrote them**, plus a
  * `title:`, an `aliases:`, its old addresses and the note's dates in the
  * frontmatter. No link in any note is rewritten.
@@ -36,7 +42,7 @@
  * bearing (see the comment on `targetFor` below).
  */
 
-import { mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import process from 'node:process'
 
@@ -55,7 +61,7 @@ import {
   snapshotDates,
 } from './lib/snapshot.mjs'
 import { collectEmbeds } from './lib/embeds.mjs'
-import { mapSite, renderConfig } from './lib/site-config.mjs'
+import { mapSite, renderSiteJson } from './lib/site-config.mjs'
 import { resolveSiteUrl } from './lib/site-url.mjs'
 import { clearContentStores } from './lib/astro-cache.mjs'
 
@@ -69,8 +75,31 @@ import { clearContentStores } from './lib/astro-cache.mjs'
  */
 const ROOT = process.cwd()
 const STATE_FILE = join(ROOT, '.op-build-state.json')
-const CONFIG_FILE = join(ROOT, 'jotter.config.ts')
 const DOWNLOAD_CONCURRENCY = 8
+
+/**
+ * Everything this script generates, under one git-ignored directory it owns.
+ *
+ * Both halves used to be written onto tracked paths: the options went into
+ * `jotter.config.ts` and the notes into `src/content/notes/`, and the README
+ * named both as files a forker owns. So every build deleted or rewrote something
+ * the theme had just invited somebody to edit, `git status` came back dirty, and
+ * the obvious response (`git commit -a`) turned every future upstream change to
+ * those paths into a merge conflict. A site that cannot take an update keeps
+ * whatever bugs it shipped with, which is a worse outcome than any of the
+ * warnings below.
+ *
+ * `.jotter/vault` is the default rather than a fixed rule: `JOTTER_VAULT_OVERRIDE`
+ * still wins, and whichever wins is written into the generated options, so the
+ * directory this script writes and the directory the build reads are the same
+ * string rather than two hardcoded paths that agreed by luck.
+ */
+const GENERATED_DIR = '.jotter'
+const OVERLAY_FILE = join(ROOT, GENERATED_DIR, 'site.json')
+const DEFAULT_VAULT = `${GENERATED_DIR}/vault`
+
+/** The path the theme shipped its demo garden at, which is now nobody's build output. */
+const DEMO_VAULT = join(ROOT, 'src', 'content', 'notes')
 
 /**
  * Every variable this script reads, as a closed list rather than an `OP_`
@@ -127,7 +156,13 @@ async function main() {
   if (urlError) fail(urlError)
 
   const reader = S3Reader.fromEnv()
-  const vault = resolve(ROOT, process.env.JOTTER_VAULT_OVERRIDE ?? 'src/content/notes')
+  /**
+   * Relative and absolute both survive: `resolve` returns an absolute path
+   * unchanged, and the same string goes into the generated options below, where
+   * `src/lib/site.ts` resolves it against `process.cwd()` the same way.
+   */
+  const vaultPath = process.env.JOTTER_VAULT_OVERRIDE ?? DEFAULT_VAULT
+  const vault = resolve(ROOT, vaultPath)
 
   const { pointer, snapshot } = await readSnapshot(reader, fail)
   log(`snapshot ${pointer.snapshot}`)
@@ -197,11 +232,41 @@ async function main() {
    * deleted from the snapshot survives on disk; without the store clear, it
    * survives in the content layer's cache, which invalidates on a *source
    * file's* digest and so notices neither the deletion nor the rewritten
-   * config below. See `lib/astro-cache.mjs`.
+   * options below. See `lib/astro-cache.mjs`.
+   *
+   * The `rm` is only safe because of what `vault` now is. It used to point at
+   * `src/content/notes/`, a tracked directory this repository ships a demo
+   * garden in and the README tells people to put their own vault in, and it
+   * deleted the lot on every build.
    */
   await rm(vault, { recursive: true, force: true })
   await mkdir(vault, { recursive: true })
   await clearContentStores(ROOT)
+
+  /**
+   * Files sitting in the old vault path that this build is not publishing.
+   *
+   * Reported rather than deleted, and reported *by name*, because the two ways
+   * to arrive here need opposite answers and only their author knows which one
+   * this is: the demo garden this repository ships (harmless, and deleting it
+   * costs a modify/delete conflict on every future update), or somebody's real
+   * notes, which are not on the site and which nobody would otherwise be told
+   * about. A build that quietly did either would be wrong half the time.
+   */
+  if (vault !== DEMO_VAULT) {
+    const stranded = await readdir(DEMO_VAULT).catch(() => [])
+    const markdown = stranded.filter((name) => name.toLowerCase().endsWith('.md'))
+    if (markdown.length > 0) {
+      warn(
+        `src/content/notes/ holds ${markdown.length} markdown file(s), and this build published ` +
+          `${vaultPath} instead, so nothing in there reaches the site. Almost always that is ` +
+          `jotter's own demo garden, which costs nothing to leave alone: deleting a file the ` +
+          `theme ships is a modify/delete conflict on every future update. If they are your ` +
+          `notes, publish them from Obsidian rather than pointing this build at them: an Open ` +
+          `Publish build deletes and rewrites its vault directory from the snapshot every run.`,
+      )
+    }
+  }
 
   let done = 0
   const warnings = []
@@ -326,12 +391,17 @@ async function main() {
   const { options, notes, warnings: siteWarnings } = mapSite(snapshot.site, {
     url,
     folderNames: folderNamesFor(entries, snapshot.site?.folders),
+    vault: vaultPath,
   })
   for (const message of notes) note(message)
   for (const message of siteWarnings) warn(message)
 
-  await writeFile(CONFIG_FILE, renderConfig(options, { snapshot: snapshot.id }), 'utf8')
-  log('jotter.config.ts was REGENERATED from the site options in Obsidian; local edits to it are gone')
+  await mkdir(join(ROOT, GENERATED_DIR), { recursive: true })
+  await writeFile(OVERLAY_FILE, renderSiteJson(options, { snapshot: snapshot.id }), 'utf8')
+  log(
+    '.jotter/site.json was REGENERATED from the site options in Obsidian. ' +
+      'jotter.config.ts is yours and was not touched.',
+  )
 
   // Handed to finalize.mjs, which runs after the build has produced dist/.
   await writeFile(

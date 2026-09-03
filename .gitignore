@@ -10,3 +10,11 @@ node_modules/
 
 # Written by scripts/fetch-content.mjs, read by scripts/finalize.mjs.
 .op-build-state.json
+
+# Everything an Open Publish build generates: the fetched vault and the site
+# options mapped from Obsidian. Both used to be written onto tracked paths, so
+# every build left the working tree dirty and every upstream update became a
+# merge conflict. Nothing in here is anybody's to edit; `npm run clean` removes
+# it. Unanchored, so the link and embed indexes written inside a hand-kept
+# vault are covered by the same rule.
+.jotter/

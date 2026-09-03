@@ -14,6 +14,9 @@
  * server for this checkout is running. See `scripts/lib/dev-server.mjs` for
  * what goes wrong otherwise.
  *
+ * It also removes `.jotter/`, everything an Open Publish build generates: the
+ * fetched vault and the mapped site options. Nothing tracked is ever touched.
+ *
  *   npm run clean              refuses while a dev server is running
  *   npm run clean -- --force   removes the caches anyway
  */
@@ -26,7 +29,15 @@ import { CONTENT_STORES } from './lib/astro-cache.mjs'
 const ROOT = join(import.meta.dirname, '..')
 const FORCE = process.argv.includes('--force')
 
-const TARGETS = ['dist', ...CONTENT_STORES, 'node_modules/.vite']
+/**
+ * `.jotter` is in here for a reason the other three do not have. It holds the
+ * site options an Open Publish build mapped from Obsidian, and
+ * `jotter.config.ts` reads them *in place of* its own literal. So a stale
+ * overlay left behind from one experiment silently overrides the config a
+ * developer is editing now, and the only symptom is a site that ignores every
+ * change they make to it.
+ */
+const TARGETS = ['dist', '.jotter', ...CONTENT_STORES, 'node_modules/.vite']
 
 if (!FORCE) {
   const servers = runningDevServers(ROOT)

@@ -19,8 +19,9 @@ import { config, socialImage } from '../lib/site.js'
 import { decodeSlug, encodeSlug } from '../lib/url.js'
 import { FEED_PATH } from '../lib/feed.js'
 import { t } from '../i18n/index.js'
-import Header from '../components/Header.astro'
-import Sidebar from '../components/Sidebar.astro'
+import { override } from '../lib/overrides.js'
+import DefaultHeader from '../components/Header.astro'
+import DefaultSidebar from '../components/Sidebar.astro'
 import Analytics from '../components/Analytics.astro'
 
 import '../styles/tokens.css'
@@ -43,6 +44,21 @@ interface Props {
 }
 
 const { title, description, current, image } = Astro.props
+
+/**
+ * The four regions of the frame somebody can replace with their own, by
+ * dropping a file into `src/user/`. Nothing is registered; see
+ * `src/lib/overrides.ts`.
+ *
+ * `Head` and `Footer` have no jotter component behind them, so they are `null`
+ * on an untouched checkout and render nothing at all. They are what replaced
+ * the old advice to paste an analytics snippet into this file, which is one of
+ * the paths an update is most likely to touch.
+ */
+const Header = override('Header') ?? DefaultHeader
+const Sidebar = override('Sidebar') ?? DefaultSidebar
+const UserHead = override('Head')
+const UserFooter = override('Footer')
 
 /**
  * Search belongs on every page, and this is the only layout all of them share:
@@ -171,6 +187,15 @@ const cardImage = image ?? socialImage
        */
     }
     <Analytics />
+
+    {
+      /**
+       * Last in `<head>`, after everything jotter puts there, so an override
+       * can add to the page without racing anything the theme declared. Absent
+       * unless `src/user/Head.astro` exists.
+       */
+      UserHead && <UserHead />
+    }
   </head>
 
   <body>
@@ -203,6 +228,15 @@ const cardImage = image ?? socialImage
         <slot />
       </main>
     </div>
+
+    {
+      /**
+       * Outside `.page`, which is the grid: a footer dropped inside it would
+       * land in a grid cell beside the sidebar rather than under the whole
+       * page. Absent unless `src/user/Footer.astro` exists.
+       */
+      UserFooter && <UserFooter />
+    }
 
     {
       /**

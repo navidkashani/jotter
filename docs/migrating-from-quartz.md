@@ -117,13 +117,22 @@ export default defineConfig({ linkResolution: 'absolute' })
 1. **Start from the template.** "Use this template" on GitHub, then
    `npm install`.
 
-2. **Move your content.** Delete the demo garden in `src/content/notes/` and
-   put your vault there. Quartz keeps content in `content/`, so:
+2. **Move your content.** Put your vault in a folder of its own and point
+   `vault:` at it. Quartz keeps content in `content/`, so:
 
    ```bash
-   rm -rf src/content/notes/*
-   cp -R ../my-quartz/content/* src/content/notes/
+   cp -R ../my-quartz/content ./notes
    ```
+
+   ```ts
+   // jotter.config.ts
+   vault: 'notes',
+   ```
+
+   Leave the demo garden in `src/content/notes/` where it is. Nothing outside
+   your vault folder is built, and deleting a file jotter ships is a
+   modify/delete conflict on every future update — the one kind no button
+   resolves. See [updating.md](updating.md).
 
    Attachments can stay wherever they are inside the vault. jotter resolves
    them by filename the way Obsidian does, and serves the ones Astro does not

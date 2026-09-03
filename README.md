@@ -13,8 +13,10 @@ npm install
 npm run dev
 ```
 
-Your notes go in `src/content/notes/`. Delete the demo garden that ships there
-and drop your vault in its place: a folder, a symlink, or a git submodule.
+Point `vault:` in `jotter.config.ts` at your own notes — a folder, a symlink, or
+a git submodule — and leave the demo garden where it is. Nothing outside your
+vault folder is built, and deleting a file jotter ships is the one change that
+conflicts with every future update. See [docs/updating.md](docs/updating.md).
 
 ---
 
@@ -37,16 +39,28 @@ handling.
 
 ---
 
-## The two files you own
+## What you own
 
-Everything else is upstream and merges cleanly.
+**jotter never writes to any of these**, which is what makes an update a merge
+rather than an argument. Everything else is upstream and merges cleanly.
 
-| File | What it is |
+| Path | What it is |
 | --- | --- |
 | `jotter.config.ts` | Site settings. Every field optional. |
 | `src/styles/custom.css` | Your CSS. Loads last. Override tokens, not rules. |
+| `src/user/*.astro` | Your own Header, Sidebar, Head, Footer, Frontmatter, PrevNext. |
+| `src/i18n/*.json` | Your translations. Dropping the file in is the whole procedure. |
+| your vault folder | Wherever `vault:` points. |
 
-Plus your content: `src/content/notes/` and `src/i18n/*.json`.
+Each is a file you *add*, not a file you edit, so upstream has no copy of it to
+disagree with. Customising by editing `src/layouts/Base.astro` conflicts with
+every release that touches `Base.astro`; the same change as
+`src/user/Head.astro` conflicts with nothing. See
+[src/user/README.md](src/user/README.md) for the slots and their props.
+
+A site fed by [Open Publish](docs/open-publish.md) writes everything it
+generates — the fetched vault, and the site options mapped from Obsidian — into
+a git-ignored `.jotter/`, and nothing else. `git status` after a build is empty.
 
 ### Config reference
 
@@ -478,19 +492,26 @@ Full detail, including the slug/URL split and what the build asserts about it:
 npm run dev          # http://localhost:4321
 npm run build        # fetch (if configured), astro build, the build assertions, then finalize
 npm run verify       # the assertions alone, against the current dist/
-npm run verify:full  # also rebuilds with features off, analytics on, RSS on, a homepage set, from an Open Publish snapshot, at 1,000 notes, and over a vault with none of the demo's fixtures
+npm run verify:full  # and jotter's own maintenance suite (scripts/verify-theme.mjs)
 ```
 
-`verify` prints three kinds of line and only one of them stops a build: `FAIL`
-is an invariant jotter guarantees about every site, `note` is an observation
-about your own content, and `skip` is a guard on this repository's demo
-fixtures, which runs only under `JOTTER_DEMO=1`, as CI runs it. See
-[docs/open-publish.md](docs/open-publish.md#two-kinds-of-verify-failure).
+`verify` reads `dist/` and nothing else, which is what makes it safe inside
+`npm run build` on your site. It prints three kinds of line and only one of them
+stops a build: `FAIL` is an invariant jotter guarantees about every site, `note`
+is an observation about your own content, and `skip` is a guard on this
+repository's demo fixtures, which runs only under `JOTTER_DEMO=1`, as CI runs
+it. See [docs/open-publish.md](docs/open-publish.md#two-kinds-of-verify-failure).
+
+`verify:full` adds `scripts/verify-theme.mjs`, which rebuilds *this repository*
+with features off, analytics on, RSS on, a homepage set, from an Open Publish
+snapshot, at 1,000 notes, and over a vault with none of the demo's fixtures.
+It asserts against fixtures only this repository has, so it is jotter's own
+maintenance and never runs on your site.
 
 ```bash
 npm test             # 525 unit tests
 npm run check        # astro check
-npm run clean        # see the note below
+npm run clean        # dist/, the Astro caches, and .jotter/; see the note below
 ```
 
 > **If you edit anything in `src/markdown/`, run `npm run clean` first.**
@@ -500,6 +521,10 @@ npm run clean        # see the note below
 ---
 
 ## Staying up to date
+
+Which jotter your site is running is reported to Obsidian on every publish
+(**Settings → Open Publish → Build → Check**), so the question has an answer
+without opening a terminal. What changed is in [CHANGELOG.md](CHANGELOG.md).
 
 "Use this template" gives you a repository with a single commit, so the first
 merge from upstream needs `--allow-unrelated-histories`:
@@ -512,9 +537,11 @@ git merge upstream/main --allow-unrelated-histories
 
 After that a plain `git merge upstream/main` works.
 
-Conflicts should only land in the files you own: `jotter.config.ts`,
-`src/styles/custom.css`, `src/content/notes/`, `src/i18n/`. Keep your versions
-of those and take upstream's for everything else.
+Conflicts should only land in the paths in ["What you own"](#what-you-own).
+Keep yours and take upstream's for everything else.
+**[docs/updating.md](docs/updating.md)** has the full procedure, the one conflict
+sites built before the `.jotter/` release cannot avoid, and what upstream may
+never do to `main` now that copies exist.
 
 ---
 

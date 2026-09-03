@@ -37,9 +37,10 @@ import Toc from '../components/Toc.astro'
 import type { Heading } from '../lib/headings.js'
 import Backlinks from '../components/Backlinks.astro'
 import Breadcrumb from '../components/Breadcrumb.astro'
-import Frontmatter from '../components/Frontmatter.astro'
+import DefaultFrontmatter from '../components/Frontmatter.astro'
 import TagList from '../components/TagList.astro'
-import PrevNext from '../components/PrevNext.astro'
+import DefaultPrevNext from '../components/PrevNext.astro'
+import { override } from '../lib/overrides.js'
 import { frontmatterImage, resolveSocialImage, socialImageUrl } from '../lib/social.js'
 import { t } from '../i18n/index.js'
 
@@ -53,6 +54,17 @@ interface Props {
 }
 
 const { note, headings, backlinks, neighbourhood, previous, next } = Astro.props
+
+/**
+ * The two regions of a note somebody can replace with their own. Both are
+ * whole blocks with a clear edge and a settled set of props, which is the bar
+ * for adding a slot at all; see `src/lib/overrides.ts`.
+ *
+ * The feature flags still gate them. An override replaces jotter's answer to
+ * "what does this block look like", not its answer to "is this block on".
+ */
+const Frontmatter = override('Frontmatter') ?? DefaultFrontmatter
+const PrevNext = override('PrevNext') ?? DefaultPrevNext
 
 const description =
   typeof note.frontmatter.description === 'string' ? note.frontmatter.description : note.excerpt

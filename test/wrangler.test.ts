@@ -67,8 +67,11 @@ describe('the Workers Builds config matches the build', () => {
     // set, so the line under test is agreement between four files rather than
     // agreement between `wrangler.jsonc` and a constant in this test. Setting
     // `outDir` fails here too, so all four move together or none do.
-    for (const script of ['scripts/verify-build.mjs', 'scripts/finalize.mjs']) {
-      const named = /^const DIST = join\(ROOT, '([^']+)'\)/m.exec(read(script))?.[1]
+    // `scripts/lib/verify.mjs` rather than `verify-build.mjs`: the constant moved
+    // there when the verification split into a dist-only suite and a theme-only
+    // one, and it is the file both of them now read `dist/` through.
+    for (const script of ['scripts/lib/verify.mjs', 'scripts/finalize.mjs']) {
+      const named = /^(?:export )?const DIST = join\(ROOT, '([^']+)'\)/m.exec(read(script))?.[1]
       expect(named, `${script} names no DIST to compare`).toBe(normalize(outDir))
     }
   })
