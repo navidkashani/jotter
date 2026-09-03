@@ -160,10 +160,46 @@ export function buildTree(
     return folder
   }
 
+  /**
+   * Every folder this tree will have, worked out before any note is placed.
+   *
+   * Needed up front because of `homeFor` below, which has to ask whether a
+   * folder exists before the note that would create it has been reached.
+   */
+  const folderPaths = new Set<string>()
   for (const note of notes) {
     const segments = note.path.split('/')
-    const parent = folderFor(segments.slice(0, -1).join('/'))
-    parent.children.push({
+    for (let i = 1; i < segments.length; i++) folderPaths.add(segments.slice(0, i).join('/'))
+  }
+  const folderBySlug = new Map<string, string>()
+  for (const path of folderPaths) folderBySlug.set(slugFor(path, style), path)
+
+  /**
+   * Which folder draws this note.
+   *
+   * Its own folder, except for a **folder note**: a note whose slug *is* a
+   * folder's slug, which is `About/About.md` carrying `permalink: about`. That
+   * note and the folder both want `/about`; the note wins the URL and the
+   * folder gets no index page, which `[...slug].astro` has always done. What
+   * was missing is that the sidebar drew it twice, once as a page above the
+   * folders and once as the folder beside it, both linking to the same place.
+   *
+   * It belongs in the folder, which is where Obsidian shows it and where
+   * Obsidian Publish publishes it.
+   *
+   * The reason it was ever anywhere else is worth keeping written down. On an
+   * Open Publish build every note is written to disk **at its slug**, so this
+   * file arrives as `about.md` at the vault root and the folder it belongs to
+   * is nowhere in its path any more. Grouping by path is right for a local
+   * vault and loses exactly this one case on a published one, so the slug is
+   * what has to answer it.
+   */
+  const homeFor = (note: VaultNote): string =>
+    folderBySlug.get(note.slug) ?? note.path.split('/').slice(0, -1).join('/')
+
+  for (const note of notes) {
+    const home = homeFor(note)
+    folderFor(home).children.push({
       kind: 'note',
       title: note.title,
       slug: note.slug,
@@ -172,8 +208,10 @@ export function buildTree(
     })
 
     // Count into every ancestor, so a collapsed folder still says how much is
-    // inside it.
-    for (let i = segments.length - 1; i > 0; i--) {
+    // inside it. Counted from where the note is drawn rather than from its
+    // path, or a folder note would be tallied outside the folder it is in.
+    const segments = home === '' ? [] : home.split('/')
+    for (let i = segments.length; i > 0; i--) {
       const ancestor = folders.get(segments.slice(0, i).join('/'))
       if (ancestor) ancestor.count++
     }

@@ -208,6 +208,16 @@ describe('tree', () => {
       expect(names(tree)).toEqual(names(t))
     })
 
+    it('ranks the homepage, which is a row of its own in this sidebar', () => {
+      // The row the plugin used to refuse to make. Quartz keeps the homepage as
+      // its trie's root data and so has no such row at all; this sidebar lists
+      // `/` among the root's own notes, sorted by its title, so an entry naming
+      // it has to land somewhere. It is the case that made the plugin stop
+      // treating the site root as nobody's sibling.
+      expect(names(arranged(['index', 'zettelkasten'])).slice(0, 2)).toEqual(['Home', 'Zettelkasten'])
+      expect(names(arranged())[0]).not.toBe('Home')
+    })
+
     it('names a folder by the slug of its index page, not by the folder slug', () => {
       // The plugin's contract, and the one shape that can tell a folder apart
       // from a note that wants the same URL.
@@ -237,6 +247,14 @@ describe('tree', () => {
 
     it('marks nothing when nothing is hidden', () => {
       expect(hiding().every((e) => e.hidden === undefined)).toBe(true)
+    })
+
+    it('can leave the homepage out, and the site still opens on it', () => {
+      // Odd and coherent: the homepage is where a site starts rather than a
+      // link in a list, so dropping its row from the sidebar takes nothing away.
+      const entry = hiding('index').find((e) => e.slug === 'index')
+      expect(entry).toBeDefined()
+      expect(entry!.hidden).toBe(true)
     })
 
     it('keeps a hidden folder in the route list, so its page still exists', () => {
@@ -281,6 +299,61 @@ describe('tree', () => {
 
   it('says nothing when every folder owns its own slug', () => {
     expect(shadowedFolders(t, vault().notes.filter((n) => n.published))).toEqual([])
+  })
+
+  /**
+   * A note whose slug *is* a folder's slug: `About/About.md` carrying
+   * `permalink: about`. Both want `/about`, the note wins it, and the sidebar
+   * used to draw the pair twice over: once as a page above the folders and once
+   * as the folder beside it, both linking to the same page.
+   *
+   * These notes are shaped the way an Open Publish build leaves them, which is
+   * the whole reason the case exists: there every note is written to disk at
+   * its **slug**, so this file arrives as `about.md` at the root with the
+   * folder it belongs to nowhere in its path.
+   */
+  describe('a folder note', () => {
+    const op = (path: string, slug: string, title: string) =>
+      ({ path, slug, title, published: true, dates: { updated: new Date(0) }, tags: [] }) as unknown as VaultNote
+
+    const published = [
+      op('about.md', 'about', 'About'),
+      op('about/contact.md', 'about/contact', 'Contact'),
+      op('about/hiring.md', 'about/hiring', 'Hiring'),
+      op('now.md', 'now', 'Now'),
+    ]
+    const tree = buildTree(published, 'preserve')
+    const about = tree.find((e) => e.kind === 'folder' && e.slug === 'about') as TreeFolder
+
+    it('is drawn inside its folder, which is where Obsidian shows it', () => {
+      expect(about.children.map((c) => (c.kind === 'folder' ? c.name : c.title))).toContain('About')
+    })
+
+    it('is not also drawn above the folders, which is the row that was doubled', () => {
+      expect(tree.filter((e) => e.kind === 'note').map((e) => e.title)).toEqual(['Now'])
+    })
+
+    it('counts inside the folder it is drawn in', () => {
+      expect(about.count).toBe(3)
+    })
+
+    it('still wins the URL, so the folder is reported as shadowed exactly as before', () => {
+      expect(shadowedFolders(tree, published)).toEqual([
+        { folder: 'about', slug: 'about', note: 'about.md' },
+      ])
+    })
+
+    it('leaves an ordinary permalink alone: it is drawn where it landed', () => {
+      // A permalink that moves a note to a *different* folder is not this case
+      // and must not be swept up in it.
+      const moved = [
+        op('writing/essay.md', 'writing/essay', 'Essay'),
+        op('writing/other.md', 'writing/other', 'Other'),
+      ]
+      const writing = buildTree(moved, 'preserve')[0] as TreeFolder
+      expect(writing.kind).toBe('folder')
+      expect(writing.children.map((c) => (c.kind === 'note' ? c.title : c.name))).toEqual(['Essay', 'Other'])
+    })
   })
 
   it('never invents a folder holding nothing published', () => {

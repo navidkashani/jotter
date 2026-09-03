@@ -57,8 +57,12 @@ const routed = [...published.map((note) => note.slug), ...folders(tree).map((f) 
  * `console.warn` inside `getStaticPaths`, which is a line in the middle of a
  * page-build log that Astro may not even re-run on a warm build. On
  * `navidk.com` the folder `About/` and the note `About/About.md` carrying
- * `permalink: about` collide exactly this way: the sidebar still says
- * `About (5)` and still links to it, and following it lands on the note.
+ * `permalink: about` collide exactly this way: the sidebar says `About (6)`,
+ * draws the note among the folder's own children, and links to the note.
+ *
+ * Still worth reporting after `buildTree` learned to draw a folder note inside
+ * its folder. The sidebar is tidy now, but the fact underneath has not changed:
+ * two things wanted one URL and one of them has no page of its own.
  *
  * Detected in `src/lib/tree.ts`, where it can be tested, and reported by the
  * integration, which is the channel a person reading a build log actually sees.
