@@ -8,6 +8,12 @@
  * side, before any script runs.
  *
  * Folder names are links, not just toggles: every folder has a real page.
+ *
+ * Hidden entries are skipped here rather than pruned from the tree, and that
+ * split is deliberate: the same tree generates this repository's folder routes,
+ * so an entry dropped upstream would stop having a page at all. Left out of the
+ * sidebar, still published, still at its own address. A hidden folder takes its
+ * children with it, because nothing recurses into a row that is not drawn.
  */
 import type { TreeEntry } from '../lib/tree.js'
 import { contains } from '../lib/tree.js'
@@ -20,11 +26,12 @@ interface Props {
 }
 
 const { entries, current = '', depth = 0 } = Astro.props
+const shown = entries.filter((entry) => !entry.hidden)
 ---
 
 <ul class="nav-tree" role="list">
   {
-    entries.map((entry) =>
+    shown.map((entry) =>
       entry.kind === 'folder' ? (
         <li>
           <details open={contains(entry, current)}>

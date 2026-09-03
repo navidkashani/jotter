@@ -231,16 +231,40 @@ The last two are deliberate rather than pending: click-to-play embeds and the
 `↗` on an outbound link have a defensible default each, and three more site
 options is too high a price for a preference.
 
-**One thing Obsidian Publish has that no plugin can import.** Its sidebar order
-is hand-dragged, and that order lives in Obsidian Publish's *server-side* site
-options rather than in `.obsidian/publish.json`, so there is nothing on disk for
-the plugin to read. jotter sorts alphabetically, with one adjustment that gets
-most of the way there for free: the loose notes at the root of the vault sort
-*above* the folders, because those are the front doors (Welcome, Now, Start
-here) and under the folders they sat at the bottom of the sidebar. Inside a
-folder it is folders-first, the way a file tree reads. A deliberate order needs
-`config.redirects`-style hand editing, which regeneration would overwrite; there
-is no good answer today, and pretending otherwise would be worse than saying so.
+**The sidebar order.** jotter's default sorts alphabetically, with one
+adjustment that gets most of the way there for free: the loose notes at the root
+of the vault sort *above* the folders, because those are the front doors
+(Welcome, Now, Start here) and under the folders they sat at the bottom of the
+sidebar. Inside a folder it is folders-first, the way a file tree reads.
+
+That is the default, and Open Publish can now override it. Settings > Open
+Publish > Site options > **Customize navigation** arranges the sidebar folder by
+folder and leaves pages out of it, and the snapshot carries the result as
+`nav: { order, hidden }`, in slugs. Anywhere it speaks, it wins outright:
+somebody who put a folder above the root notes meant it. Anywhere it says
+nothing, the default above is untouched, which is what an ordinary vault gets.
+A note can also say it itself, with `nav-order:` or `nav-hidden:` in its own
+frontmatter, and frontmatter wins over the dialog.
+
+Two details of the mapping are worth knowing:
+
+- A folder is named by the slug of its index page, so the folder served at
+  `/notes` is `notes/index` in both lists. That indirection is the plugin's
+  contract, and it earns its keep here: a folder and a note can want the same
+  URL, which `shadowedFolders` exists because of, and `notes` alone could not
+  tell them apart.
+- **Hidden is not unpublished and not private.** A page left out of the sidebar
+  is still built, still at its own address, still in the search index, still in
+  the sitemap and still linked to from any note that links to it. jotter marks
+  hidden entries rather than dropping them from its tree, precisely because that
+  tree also generates the folder routes: dropping a folder would take its page
+  down. `NavTree.astro` is what skips them, and `neighbours()` skips them too,
+  so the previous/next footer agrees with the sidebar.
+
+**One thing Obsidian Publish still has that no plugin can import**: its own
+hand-dragged order, which lives in its *server-side* site options rather than in
+`.obsidian/publish.json`, so there is nothing on disk to read. What arrives here
+was arranged in Open Publish, not migrated from Publish.
 
 ---
 

@@ -240,6 +240,33 @@ export const jotterConfigSchema = z
      * is a set of corrections rather than a table anybody has to complete.
      */
     folderNames: z.record(z.string(), z.string()).default({}),
+
+    /**
+     * The sidebar order somebody arranged in Obsidian, as slugs, for the
+     * parents they actually arranged. A parent named nowhere in here keeps
+     * jotter's own default order, which is what an ordinary vault gets: this is
+     * empty unless an Open Publish snapshot filled it in.
+     *
+     * A folder is named by the slug of its index page, so the folder served at
+     * `/notes` is `notes/index`. That is the plugin's contract, and it is the
+     * one shape that can tell a folder apart from a note wanting the same URL.
+     *
+     * One flat list covers every parent at once. Entries are only ever compared
+     * with their own siblings, so a single running index orders each parent on
+     * its own without any grouping being written down twice.
+     */
+    navOrder: z.array(z.string()).default([]),
+
+    /**
+     * Slugs to leave out of the sidebar, named the same way.
+     *
+     * **Not access control, and not unpublishing.** Every page named here is
+     * still built, still served at its own address, still in the search index,
+     * still in the sitemap and still linked to from any note that links to it.
+     * Hiding a folder takes everything under it out of the sidebar and changes
+     * nothing else about those pages.
+     */
+    navHidden: z.array(z.string()).default([]),
   })
   .strict()
   /**

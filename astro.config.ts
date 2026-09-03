@@ -41,7 +41,10 @@ const graph = buildGraph(vault, jotter.linkResolution)
 
 const published = vault.notes.filter((note) => note.published)
 
-const tree = buildTree(published, vault.slugs, jotter.folderNames)
+const tree = buildTree(published, vault.slugs, jotter.folderNames, {
+  order: jotter.navOrder,
+  hidden: jotter.navHidden,
+})
 
 /** Every slug this build routes: a note page, or a folder index above one. */
 const routed = [...published.map((note) => note.slug), ...folders(tree).map((f) => f.slug)]

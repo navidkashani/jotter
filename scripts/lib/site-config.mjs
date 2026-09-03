@@ -19,6 +19,10 @@
  * - **`showNavigation`** is a boolean here and a three-valued enum in jotter
  *   (`tree` | `tags` | `none`). `true` means `tree`; there is no plugin option
  *   that means `tags`.
+ * - **`nav`** collides by name with that enum, so the arrangement it carries
+ *   lands on two keys of jotter's own, `navOrder` and `navHidden`. Both are
+ *   omitted when empty, so a site nobody has arranged generates the same config
+ *   file it generated before this option existed.
  *
  * The other keys map straight across, except `homepage`, which is *already*
  * applied: it is a vault path, and the plugin has given that note the slug
@@ -57,6 +61,12 @@ export const DEFAULT_SITE = {
   /** Off in the plugin too, the way Obsidian Publish is. */
   showPageMetadata: false,
   showPrevNext: true,
+  /**
+   * The sidebar somebody arranged, as slugs, and the pages left out of it.
+   * Empty until they arrange one, and empty is exactly jotter's own default
+   * order, so an untouched site renders what it always did.
+   */
+  nav: { order: [], hidden: [] },
   analytics: { provider: 'none', id: '' },
 }
 
@@ -102,6 +112,10 @@ export function mapSite(rawSite, { url, folderNames } = {}) {
     if (rawSite?.[key] !== undefined) site[key] = rawSite[key]
   }
   site.analytics = { ...DEFAULT_SITE.analytics, ...(rawSite?.analytics ?? {}) }
+  // Field by field, like analytics above and for the same reason: a snapshot
+  // carrying half of this must not leave the other half `undefined`, which the
+  // schema would then reject with a message about a key nobody typed.
+  site.nav = { order: slugList(rawSite?.nav?.order), hidden: slugList(rawSite?.nav?.hidden) }
 
   /** @type {string[]} */
   const notes = []
@@ -148,6 +162,17 @@ export function mapSite(rawSite, { url, folderNames } = {}) {
     nav: site.showNavigation ? 'tree' : 'none',
 
     /**
+     * The sidebar arrangement, straight across. Two flat lists here rather than
+     * the snapshot's one nested key because `nav` is already taken in this
+     * config, by the three-valued sidebar mode a few lines up.
+     *
+     * Emitted only when there is something to say, so an ordinary build's
+     * generated config is exactly the file it was before this existed.
+     */
+    ...(site.nav.order.length > 0 ? { navOrder: site.nav.order } : {}),
+    ...(site.nav.hidden.length > 0 ? { navHidden: site.nav.hidden } : {}),
+
+    /**
      * Not a site option: a repair. Every note is written to its slug, so the
      * folder tree jotter derives from the paths on disk would read
      * `wisdom-approaches` where the vault reads `Wisdom & Approaches`. The real
@@ -170,6 +195,13 @@ export function mapSite(rawSite, { url, folderNames } = {}) {
   }
 
   return { options, notes, warnings }
+}
+
+/** Slugs only: a snapshot is data off the network, so neither list is trusted. */
+function slugList(value) {
+  return Array.isArray(value)
+    ? value.filter((entry) => typeof entry === 'string' && entry.length > 0)
+    : []
 }
 
 /**

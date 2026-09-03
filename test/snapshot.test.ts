@@ -944,6 +944,51 @@ describe('site options become a jotter config', () => {
     expect(options.features?.prevNext).toBe(true)
   })
 
+  /**
+   * Trap four: the snapshot's `nav` and jotter's `nav` are different things
+   * with the same name, so the arrangement lands on two keys of jotter's own.
+   */
+  it('lands the arrangement on navOrder and navHidden, not on the nav enum', () => {
+    const { options } = mapSite({
+      ...site,
+      showNavigation: true,
+      nav: { order: ['notes/index', 'zettelkasten'], hidden: ['private/index'] },
+    })
+    expect(options.nav).toBe('tree')
+    expect(options.navOrder).toEqual(['notes/index', 'zettelkasten'])
+    expect(options.navHidden).toEqual(['private/index'])
+    expect(() => defineConfig(options)).not.toThrow()
+  })
+
+  it('emits neither key for a site nobody has arranged', () => {
+    // The generated config has to be the file it was before this option
+    // existed, so an untouched site cannot be told apart from one built by a
+    // jotter that had never heard of it.
+    expect(mapSite(site).options).not.toHaveProperty('navOrder')
+    expect(mapSite(site).options).not.toHaveProperty('navHidden')
+    expect(mapSite({ ...site, nav: { order: [], hidden: [] } }).options).not.toHaveProperty('navOrder')
+  })
+
+  it('does not report the arrangement as a key it has never heard of', () => {
+    const { notes } = mapSite({ ...site, nav: { order: ['a'], hidden: [] } })
+    expect(notes.join(' ')).not.toMatch(/nav/)
+  })
+
+  it('takes half an arrangement without leaving the other half undefined', () => {
+    const { options } = mapSite({ ...site, nav: { order: ['a'] } })
+    expect(options.navOrder).toEqual(['a'])
+    expect(options).not.toHaveProperty('navHidden')
+    expect(() => defineConfig(options)).not.toThrow()
+  })
+
+  it('keeps only the slugs out of a list that is not one', () => {
+    // A snapshot is data off the network. A number in here would reach the zod
+    // schema and fail the build on a key nobody typed.
+    const { options } = mapSite({ ...site, nav: { order: ['a', 42, null, '', 'b'], hidden: 'nope' } })
+    expect(options.navOrder).toEqual(['a', 'b'])
+    expect(options).not.toHaveProperty('navHidden')
+  })
+
   it('reports a key it does not understand rather than guessing', () => {
     const { notes } = mapSite({ ...site, showStackedNotes: true })
     expect(notes.join(' ')).toMatch(/showStackedNotes/)

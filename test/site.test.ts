@@ -167,6 +167,103 @@ describe('tree', () => {
   })
 
   /**
+   * The sidebar somebody arranged in Obsidian.
+   *
+   * Everything above is the default, which is what a parent nobody arranged
+   * keeps. These are about the parents they did.
+   */
+  describe('arrangement', () => {
+    const arranged = (order: string[] = [], hidden: string[] = []) =>
+      buildTree(vault().notes.filter((n) => n.published), 'derive', {}, { order, hidden })
+
+    const names = (entries: TreeEntry[]) =>
+      entries.map((e) => (e.kind === 'folder' ? e.name : e.title))
+
+    it('changes nothing at all when nobody arranged anything', () => {
+      expect(names(arranged())).toEqual(names(t))
+    })
+
+    it('puts an arranged parent in the order it was given', () => {
+      const order = ['zettelkasten', 'notes/index', 'bare']
+      expect(names(arranged(order)).slice(0, 3)).toEqual(['Zettelkasten', 'notes', 'bare'])
+    })
+
+    it('lets an explicit order beat the rule about which kind comes first', () => {
+      // The root puts notes above folders on purpose, and that is the default
+      // rather than a law: somebody who dragged a folder to the top meant it.
+      expect(names(arranged(['notes/index']))[0]).toBe('notes')
+      expect(names(arranged())[0]).not.toBe('notes')
+    })
+
+    it('leaves the siblings it does not name in their own order, after the ones it does', () => {
+      const names0 = names(arranged(['zettelkasten']))
+      expect(names0[0]).toBe('Zettelkasten')
+      expect(names0.slice(1)).toEqual(names(t).filter((n) => n !== 'Zettelkasten'))
+    })
+
+    it('scopes an order to its own parent, so one folder cannot reach into another', () => {
+      const tree = arranged(['notes/note', 'notes/luhmann'])
+      const inNotes = tree.find((e) => e.kind === 'folder' && e.path === 'notes') as TreeFolder
+      expect(names(inNotes.children).slice(0, 2)).toEqual(['Note (shallow)', 'Niklas Luhmann'])
+      expect(names(tree)).toEqual(names(t))
+    })
+
+    it('names a folder by the slug of its index page, not by the folder slug', () => {
+      // The plugin's contract, and the one shape that can tell a folder apart
+      // from a note that wants the same URL.
+      expect(names(arranged(['notes/index']))[0]).toBe('notes')
+      expect(names(arranged(['notes']))[0]).not.toBe('notes')
+    })
+  })
+
+  /**
+   * Hiding, which is a sidebar decision and nothing else.
+   *
+   * The assertion that matters here is the one about `folders()`: this tree
+   * generates the folder routes, so a hidden folder that fell out of it would
+   * have its page stop existing, turning "leave it out of the navigation" into
+   * "unpublish everything inside it".
+   */
+  describe('hiding', () => {
+    const hiding = (...hidden: string[]) =>
+      buildTree(vault().notes.filter((n) => n.published), 'derive', {}, { order: [], hidden })
+
+    it('marks a note rather than dropping it', () => {
+      const tree = hiding('zettelkasten')
+      const entry = tree.find((e) => e.slug === 'zettelkasten')
+      expect(entry).toBeDefined()
+      expect(entry!.hidden).toBe(true)
+    })
+
+    it('marks nothing when nothing is hidden', () => {
+      expect(hiding().every((e) => e.hidden === undefined)).toBe(true)
+    })
+
+    it('keeps a hidden folder in the route list, so its page still exists', () => {
+      const tree = hiding('notes/index')
+      const folder = folders(tree).find((f) => f.path === 'notes')!
+      expect(folder.hidden).toBe(true)
+      // Still routed, and so is everything under it: hidden is not unpublished.
+      expect(folders(tree).map((f) => f.path)).toContain('notes/nested')
+    })
+
+    it('takes a hidden note out of the previous/next chain', () => {
+      const tree = hiding('notes/luhmann')
+      const pairs = neighbours(tree)
+      for (const pair of pairs.values()) {
+        expect(pair.previous).not.toBe('notes/luhmann')
+        expect(pair.next).not.toBe('notes/luhmann')
+      }
+    })
+
+    it('takes everything under a hidden folder out of the chain too', () => {
+      const pairs = neighbours(hiding('notes/index'))
+      expect([...pairs.keys()].some((slug) => slug.startsWith('notes/'))).toBe(false)
+      expect(pairs.has('zettelkasten')).toBe(true)
+    })
+  })
+
+  /**
    * The `/about` collision, which used to be a `console.warn` inside
    * `getStaticPaths`: a line in a page-build log, on a hook Astro may not
    * re-run. The note wins the URL, the sidebar keeps listing the folder, and

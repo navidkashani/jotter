@@ -15,6 +15,8 @@ export interface TreeNote {
   slug: string
   path: string
   updated: Date
+  /** Left out of the sidebar. Still built, still routed, still reachable. */
+  hidden?: boolean
 }
 
 export interface TreeFolder {
@@ -27,9 +29,34 @@ export interface TreeFolder {
   children: TreeEntry[]
   /** Notes anywhere beneath this folder. */
   count: number
+  /** Left out of the sidebar, along with everything under it. See `hidden`. */
+  hidden?: boolean
 }
 
 export type TreeEntry = TreeNote | TreeFolder
+
+/**
+ * The sidebar arrangement from the published snapshot: `config.navOrder` and
+ * `config.navHidden`.
+ *
+ * Both name **slugs**, and a folder is named by the slug of its index page, so
+ * the folder served at `/notes` is `notes/index` here. That indirection is the
+ * plugin's contract rather than jotter's preference, and it earns its keep: a
+ * folder and a note can want the same URL, which `shadowedFolders` below exists
+ * because of, and `notes` alone could not tell them apart.
+ */
+export interface NavArrangement {
+  /** Slugs in sidebar order, for the parents somebody arranged. */
+  order: readonly string[]
+  /** Slugs to leave out of the sidebar. */
+  hidden: readonly string[]
+}
+
+const NO_ARRANGEMENT: NavArrangement = { order: [], hidden: [] }
+
+/** What the arrangement calls this entry. A folder answers for its index page. */
+const navKey = (entry: TreeEntry): string =>
+  entry.kind === 'folder' ? `${entry.slug}/index` : entry.slug
 
 /**
  * Alphabetical within a kind; which kind comes first depends on where you are.
@@ -43,12 +70,26 @@ export type TreeEntry = TreeNote | TreeFolder
  * folder in the vault, which is where Obsidian Publish never puts them and
  * where no wiki puts its front page.
  *
- * This is not the whole of what Obsidian Publish does. That is a hand-dragged
- * order stored in its server-side site options, not in `.obsidian/publish.json`,
- * so no plugin can import it and no generator can reproduce it. See
- * `docs/open-publish.md`. This is the part that can be had for free.
+ * All of this is the *default*, and it is what a parent nobody arranged keeps.
+ * An Open Publish snapshot can carry an explicit order, and where it does, that
+ * order wins outright: somebody who dragged a note above a folder meant it, and
+ * so did somebody who dragged one to the top of the root. See `NavArrangement`.
+ *
+ * What still cannot be had is Obsidian Publish's own hand-dragged order. That
+ * lives in its server-side site options rather than in `.obsidian/publish.json`,
+ * so nothing can import it; what arrives here was arranged in Open Publish. See
+ * `docs/open-publish.md`.
  */
-const compare = (a: TreeEntry, b: TreeEntry, notesFirst: boolean) => {
+const compare = (a: TreeEntry, b: TreeEntry, notesFirst: boolean, rank: Map<string, number>) => {
+  // An arranged pair is ordered by the arrangement and nothing else. Arranged
+  // beats unarranged, and both beat the kind rule below, which is the whole
+  // point of an explicit order.
+  const rankA = rank.get(navKey(a))
+  const rankB = rank.get(navKey(b))
+  if (rankA !== undefined && rankB !== undefined) return rankA - rankB
+  if (rankA !== undefined) return -1
+  if (rankB !== undefined) return 1
+
   if (a.kind !== b.kind) {
     const folderIsFirst = a.kind === 'folder' ? -1 : 1
     return notesFirst ? -folderIsFirst : folderIsFirst
@@ -84,6 +125,17 @@ export function buildTree(
    * reader actually sees.
    */
   folderNames: Record<string, string> = {},
+  /**
+   * `config.navOrder` and `config.navHidden`: the sidebar somebody arranged in
+   * Obsidian, or nothing at all, which is the ordinary case.
+   *
+   * Hiding marks entries rather than dropping them, and that is the difference
+   * between this and a generator whose filter only feeds a sidebar. This tree
+   * also generates routes: drop a folder here and its page stops existing,
+   * which would turn "leave it out of the navigation" into "unpublish it and
+   * everything under it". `NavTree.astro` is what skips them.
+   */
+  arrangement: NavArrangement = NO_ARRANGEMENT,
 ): TreeEntry[] {
   const root: TreeFolder = { kind: 'folder', name: '', path: '', slug: '', children: [], count: 0 }
   const folders = new Map<string, TreeFolder>([['', root]])
@@ -128,9 +180,15 @@ export function buildTree(
     root.count++
   }
 
+  const rank = new Map(arrangement.order.map((slug, index) => [slug, index]))
+  const hidden = new Set(arrangement.hidden)
+
   const sortDeep = (entries: TreeEntry[], atRoot: boolean): TreeEntry[] => {
-    entries.sort((a, b) => compare(a, b, atRoot))
-    for (const entry of entries) if (entry.kind === 'folder') sortDeep(entry.children, false)
+    entries.sort((a, b) => compare(a, b, atRoot, rank))
+    for (const entry of entries) {
+      if (hidden.has(navKey(entry))) entry.hidden = true
+      if (entry.kind === 'folder') sortDeep(entry.children, false)
+    }
     return entries
   }
 
@@ -154,6 +212,11 @@ export function buildTree(
  * Folders are not in the chain. A folder is a listing, not the next thing to
  * read, and stepping into one would make the sequence depend on which folder
  * you happened to be in.
+ *
+ * Neither is anything hidden, for the same reason twice over: it is not in the
+ * navigation, and this chain is supposed to be the navigation's order. A hidden
+ * note still has its own page and still has neighbours; it simply stops being
+ * anybody else's "next".
  */
 export function neighbours(
   entries: readonly TreeEntry[],
@@ -161,11 +224,17 @@ export function neighbours(
   const pairs = new Map<string, { previous?: string; next?: string }>()
 
   const walk = (children: readonly TreeEntry[]): void => {
-    const notes = children.filter((child): child is TreeNote => child.kind === 'note')
+    const notes = children.filter(
+      (child): child is TreeNote => child.kind === 'note' && !child.hidden,
+    )
     notes.forEach((note, i) => {
       pairs.set(note.slug, { previous: notes[i - 1]?.slug, next: notes[i + 1]?.slug })
     })
-    for (const child of children) if (child.kind === 'folder') walk(child.children)
+    // A hidden folder is not walked at all: nothing inside it is in the
+    // navigation, so nothing inside it is anybody's next either.
+    for (const child of children) {
+      if (child.kind === 'folder' && !child.hidden) walk(child.children)
+    }
   }
 
   walk(entries)
