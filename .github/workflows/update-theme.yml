@@ -59,8 +59,25 @@ jobs:
 
           have=$(jq -r '.version // "unknown"' package.json 2>/dev/null || echo unknown)
           want=$(git show upstream/main:package.json | jq -r '.version // "unknown"')
+          ahead=$(git rev-list --count HEAD..upstream/main)
+
+          # What to call the update, which is not always a version.
+          #
+          # Most updates land between releases, so `want` is usually the version
+          # this site is *already* running and a headline built from it alone
+          # reads "jotter 0.7.0 is ready to merge" to somebody running 0.7.0.
+          # The count is the honest answer in that case, and the version is the
+          # honest one when it moved.
+          if [ "$have" = "$want" ]; then
+            what="$ahead change(s) to jotter $want"
+          else
+            what="jotter $want"
+          fi
+
           echo "have=$have" >> "$GITHUB_OUTPUT"
           echo "want=$want" >> "$GITHUB_OUTPUT"
+          echo "ahead=$ahead" >> "$GITHUB_OUTPUT"
+          echo "what=$what" >> "$GITHUB_OUTPUT"
 
           # Already carrying every upstream commit. Not a failure, and not a
           # pull request either: an empty one is a thing to close, not to read.
@@ -87,7 +104,7 @@ jobs:
             {
               echo "## Update stopped: files disagree"
               echo
-              echo "jotter $want could not be merged into this repository without a decision"
+              echo "$what could not be merged into this repository without a decision"
               echo "only you can make. Nothing was changed, and \`$BASE\` is untouched."
               echo
               echo "These files were edited both here and upstream:"
@@ -123,14 +140,16 @@ jobs:
           BASE: ${{ github.event.repository.default_branch }}
           HAVE: ${{ steps.merge.outputs.have }}
           WANT: ${{ steps.merge.outputs.want }}
+          AHEAD: ${{ steps.merge.outputs.ahead }}
+          WHAT: ${{ steps.merge.outputs.what }}
           COMPARE: ${{ github.server_url }}/${{ github.repository }}/compare
         run: |
           set -euo pipefail
 
           body=$(printf '%s\n' \
-            "Merges [jotter](https://github.com/navidkashani/jotter) **$WANT** into this site." \
+            "Merges **$WHAT** from [jotter](https://github.com/navidkashani/jotter) into this site." \
             "" \
-            "This site is running **$HAVE**." \
+            "This site is running **$HAVE**, $AHEAD commit(s) behind." \
             "" \
             "What changed is in [jotter's changelog](https://github.com/navidkashani/jotter/blob/main/CHANGELOG.md)." \
             "The merge is already done on this branch, so merging this pull request is the whole update." \
@@ -139,10 +158,10 @@ jobs:
 
           existing=$(gh pr list --head update-theme --state open --json number --jq '.[0].number // empty')
           if [ -n "$existing" ]; then
-            gh pr edit "$existing" --title "Update jotter to $WANT" --body "$body"
+            gh pr edit "$existing" --title "Update: $WHAT" --body "$body"
             url=$(gh pr view "$existing" --json url --jq .url)
           elif url=$(gh pr create --base "$BASE" --head update-theme \
-                      --title "Update jotter to $WANT" --body "$body" 2>/tmp/pr-error); then
+                      --title "Update: $WHAT" --body "$body" 2>/tmp/pr-error); then
             :
           else
             # `GITHUB_TOKEN` cannot open pull requests unless somebody has ticked
@@ -153,7 +172,7 @@ jobs:
             # opens the pull request. Say so, and link straight to it.
             echo "::notice::Could not open the pull request automatically; the branch is pushed."
             {
-              echo "## jotter $WANT is ready to merge"
+              echo "## $WHAT ready to merge"
               echo
               echo "The merge is done and pushed to the \`update-theme\` branch. One click left:"
               echo
@@ -176,9 +195,9 @@ jobs:
           fi
 
           {
-            echo "## jotter $WANT is ready to merge"
+            echo "## $WHAT ready to merge"
             echo
-            echo "This site is running **$HAVE**. The merge is done; review and merge:"
+            echo "This site is running **$HAVE**, $AHEAD commit(s) behind. The merge is done; review and merge:"
             echo
             echo "### [$url]($url)"
           } >> "$GITHUB_STEP_SUMMARY"
