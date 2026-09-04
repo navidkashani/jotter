@@ -1,14 +1,12 @@
 # Building from an Open Publish snapshot
 
 [Open Publish](https://github.com/navidkashani/open-publish) is an Obsidian
-plugin that pushes a chosen subset of a vault into object storage as an
-immutable, content-addressed snapshot, and then asks a host to rebuild. This
-repository can be that host.
+plugin that pushes a chosen subset of a vault into object storage, then asks a
+host to rebuild. This repository can be that host.
 
-Two scripts do it, and both **no-op when the bucket is not configured**. With
+Two scripts do it, and both do nothing when the bucket is not configured. With
 none of the `OP_*` variables set, `npm run build` builds the folder of markdown
-at `vault:` exactly as it always has: no manifest, no network, no
-change to the demo garden. Everything below is opt-in by environment variable.
+at `vault:` exactly as it always has. Everything below is opt-in.
 
 ```
 npm run build
@@ -18,11 +16,9 @@ npm run build
   └─ node scripts/finalize.mjs          the marker the plugin polls
 ```
 
-`finalize` runs **after** `verify`, and that ordering is the point: a build that
-failed jotter's own gate never gets a `_publish.json`, so the plugin cannot
-report a broken deploy as the live one.
-
----
+`finalize` runs **after** `verify`, so a build that failed jotter's own gate
+never gets a `_publish.json` and the plugin cannot report a broken deploy as the
+live one.
 
 ## Set these on your host
 
@@ -42,105 +38,46 @@ and Vercel, in the site's build settings.
 | `OP_FORCE_PATH_STYLE` | Optional. `false` for virtual-host addressing |
 | `OP_SITE_URL` | Your own address, overriding whatever the host injects. Optional everywhere except Workers Builds, which injects none |
 
-**Set all four, or none of the eight.** Any `OP_*` variable in the table turns
-the fetch on; with some of the required four then missing, the build stops and
-names them. A typo in a build setting must not quietly publish the demo garden
-to your domain.
+**Set all four, or none of the eight.** Any `OP_*` variable turns the fetch on,
+and the build stops and names whichever of the required four is then missing. A
+typo in a build setting must not quietly publish the demo garden to your domain.
 
 The site URL is worked out from `OP_SITE_URL`, then `CF_PAGES_URL`,
 `DEPLOY_PRIME_URL`, `URL`, `VERCEL_PROJECT_PRODUCTION_URL`, `VERCEL_URL`. With
-none of them set, jotter emits no sitemap and no canonical links (a smaller
-site, not a wrong one), so it is a warning rather than a failure. Cloudflare
-Workers Builds injects no address at all, and is the one host where you have to
-set `OP_SITE_URL` yourself.
+none of them set, jotter emits no sitemap and no canonical links, which is a
+smaller site rather than a wrong one, so it warns rather than failing.
 
 ### Cloudflare Workers Builds
 
-There is no configuration to write by hand any more.
 [`wrangler.jsonc`](../wrangler.jsonc) ships in the repository root, so
-connecting the repository to a Worker is the whole setup: the deploy reads the
-output directory, the 404 page and the trailing-slash rule out of that file.
-Each of the three carries a comment saying why it holds the value it does, and
-`test/wrangler.test.ts` keeps the output directory in step with the build,
-because a directory that has drifted deploys an empty site and still reports
-success.
+connecting the repository to a Worker is the whole setup. The deploy reads the
+output directory, the 404 page and the trailing-slash rule out of that file, and
+`test/wrangler.test.ts` keeps the output directory in step with the build. One
+line in it is yours: `name` has to match the Worker you created in the
+dashboard, and Workers Builds fails the build when the two disagree.
+`OP_SITE_URL` is required here, and this is the only host where that is true.
 
-One line in it is yours. `name` has to match the Worker you created in the
-dashboard, and Workers Builds fails the build when the two disagree, so change
-that line rather than renaming the Worker.
-
-`OP_SITE_URL` is still required here, and this is the only host where that is
-true. Workers Builds tells the build nothing about where the site will be
-served, so with the variable unset the build warns and the site goes out with no
-sitemap and no canonical links.
-
-The file carries no `pages_build_output_dir`, which is what keeps it invisible
-to Cloudflare Pages: a Wrangler file without that key is used for local
-development only, so a site already deployed from Pages is untouched by it.
-Netlify and Vercel never read it at all.
-
-### The line Cloudflare Pages prints about `wrangler.jsonc`
-
-Invisible is not the same as silent. Every Pages build of a site made from this
-theme logs this, and then succeeds:
-
-```
-Found wrangler.json file. Reading build configuration...
-A Wrangler configuration file was found but it does not appear to be valid.
-Did you mean to use wrangler.toml to configure Pages? If so, then make sure
-the file is valid and contains the `pages_build_output_dir` property.
-Skipping file and continuing.
-```
-
-**Expected, and harmless.** "Skipping file and continuing" is Pages declining to
-read a file that was never addressed to it, which is exactly the arrangement
-that lets one repository deploy to both Pages and Workers Builds. Nothing about
-your site is misconfigured, and no build has ever failed because of it. It is
-documented here because "does not appear to be valid" is the kind of line
-somebody debugging an unrelated failure will chase for an hour.
-
-Adding `pages_build_output_dir` to make it stop is not the fix. That was tested
-rather than assumed, and it fails in both directions:
-
-- `wrangler deploy` starts warning that this "is a Pages project" and that
-  "proceeding will likely produce unwanted results", then stops for a
-  confirmation that only a non-interactive fallback answers. A Workers Builds
-  deploy would be riding on that fallback.
-- The key is precisely what promotes the file from local-development-only to
-  the source of truth for a Pages project's configuration. Adding it would
-  silently take over the dashboard build settings of every Pages site already
-  deployed from this theme.
-
-So the warning stays, and this section is the whole fix.
+**Cloudflare Pages prints a warning about that file, and it is harmless.** Every
+Pages build logs "A Wrangler configuration file was found but it does not appear
+to be valid… Skipping file and continuing", and then succeeds. The file carries
+no `pages_build_output_dir`, which is what keeps it invisible to Pages and lets
+one repository deploy to both. Adding that key would instead make the file the
+source of truth for the Pages build settings of every site already deployed from
+this theme.
 
 ### The Node version is pinned
 
-`.node-version` in the repository root says `24.20.0`, and `engines.node` agrees
-with it. Cloudflare Pages and Workers Builds both read that file, and so do
-Netlify, `fnm` and `nodenv`. Vercel reads `engines.node` instead, which is the
-other half of why both say the same thing. CI reads the file directly rather
-than naming a version of its own, so a green run means the theme built on the
-version your host will use.
-
-It is pinned rather than floating because unpinned means the host chooses. On a
-real build, Pages picked 22.16.0 while development was happening on 24.x and
-`undici` warned that it wanted 22.19.0 or newer: three different answers, none
-of them chosen, and a warning today is a broken build on a version you cannot
-reproduce locally tomorrow.
-
-`24.20.0` is the current Node LTS, and moving it is a decision somebody makes.
-When you do move it, change `.node-version` and `engines.node` together, and
-run `npm test` and `npm run verify:full` on the new version before trusting it.
-
----
+`.node-version` and `engines.node` name the same version, because hosts disagree
+about where to look: Pages, Workers Builds and Netlify read the file, and Vercel
+reads `engines`. Unpinned means the host chooses, and on a real build Pages
+picked one version while development was happening on another. Change both
+together, and run `npm test` and `npm run verify:full` before trusting the new
+one.
 
 ## What the fetch does to this repository
 
-Nothing you can see in `git status`. That is the whole answer, and it is worth
-one paragraph of why, because it used to be the opposite.
-
-**Everything the fetch generates goes into `.jotter/`**, which is git-ignored,
-which `npm run clean` removes, and which nothing else in the build writes to:
+Nothing you can see in `git status`. **Everything the fetch generates goes into
+`.jotter/`**, which is git-ignored and which `npm run clean` removes:
 
 | Path | What |
 | --- | --- |
@@ -148,32 +85,17 @@ which `npm run clean` removes, and which nothing else in the build writes to:
 | `.jotter/site.json` | The site options from Obsidian, mapped to jotter's config. |
 | `.jotter/vault/.jotter/` | `links.json` and `embeds.json`, described below. |
 
-`jotter.config.ts` reads `site.json` as `defineConfig(generated ?? { … })` — a
-replacement, not a merge, because the plugin has no site option for
+`jotter.config.ts` reads `site.json` as `defineConfig(generated ?? { … })`, a
+replacement rather than a merge, because the plugin has no site option for
 `description`, `author`, `linkResolution` or `publishGate` and a merge would
 leave the demo's own values showing under a real site. **The config file itself
-is never written.** Edit it freely: it is what a build with no snapshot uses,
-and a build with one leaves it byte-identical.
+is never written.** Edit it freely.
 
-Both halves used to be written onto tracked paths — the options into
-`jotter.config.ts`, the notes into `src/content/notes/` — and the cost was not
-the overwriting. It was that `git status` came back dirty after every build, the
-obvious response is `git commit -a`, and from then on every upstream change to
-those paths was a merge conflict. A site that cannot take an update keeps
-whatever bugs it shipped with. See [updating.md](updating.md).
-
-What stays yours, and is never written by anything here: `jotter.config.ts`,
-`src/styles/custom.css`, `src/user/*.astro`, `src/i18n/*.json`.
-
-**Two files are written into the vault beside your notes**, both under
-`.jotter/`, which the scan ignores as a directory and reads as data:
-`links.json` (every wikilink, resolved inside Obsidian: see below) and
-`embeds.json` (posters and tweet text, fetched from the network: see
-"Obsidian syntax support" in [the README](../README.md)). A poster downloaded
-for a video facade lands
-in `attachments/embeds/` and is served from your own site like any other image.
-
----
+Both halves used to be written onto tracked paths, and the cost was a dirty
+`git status` after every build, whose obvious answer is `git commit -a`. From
+then on every upstream change to those paths was a merge conflict, and a site
+that cannot take an update keeps whatever bugs it shipped with. See
+[updating.md](updating.md).
 
 ## The site options, and what each becomes
 
@@ -196,146 +118,80 @@ in `attachments/embeds/` and is served from your own site like any other image.
 | `analytics` | `analytics`, or `none` when the id is blank |
 | `homepage` | *nothing: already applied* |
 
-Two of those arrived to answer the same question twice, and it is worth knowing
-why they are site options rather than jotter config keys. **`.jotter/site.json`
-replaces `jotter.config.ts`'s literal outright on an Open Publish build**, so a
-key `mapSite` does not emit is frozen at its schema default: not settable in
-Obsidian, and not settable by editing the config, because on this build path the
-config's literal is not what runs. Anything you need to flip has to travel in the
-snapshot.
+`.jotter/site.json` replaces `jotter.config.ts`'s literal outright on an Open
+Publish build, so a key the mapping does not emit sits at its schema default,
+and anything you need to flip has to travel in the snapshot. The escape hatch is
+to delete the `generated ??` and keep your own literal, at the price of the site
+options in Obsidian no longer reaching the site at all.
 
-The escape hatch, for a key you need and the plugin has no option for, is to
-delete the `generated ??` and keep your own literal — at the price of the site
-options in Obsidian no longer reaching the site at all. It is your file; it just
-cannot be half of each.
+Three rows are not the straight mapping they look like.
 
-`showPageMetadata` is **off** by default, which is what Obsidian Publish does:
-it shows none of this. Turned on, jotter still prints a date only where it has a
-real one: see the next section.
+- **The graph needs the layout.** jotter renders the graph in the right panel,
+  and the column layout has no right panel.
+- **Analytics with no id would fail the build.** A provider chosen in Obsidian
+  with the id left blank falls back to no analytics, with a line in the build
+  log, rather than stopping the deploy.
+- **The homepage is already applied.** The plugin has given that note the slug
+  `index`, which is what `/` is served from.
 
-Three of those are not the straight mapping they look like.
-
-**The graph needs the layout.** jotter renders the graph in the right panel, and
-the column layout has no right panel, so `features.graph` alone is a flag that
-is on and a feature that never draws. Asking for a graph therefore also asks for
-`layout: 'panels'`.
-
-**Analytics with no id would fail the build.** The plugin defaults the id to an
-empty string, and jotter's config requires one unless the provider is `none`. A
-provider chosen in Obsidian with the id left blank falls back to no analytics,
-with a line in the build log, rather than stopping the deploy over it.
-
-**The homepage is already applied.** `homepage` is a vault path, and the plugin
-has given that note the slug `index`, which is what `/` is served from. Copying
-it into jotter's `homepage`, which takes a *slug*, would be a second answer to a
-settled question.
-
-**The language decides the direction, in Obsidian.** `dir` is not a control
-anybody sets: the plugin derives it from `locale` through a closed table of the
-tags it will publish, and jotter carries the answer across rather than working
-it out again. One table in one place is one answer, and a starter with no
-direction concept of its own still receives the right one instead of guessing.
-
-Chrome text is a separate question from layout. An `fa-IR` site gets `<html
-lang="fa-IR" dir="rtl">` and a right-to-left layout immediately, but its
-buttons and labels stay English until someone adds `src/i18n/fa.json` and
-registers it in `src/i18n/index.ts`. The lookup tries the whole tag before the
-language alone, so either `fa-IR.json` or `fa.json` is found. That directory is
-yours and survives every rebuild.
+`dir` is derived from `locale` in Obsidian, and jotter carries the answer across
+rather than working it out again. Chrome text is a separate question: an `fa-IR`
+site gets `<html lang="fa-IR" dir="rtl">` immediately, and its buttons and
+labels stay English until someone adds `src/i18n/fa.json`.
 
 A site option this repository has never heard of is reported in the build log
 and ignored, which is how you find out to update from the template. Four jotter
 settings have no equivalent in a snapshot and stay at their defaults:
 `features.hoverPreview`, `features.rss`, `features.embeds` and `externalLinks`.
-The last two are deliberate rather than pending: click-to-play embeds and the
-`↗` on an outbound link have a defensible default each, and three more site
-options is too high a price for a preference.
 
-**The sidebar order.** jotter's default sorts alphabetically, with one
-adjustment that gets most of the way there for free: the loose notes at the root
-of the vault sort *above* the folders, because those are the front doors
-(Welcome, Now, Start here) and under the folders they sat at the bottom of the
-sidebar. Inside a folder it is folders-first, the way a file tree reads.
+### The sidebar order
 
-That is the default, and Open Publish can now override it. Settings > Open
-Publish > Site options > **Customize navigation** arranges the sidebar folder by
-folder and leaves pages out of it, and the snapshot carries the result as
-`nav: { order, hidden }`, in slugs. Anywhere it speaks, it wins outright:
-somebody who put a folder above the root notes meant it. Anywhere it says
-nothing, the default above is untouched, which is what an ordinary vault gets.
-A note can also say it itself, with `nav-order:` or `nav-hidden:` in its own
-frontmatter, and frontmatter wins over the dialog.
+jotter's default sorts alphabetically, with the loose notes at the root of the
+vault above the folders, because those are the front doors. Inside a folder it
+is folders-first, the way a file tree reads.
 
-Two details of the mapping are worth knowing:
+Open Publish can override that. **Settings → Open Publish → Site options →
+Customize navigation** arranges the sidebar folder by folder and leaves pages
+out of it, and the snapshot carries the result as `nav: { order, hidden }`, in
+slugs. Where it speaks it wins outright; where it says nothing the default above
+is untouched. A note can also say it itself with `nav-order:` or `nav-hidden:`,
+and frontmatter wins over the dialog. A folder is named by the slug of its index
+page, so the folder served at `/notes` is `notes/index` in both lists: a folder
+and a note can want the same URL, and `notes` alone could not tell them apart.
 
-- A folder is named by the slug of its index page, so the folder served at
-  `/notes` is `notes/index` in both lists. That indirection is the plugin's
-  contract, and it earns its keep here: a folder and a note can want the same
-  URL, which `shadowedFolders` exists because of, and `notes` alone could not
-  tell them apart.
-- **Hidden is not unpublished and not private.** A page left out of the sidebar
-  is still built, still at its own address, still in the search index, still in
-  the sitemap and still linked to from any note that links to it. jotter marks
-  hidden entries rather than dropping them from its tree, precisely because that
-  tree also generates the folder routes: dropping a folder would take its page
-  down. `NavTree.astro` is what skips them, and `neighbours()` skips them too,
-  so the previous/next footer agrees with the sidebar.
+**Hidden is not unpublished and not private.** A page left out of the sidebar is
+still built, still at its own address, still in the search index, still in the
+sitemap and still linked to from any note that links to it. jotter marks hidden
+entries rather than dropping them, because that same tree generates the folder
+routes and dropping a folder would take its page down.
 
-**One thing Obsidian Publish still has that no plugin can import**: its own
-hand-dragged order, which lives in its *server-side* site options rather than in
-`.obsidian/publish.json`, so there is nothing on disk to read. What arrives here
-was arranged in Open Publish, not migrated from Publish.
-
----
+Obsidian Publish's own hand-dragged order lives in its server-side site options,
+so no plugin can import it. What arrives here was arranged in Open Publish.
 
 ## Dates, and which ones jotter believes
 
 A vault fetched from a snapshot is written fresh into a directory this build
-just deleted. Every fallback in `src/lib/dates.ts` therefore collapses at once:
-the author wrote no frontmatter date, there is no git history, and the mtime is
-the instant `writeFile` ran. All three land on *now*, which is why every note on
-a site built this way used to read `Created` as the day of the last deploy.
+just deleted, so every fallback in `src/lib/dates.ts` collapses at once: no
+frontmatter date, no git history, and an mtime of the instant `writeFile` ran.
+All three land on *now*.
 
 So the snapshot carries the file's `ctime` and `mtime`, and
-`scripts/fetch-content.mjs` writes them into each note:
+`scripts/fetch-content.mjs` writes them into each note as `created:` and
+`updated:`, **only when the note dates none of itself**. A note carrying any of
+the ten spellings `src/lib/dates.ts` recognises keeps what its author wrote.
 
-```yaml
----
-title: "Critical Thinking"
-created: "2024-03-14T00:00:00.000Z"
-updated: "2026-01-09T00:00:00.000Z"
----
-```
-
-**Only when the note dates none of itself.** A note carrying any of the ten
-spellings `src/lib/dates.ts` recognises (`created`, `date`, `created_at`,
-`createdAt`, `published`, and the five `updated` ones) keeps what its author
-wrote, untouched.
-
-That precedence is not politeness, it is accuracy. Obsidian takes `ctime` from
-the filesystem, and the filesystem loses it: sync, a restore from backup and an
-ordinary file transfer all reset it to the moment the copy landed, which is why
-Obsidian's own forum carries a long-standing request to stop deriving it that
-way and why plugins exist whose whole job is to write a creation date into
-frontmatter. **A note's own `created:` is the only trustworthy source**; the
-snapshot's `ctime` is best effort. The one corruption cheap to catch is caught:
-a creation date later than the last modification is a copy operation's
-timestamp, not a note edited before it existed, so `mtime` wins.
-
-And where jotter has no real date at all, it prints none. `features.metadata`
-on a vault with no dates and no git history shows the other frontmatter fields
-and no `Created` row, rather than the build's own clock.
-
----
+A note's own `created:` is the only trustworthy source, and the snapshot's
+`ctime` is best effort: Obsidian takes it from the filesystem, and sync, a
+restore from backup and an ordinary file transfer all reset it. One corruption
+is cheap to catch and is caught: a creation date later than the last
+modification is a copy operation's timestamp, so `mtime` wins. Where jotter has
+no real date at all, it prints none.
 
 ## Old addresses become redirects, and the note does not move
 
-A vault moving off Obsidian Publish carries `legacyUrls`: the addresses each
-note used to answer at, like `Wisdom+&+Approaches/Critical+Thinking`. The plugin
-also records every rename it has seen.
-
-Both arrive in the note's frontmatter, never as `permalink:` and never as
-`aliases:`, and under **two keys**:
+A vault moving off Obsidian Publish carries `legacyUrls`, the addresses each
+note used to answer at. The plugin also records every rename it has seen. Both
+arrive in the note's frontmatter, under two keys of their own:
 
 ```yaml
 ---
@@ -346,96 +202,60 @@ renamedFrom: ["notes/critical-thinking"]
 ---
 ```
 
-`buildRedirectRules` runs an old address through `sourceFor(url, 'preserve')`
-(NFC and nothing else), and then through the one URL encoder in the build, so
-the first line becomes a redirect from `/Wisdom+%26+Approaches/Critical+Thinking`
-to the slug the plugin published, and **the note stays where it is**. Written to
-`permalink:` instead it would be the other way round: the address the plugin
-published would redirect to the address the site used to have, backwards.
+| Key | Redirect | Why |
+| --- | --- | --- |
+| `oldUrls:` | **301** | Nothing retracts what publish.obsidian.md served, so the address is permanent |
+| `renamedFrom:` | **302** | Rename the note back and the plugin records the opposite move, so the rule reverses |
+| `aliases:` | 302 | A name the author gave the note, and the only one of the three printed on the page |
 
-**Two keys, because only one of the two is frozen.** `oldUrls:` is a 301 and
-`renamedFrom:` is a 302, and the difference is whether jotter could ever take
-the address back. Nothing retracts what publish.obsidian.md served. A rename is
-this site's own history: rename the note back and the plugin records the
-opposite move, and the rule reverses.
+Both address keys redirect **to** the note, so the note stays at the slug the
+plugin published. Written to `permalink:` instead it would be the other way
+round, with the address the plugin published redirecting to the old one.
 
-That matters because a 301 outlives the build that wrote it. Browsers cache one
-indefinitely and nothing here bounds it with a `Cache-Control`, so a browser
-holding the withdrawn half of a reversed pair asks for `d`, replays its pinned
-`d → p`, is answered `p → d`, and loops until it gives up with
-`ERR_TOO_MANY_REDIRECTS` — clearing only when its cache does. `resolveChain` in
-the plugin collapses chains within one snapshot and cannot see this one: the
-stale half is in somebody's browser. Merged into a single list, as they were,
-the two kinds were indistinguishable by the time the redirect writer read them,
-so every rule was permanent, including the ones a later build withdraws. **The
-SEO this protects is the SEO that matters**: a migrated site's search equity is
-in its Obsidian Publish addresses, and those still answer 301.
+The 301/302 split matters because a 301 outlives the build that wrote it.
+Browsers cache one indefinitely, so a browser holding the withdrawn half of a
+reversed pair loops until it gives up with `ERR_TOO_MANY_REDIRECTS`. Merged into
+a single list, as they once were, every rule was permanent, including the ones a
+later build withdraws. `aliases:` is separate again because
+`src/components/Frontmatter.astro` prints it under "Also known as", and
+`About/How+to+Communicate` is not a name anybody gave a note.
 
-**And keys of their own, not more `aliases:`.** All of them become redirects, so
-routing never told them apart; the page did.
-`src/components/Frontmatter.astro` prints `aliases` under the heading "Also
-known as", so every note on a vault migrated from Obsidian Publish displayed
-`About/How+to+Communicate` as human metadata. An alias is a name the author gave
-the note. An old URL is routing data that somebody happened to publish. Both
-address keys are written whole rather than merged, because unlike `aliases` they
-hold no author content: the snapshot is the authority on which addresses this
-note used to answer at.
-
-This is why nothing in this pipeline writes `_redirects` of its own. jotter had
-a redirect writer already; it just needed to be told the names.
-
-The Quartz starter does write `legacyUrls` into `permalink:`, because Quartz
-runs every alias through its own slugifier and `permalink` is the one key it
-honours character for character. jotter honours both, so it can pick the one
-that keeps the note in place. A vault prepared by the Quartz starter still
-works here (see [url-styles.md](url-styles.md)).
-
----
+The Quartz starter writes `legacyUrls` into `permalink:` instead, because Quartz
+runs every alias through its own slugifier. jotter honours both keys, so a vault
+that starter prepared still works here. See [url-styles.md](url-styles.md).
 
 ## Links, and why no note body is rewritten
 
-The plugin resolves every wikilink *inside Obsidian*, against the whole vault,
-with your own settings: attachment folders, aliases, shortest-path matching
-over notes that were never published. Nothing that sees only the published
-subset can reproduce that.
+The plugin resolves every wikilink inside Obsidian, against the whole vault,
+with your own settings: attachment folders, aliases, shortest-path matching over
+notes that were never published. Nothing that sees only the published subset can
+reproduce that. So the answers are written to `<vault>/.jotter/links.json`, and
+[`src/lib/links-index.ts`](../src/lib/links-index.ts) reads them, alongside
+`embeds.json` for posters and tweet text. Note bodies arrive byte for byte as
+their author wrote them, plus a `title:`, an `aliases:`, an `oldUrls:` and the
+note's dates. A link to a note that was not published renders as an inert
+`<span class="dead-link">` labelled with what the author typed, never with the
+unpublished note's title.
 
-So the answers are written to `<vault>/.jotter/links.json`, in the manifest's own
-shape, and [`src/lib/links-index.ts`](../src/lib/links-index.ts) reads them. Note
-bodies arrive byte for byte as their author wrote them, plus a `title:`, an
-`aliases:`, an `oldUrls:` and the note's dates in the frontmatter. A link to a
-note that was not published renders as an inert `<span class="dead-link">`
-labelled with what the author typed: never with the unpublished note's title.
-
-One re-keying happens on the way in: the manifest keys links by vault path, and
-jotter looks them up by the note's on-disk path, which after the fetch is
-`<slug>.md`.
-
-**Markdown is written at its slug; attachments are written at their vault path.**
-That difference is deliberate. A note's slug is an address the plugin published
-and other people link to. An attachment has no such address (jotter serves
-attachments from `/_vault/<path>`, which the plugin never sees), and
-`resolveAsset` matches an embed on the file's *basename* without consulting the
-link index, so a slugified `My Diagram.png` would make `![[My Diagram.png]]`
-resolve to nothing.
-
----
+**Markdown is written at its slug; attachments are written at their vault
+path.** A note's slug is an address the plugin published and other people link
+to. An attachment has no such address, and `resolveAsset` matches an embed on
+the file's basename, so a slugified `My Diagram.png` would make
+`![[My Diagram.png]]` resolve to nothing.
 
 ## The marker the plugin polls
 
 After a passing build, `finalize.mjs` writes:
 
 - **`dist/_publish.json`**: `{ snapshot, builtAt }`. The plugin polls this every
-  3 to 15 seconds for ten minutes after a publish. Without it, every publish ends
-  in "still waiting" on a site that went live minutes earlier.
+  3 to 15 seconds for ten minutes after a publish. Without it, every publish
+  ends in "still waiting" on a site that went live minutes earlier.
 - **`dist/_headers`**: `Cache-Control: no-store` on the marker, so a CDN cannot
-  serve a stale one and have the plugin report an old snapshot as live, plus
-  `X-Robots-Tag: noindex, nofollow` when `noIndex` is set. An existing `_headers`
-  is merged, not replaced.
+  serve a stale one, plus `X-Robots-Tag: noindex, nofollow` when `noIndex` is
+  set. An existing `_headers` is merged, not replaced.
 
-`robots.txt` is not written here. jotter's vault integration already writes it on
-every build, and its `noIndex` output is byte-identical.
-
----
+`robots.txt` is not written here. jotter's vault integration already writes it
+on every build, and its `noIndex` output is byte-identical.
 
 ## When a build stops
 
@@ -447,63 +267,46 @@ Every failure names the file or the setting that caused it.
 | `Storage rejected the build credentials (403)` | The token is wrong, or not scoped to this bucket. Not retried: a revoked token will not fix itself |
 | `No content has been published yet` | `current.json` is not in the bucket, or `OP_PREFIX` points somewhere else |
 | `… is not in the bucket` | `current.json` names a snapshot a cleanup removed. Publish again |
-| `"<file>" downloaded corrupted` | The object's sha256 did not match the manifest. Refusing to publish content that does not match the snapshot |
+| `"<file>" downloaded corrupted` | The object's sha256 did not match the manifest |
 | `… is missing from storage` | The manifest lists a file whose object was never uploaded. The publish was probably interrupted |
-| `… escapes the vault directory` | A slug, an old URL or a rename that would write outside the vault. Checked before anything is deleted, so the vault is left as it was |
+| `… escapes the vault directory` | A slug, an old URL or a rename that would write outside the vault. Checked before anything is deleted |
 | `understands snapshot version 1` | The plugin has moved on. Update this repository from the jotter template |
-
----
 
 ## Two kinds of verify failure
 
 `verify-build.mjs` runs between `astro build` and `finalize.mjs`, so anything it
-fails on is a site that does not go live. It therefore says out loud which kind
-of thing each line is, and only one of the three can stop a deploy.
+fails on is a site that does not go live. It says out loud which kind of thing
+each line is, and only one of the three can stop a deploy.
 
 | Line | What it means | Stops the build |
 | --- | --- | --- |
-| `FAIL` | An **invariant**: something jotter guarantees about every site it builds. A page without a `<main>`, a dead link rendered as a working `<a>`, a canonical that spells a URL differently from the links pointing at it | Yes |
-| `note` | An **observation**: something true of your content that you decided. Notes embedding files from another origin, an image whose dimensions jotter cannot know, a hand-written link to a page that is not there | No |
-| `skip` | A **demo-integrity guard**: a check that this repository's own demo garden still exercises some case, so the assertions beside it are not passing on an empty set. Meaningless on your vault, and skipped there | No |
+| `FAIL` | A rule jotter guarantees on every site it builds. A page without a `<main>`, a dead link rendered as a working `<a>`, a canonical that spells a URL differently from the links pointing at it | Yes |
+| `note` | An observation about your content. Notes embedding files from another origin, an image whose dimensions jotter cannot know, a hand-written link to a page that is not there | No |
+| `skip` | A guard on this repository's own demo garden, meaningless on your vault | No |
 
-So: a `note` is yours to act on, in your own time, and your site is live either
-way. A `FAIL` is a bug in the theme. The vault did not cause it, and no change
-to a note will fix it. Open an issue with the line it printed.
+A `note` is yours to act on in your own time, and your site is live either way.
+A `FAIL` is a bug in the theme: the vault did not cause it, and no change to a
+note will fix it. Open an issue with the line it printed.
 
-The line at the top of the run says which mode it is in. `JOTTER_DEMO=1` marks
-a build as this repository's own demo, which is what turns the `skip` lines into
-real checks; CI sets it, and nothing about a site built from a snapshot should.
+The line at the top of the run says which mode it is in. `JOTTER_DEMO=1` marks a
+build as this repository's own demo, which is what turns the `skip` lines into
+real checks. CI sets it, and nothing about a site built from a snapshot should.
 
-A worked example of the distinction, because it is what the split was written
-for. A vault kept its notes in a folder called `notes`, embedded two PDFs with
-`![[Integrity.pdf]]`, and pasted a tweet and a YouTube URL as `![](…)`. That
-built correctly and then failed eight checks, five of which were about fixtures
-that only exist in jotter's own demo garden. None of the eight was a reason not
-to publish; their site is live because they took the gate out of their build
-command. Today the demo guards skip, the content facts report, and the two real
-bugs in that list are fixed: a PDF emitted as an `<img>` no browser draws, and
-a listing check that read any folder called `notes` as jotter's own index.
-
-The durable half of that fix is that **the checks a user cannot pass are not in
-the script a user runs**. `scripts/verify-build.mjs` reads `dist/` and nothing
-else; the passes that rebuild this repository under configurations nobody ships
-are `scripts/verify-theme.mjs`, which `npm run build` never calls.
-
----
+The durable half of that split is that **the checks a user cannot pass are not
+in the script a user runs.** `scripts/verify-build.mjs` reads `dist/` and
+nothing else. The passes that rebuild this repository under configurations
+nobody ships are `scripts/verify-theme.mjs`, which `npm run build` never calls.
 
 ## Testing it without a bucket
 
 `test/snapshot.test.ts` runs the real `fetch-content.mjs` against a synthetic
 bucket served over loopback, in a scratch directory, so nothing in the
-repository is touched. `npm run verify:full` goes further: it fetches a fixture
-snapshot, builds it, and asserts on the finished `dist/` that each note is at
-the slug the plugin published, that the old Obsidian address 301s to it without
-moving the note, that an unpublished link is inert, and that `_publish.json`
-carries the snapshot `current.json` named.
+repository is touched.
 
-It also builds a deliberately unremarkable vault (a folder called `notes`, two
-PDF embeds, a tweet URL, a YouTube URL, and none of the demo's dead links, SVG
-or probe pages) and runs the real `verify-build.mjs` over it with `JOTTER_DEMO`
-removed from the environment. Its exit code is the assertion. That section is
-what stops a check that only the demo can satisfy from ever again being one your
+`npm run verify:full` goes further. It fetches a fixture snapshot, builds it,
+and asserts on the finished `dist/` that each note is at the slug the plugin
+published, that the old Obsidian address 301s to it without moving the note,
+that an unpublished link is inert, and that `_publish.json` carries the snapshot
+`current.json` named. It also builds a deliberately unremarkable vault with
+`JOTTER_DEMO` removed, so a check only the demo can satisfy is never one your
 deploy has to satisfy.

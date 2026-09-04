@@ -1,26 +1,32 @@
 # Migrating from Quartz
 
 Quartz is mature, free and well maintained. jotter is not trying to replace it
-for everyone. Move if you want a site that looks composed rather than
-generated, or if you have been fighting link resolution.
+for everyone. Move if you want a site that looks composed rather than generated,
+or if you have been fighting link resolution. Stay on Quartz if you depend on
+its plugin ecosystem, Mermaid, or KaTeX.
 
-Stay on Quartz if you depend on its plugin ecosystem, Mermaid, or KaTeX.
+## Three things jotter does differently
 
----
+**Links resolve exactly like Obsidian.** Quartz's `CrawlLinks` transformer
+defaults `markdownLinkResolution` to `absolute`, and Obsidian's own default is
+*shortest path*. If you never changed that setting, some of your links resolved
+differently on your site than in your vault, usually the ones to notes with
+duplicate basenames or written as a bare `[[Name]]` from inside a folder.
+
+**The whole theme is one token file.** No Tailwind, no SCSS, no second styling
+idiom for prose. `src/styles/tokens.css` holds every colour, space, type step,
+radius and duration, and the build fails on a colour literal anywhere else.
+
+**Wikilinks are parsed by the markdown engine, not by a regex over your prose.**
+Quartz hand-rolls `[[…]]` detection. jotter's engine parses it natively, which
+is why a `[[link]]` inside a code fence survives untouched.
 
 ## The one that will actually change your site
 
-**Link resolution.** Quartz's `CrawlLinks` transformer defaults
-`markdownLinkResolution` to `absolute`. Obsidian's own default is *shortest
-path*. If you never changed that setting, some of your links resolved
-differently on your site than in your vault: usually the ones to notes with
-duplicate basenames, or written as a bare `[[Name]]` from inside a folder.
+jotter defaults to `shortest`, so **your links will move.** That is the fix, and
+it is still a change: check any note where two files share a basename.
 
-jotter defaults to `shortest`. **Your links will move.** That is the fix, but
-it is a change: check any note where two files share a basename.
-
-If you deliberately set `markdownLinkResolution: 'absolute'` in
-`quartz.config.ts` and want to keep that behaviour:
+To keep Quartz's behaviour instead:
 
 ```ts
 // jotter.config.ts
@@ -29,8 +35,6 @@ export default defineConfig({ linkResolution: 'absolute' })
 
 `relative` is also available.
 
----
-
 ## Mapping the config
 
 | Quartz (`quartz.config.ts`) | jotter (`jotter.config.ts`) |
@@ -38,12 +42,12 @@ export default defineConfig({ linkResolution: 'absolute' })
 | `pageTitle` | `title` |
 | `baseUrl` | `url` (with the scheme: `https://…`) |
 | `locale` | `locale`, plus `dir` for RTL |
-| `enableSPA` | Not applicable: every page is a real document, so there is no router to enable. This is also why none of Quartz's analytics machinery ports across: it fires pageviews *manually*, on a custom `nav` event, because in an SPA the document never reloads and the vendor's automatic pageview fires once and never again. jotter emits each vendor's plain documented tag and a real navigation does the rest. Nothing to port, and nothing missing |
-| `enablePopovers` | `features.hoverPreview`, with one visible difference: jotter embeds the excerpt at build time rather than fetching the page, so a card opens instantly and offline, and shows the first paragraph rather than the whole note |
+| `enableSPA` | Not applicable: every page is a real document. This is also why none of Quartz's analytics machinery ports across. Quartz fires pageviews manually on a custom `nav` event, because in an SPA the document never reloads; jotter emits each vendor's plain documented tag and a real navigation does the rest |
+| `enablePopovers` | `features.hoverPreview`. jotter embeds the excerpt at build time rather than fetching the page, so a card opens instantly and offline, and shows the first paragraph rather than the whole note |
 | `analytics: { provider: 'google', tagId }` | `analytics: { provider: 'google', id: tagId }` |
-| `analytics: { provider: 'plausible', host? }` | `analytics: { provider: 'plausible', id: '<your domain>', host? }`: jotter needs the domain named. Quartz reads it from `location.hostname` at runtime, which cannot mismatch but also means the tag no longer says what it tracks; jotter's build asserts the id reached the markup instead |
-| `analytics: { provider: 'umami', host, websiteId }` | `analytics: { provider: 'umami', id: websiteId, host? }`, and note jotter's default host is `cloud.umami.is`, the current one. Quartz still ships `analytics.umami.is` |
-| `analytics: { provider: 'goatcounter', websiteId, host?, scriptSrc? }` | `analytics: { provider: 'goatcounter', id: websiteId, host? }`: jotter's `host` is the whole endpoint (`https://stats.example.com`), where Quartz's is the domain suffix it interpolates the site code into. There is no `scriptSrc` equivalent |
+| `analytics: { provider: 'plausible', host? }` | `analytics: { provider: 'plausible', id: '<your domain>', host? }`: jotter needs the domain named, and its build asserts the id reached the markup. Quartz reads it from `location.hostname` at runtime |
+| `analytics: { provider: 'umami', host, websiteId }` | `analytics: { provider: 'umami', id: websiteId, host? }`. jotter's default host is `cloud.umami.is`; Quartz still ships `analytics.umami.is` |
+| `analytics: { provider: 'goatcounter', websiteId, host?, scriptSrc? }` | `analytics: { provider: 'goatcounter', id: websiteId, host? }`: jotter's `host` is the whole endpoint, where Quartz's is a domain suffix. No `scriptSrc` equivalent |
 | `posthog`, `tinylytics`, `cabin`, `clarity`, `matomo`, `vercel`, `rybbit` | **No equivalent.** jotter supports six providers; `fathom` and `cloudflare` are additions Quartz does not have |
 | `ignorePatterns` | A note opts out with `publish: false`, or set `publishGate: 'opt-in'` |
 | `defaultDateType` | `created` / `updated` are both shown; lists sort by `updated` |
@@ -53,64 +57,45 @@ export default defineConfig({ linkResolution: 'absolute' })
 | `Plugin.ObsidianFlavoredMarkdown` | Built in |
 | `Plugin.SyntaxHighlighting` | Built in (Shiki, both themes) |
 | `Plugin.TableOfContents` | `features.toc` |
-| `Plugin.ContentIndex` and the search component | `features.search`: Pagefind builds the index at the end of `astro build`, and jotter draws the modal in its own tokens rather than using Pagefind's web components |
-| `Plugin.ContentIndex({ enableRSS: true })` | `features.rss`, plus `url`: jotter refuses the flag without one, because a feed's links resolve against nothing. The feed is `/rss.xml`, not Quartz's `/index.xml`; keep your existing subscribers with `redirects: { '/index.xml': '/rss.xml' }`, which jotter writes into both `_redirects` and `vercel.json` |
-| `rssFullHtml` | **No equivalent.** The excerpt only, which is Quartz's own default. Full HTML would mean rewriting every wikilink, image and transclusion to an absolute URL, and that is the layer Open Publish exists to be |
-| `rssLimit` | **No equivalent.** Fixed at 50. Quartz's default of 10 is too few once you notice that a *revision* re-enters the window, so a weekend of tidying can evict a new note before a subscriber polls, and readers dedupe on `guid`, so they never see it |
+| `Plugin.ContentIndex` and the search component | `features.search`: Pagefind builds the index at the end of `astro build`, and jotter draws the modal in its own tokens |
+| `Plugin.ContentIndex({ enableRSS: true })` | `features.rss`, plus `url`: jotter refuses the flag without one, because a feed's links resolve against nothing. The feed is `/rss.xml`, not Quartz's `/index.xml`; keep your subscribers with `redirects: { '/index.xml': '/rss.xml' }` |
+| `rssFullHtml` | **No equivalent.** The excerpt only, which is Quartz's own default. Full HTML would mean rewriting every wikilink, image and transclusion to an absolute URL |
+| `rssLimit` | **No equivalent.** Fixed at 50. A revision re-enters the window, so at Quartz's default of 10 a weekend of tidying can evict a new note before a subscriber polls, and readers dedupe on `guid`, so they never see it |
 | `rssSlug` | **No equivalent.** Fixed at `rss.xml` |
-| `socialImage`, `image` or `cover` in frontmatter | `image:`. All three spellings are read, `image` wins, and the file is resolved against the vault the way an embed is. Plus `image` in `jotter.config.ts` for a site-wide default a note can override. Needs `url`, and PNG/JPEG/GIF/WebP: an SVG card is one Facebook will not draw, so it is a build warning rather than a tag |
-| `permalink` in frontmatter | `permalink:`, **and it changes meaning.** On Quartz, `permalink` emits a `noindex` meta-refresh bounce page at that path and the note stays at its derived slug. On jotter the note is *served* there, and the derived slug 302s to it (a 301 would be a promise deleting the `permalink:` takes back). The same set of URLs works either way; the canonical one moves. That is a migration note, not a bug, and it is the behaviour Obsidian Publish, Jekyll, Hugo (`url`) and 11ty all give the key. jotter also accepts a list, where Quartz takes one value |
-| `Plugin.CustomOgImages` | **Not yet.** Quartz's emitter *generates* a card from each page's title and description; jotter emits the one you declare and nothing where you declare none. Generated images are the half still to come |
+| `socialImage`, `image` or `cover` in frontmatter | `image:`. All three spellings are read and `image` wins. Plus `image` in `jotter.config.ts` for a site-wide default a note can override. Needs `url`, and PNG/JPEG/GIF/WebP. See [configuration.md](configuration.md#link-previews) |
+| `permalink` in frontmatter | `permalink:`, **and it changes meaning.** On Quartz it emits a `noindex` meta-refresh bounce page and the note stays at its derived slug. On jotter the note is *served* there, and the derived slug 302s to it. The same URLs work either way; the canonical one moves. jotter also accepts a list. See [url-styles.md](url-styles.md) |
+| `Plugin.CustomOgImages` | **Not yet.** Quartz generates a card from each page's title and description; jotter emits the one you declare and nothing where you declare none |
 | `quartz.layout.ts` | `layout: 'column' \| 'panels'` and `nav: 'tree' \| 'tags' \| 'none'` |
 | `quartz/styles/custom.scss` | `src/styles/custom.css` (plain CSS) |
-
----
 
 ## What you gain
 
 - **Dead links are inert.** An unresolved or unpublished link is a
   `<span class="dead-link">`, not an `<a href="">`. It cannot be clicked or
-  focused, and it never renders an unpublished note's *title*: only the
-  filename you typed.
+  focused, and it shows the filename you typed rather than the target's title.
 - **A design system you can actually change.** Forty tokens, one file, WCAG AA
   asserted at build in both themes.
-- **Almost no JavaScript.** A default build ships about 1.1 KB per page, about
-  22 KB on a note page with the local graph turned on, and about 29 KB with the
-  graph and search both on. Quartz's client bundle (`d3` entire, `pixi.js` and
-  `@tweenjs/tween.js`, 107 KB before its graph draws anything) is a documented
-  complaint. Pagefind's runtime is fetched when a reader opens the modal, not
-  when the page loads, so a visit that never searches pays none of it.
-- **Images optimized by default.** AVIF/WebP with intrinsic dimensions; SVG and
-  GIF passed through untouched.
-- **Obsidian's embed pipe rule.** `![[img.png|300]]` is a size,
+- **Almost no JavaScript.** About 1.1 KB per page by default, about 22 KB with
+  the local graph on, and about 29 KB with graph and search both on. Quartz
+  ships 107 KB before its graph draws anything.
+- **Images optimized by default.** AVIF and WebP with intrinsic dimensions, and
+  SVG and GIF passed through untouched.
+- **Obsidian's embed pipe rule.** `![[img.png|300]]` is a size and
   `![[img.png|A caption]]` is a caption. Quartz treats the pipe as alt text.
-- **A feed that validates.** Quartz's is missing `<atom:link rel="self">` and
-  the namespace it needs, `<language>`, `<lastBuildDate>` and an explicit
-  `isPermaLink`; it hardcodes `https://` rather than using the URL you
-  configured; and it wraps note text in CDATA with no `]]>` guard, so a note
-  containing that sequence corrupts the document. jotter escapes instead, which
-  has no such hole to forget, and the build asserts the rest.
-- **Search that indexes your notes and nothing else.** Quartz's
-  `ContentIndex` indexes every emitted page, so a hit can land on a tag listing
-  that merely mentions the note you wanted. jotter marks only note pages as
-  indexable, and cuts the breadcrumb, the dates and the prev/next links back
-  out, so an excerpt opens with the note's own prose rather than with its file
-  path and its modification date.
+- **A feed that validates.** Quartz's is missing `<atom:link rel="self">`,
+  `<language>`, `<lastBuildDate>` and an explicit `isPermaLink`, hardcodes
+  `https://`, and wraps note text in CDATA with no `]]>` guard. jotter escapes
+  instead, and the build asserts the rest.
+- **Search over your notes and nothing else.** Quartz indexes every emitted
+  page, so a hit can land on a tag listing that merely mentions what you wanted.
 
 ## What you lose
 
-- **The global graph.** jotter has the *local* graph (`features.graph`, in
-  the `panels` rail), but there is no whole-site graph page. The local one is
-  `d3-force` on a 2D canvas rather than Pixi, and it keeps the readable list of
-  neighbours underneath the picture rather than instead of it. It also names
-  every node at rest (Quartz hides its labels until you zoom in) with an
-  expand button that opens the same graph in a full-size dialog.
-- **Mermaid, KaTeX rendering, Dataview, `.canvas`, Excalidraw.** Out of scope,
-  documented rather than silently missing.
+- **The global graph.** jotter has the local graph (`features.graph`, in the
+  `panels` rail) but no whole-site graph page.
+- **Mermaid, KaTeX rendering, Dataview, `.canvas`, Excalidraw.** Out of scope.
 - **The plugin ecosystem.** jotter has six small markdown plugins over pure
-  functions in `src/lib/`; it is not a plugin platform.
-
----
+  functions in `src/lib/`. It is not a plugin platform.
 
 ## Doing it
 
@@ -131,19 +116,18 @@ export default defineConfig({ linkResolution: 'absolute' })
 
    Leave the demo garden in `src/content/notes/` where it is. Nothing outside
    your vault folder is built, and deleting a file jotter ships is a
-   modify/delete conflict on every future update — the one kind no button
-   resolves. See [updating.md](updating.md).
+   modify/delete conflict on every future update. See [updating.md](updating.md).
 
-   Attachments can stay wherever they are inside the vault. jotter resolves
-   them by filename the way Obsidian does, and serves the ones Astro does not
-   process from `/_vault/`.
+   Attachments can stay wherever they are inside the vault. jotter resolves them
+   by filename the way Obsidian does, and serves the ones Astro does not process
+   from `/_vault/`.
 
 3. **Port the config.** Use the table above. Everything is optional, so start
    with `title` and `url` and add as you go.
 
 4. **Port your CSS.** `custom.scss` becomes `src/styles/custom.css`, as plain
    CSS. If you were overriding Quartz colour variables, override jotter tokens
-   instead:
+   instead. See [theming.md](theming.md):
 
    ```css
    :root {
@@ -180,8 +164,6 @@ export default defineConfig({ linkResolution: 'absolute' })
    Quartz's (because that is where the vault was before Quartz) `slugs:` does
    the whole set at once rather than one redirect at a time, and `permalink:`
    overrides a single note. See [url-styles.md](url-styles.md).
-
----
 
 ## Things that will look different and are not bugs
 
