@@ -522,12 +522,19 @@ npm run clean        # dist/, the Astro caches, and .jotter/; see the note below
 
 ## Staying up to date
 
+**Actions → Update theme → Run workflow.** Your repository ships that workflow;
+it merges jotter onto a branch inside your own repository and gives you a pull
+request to review. It never writes to your default branch, and it works on a
+repository made with "Use this template", which GitHub's own "Sync fork" button
+cannot.
+
 Which jotter your site is running is reported to Obsidian on every publish
 (**Settings → Open Publish → Build → Check**), so the question has an answer
 without opening a terminal. What changed is in [CHANGELOG.md](CHANGELOG.md).
 
-"Use this template" gives you a repository with a single commit, so the first
-merge from upstream needs `--allow-unrelated-histories`:
+The same merge by hand, if you would rather. "Use this template" gives you a
+repository with a single commit, so the first one needs
+`--allow-unrelated-histories`:
 
 ```bash
 git remote add upstream https://github.com/navidkashani/jotter.git
