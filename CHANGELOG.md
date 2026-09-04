@@ -16,6 +16,8 @@ saying so in the version number is more honest than a 1.0 that would not hold.
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-09-04
+
 ### Added
 
 - **An update button.** `.github/workflows/update-theme.yml` ships with every
@@ -101,5 +103,6 @@ Nothing else in this release touches a path you own.
   jotter it is running. Optional on both sides: a site built by an older starter
   reports no version and publishes exactly as before.
 
-[Unreleased]: https://github.com/navidkashani/jotter/compare/v0.7.0...main
+[Unreleased]: https://github.com/navidkashani/jotter/compare/v0.7.1...main
+[0.7.1]: https://github.com/navidkashani/jotter/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/navidkashani/jotter/releases/tag/v0.7.0
