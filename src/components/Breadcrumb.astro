@@ -1,26 +1,36 @@
 ---
 /**
- * Where the note lives in the vault.
+ * Where the note lives in the vault: the folders **above** it, and nothing else.
  *
  * Not a navigation aid so much as an orientation one: it says "this page is a
  * note, in a folder, in somebody's vault", which is the whole premise of a
- * published garden. The folder segments are links because every folder has a
- * real page; the last crumb is not, because you are already on it.
+ * published garden. Every crumb is a link, because every folder has a real page.
  *
- * Derived from `note.path` against the folder tree that `src/lib/tree.ts`
- * already computed for the sidebar, so it costs one array lookup per note, and
- * so the folder names here are the same ones the sidebar draws: on an Open
- * Publish build those come from `config.folderNames` rather than from the path,
- * which is a slug.
+ * The note's own title is **not** the last crumb, though it used to be. It is
+ * printed one line below by `Note.astro`, in the `<h1>` the eye lands on next,
+ * so the crumb was only saying the heading twice — which is the carve-out NN/g's
+ * breadcrumb guidelines name against "include the current page", and the sidebar
+ * is already marking where you are besides. On an Open Publish build it was
+ * worse than redundant: every note there is written to its *slug*, so a section
+ * landing page arrives as `wp-statistics/wp-statistics.md` and the page read
+ * `WP STATISTICS / WP STATISTICS` above an `<h1>` saying WP Statistics — the
+ * same words three times. `trailFor` is where that last crumb is dropped, and
+ * where the two shapes it can take are written down.
  *
- * The last crumb is the note's **title**, not `<filename>.md`. It used to be the
- * filename, which read well on a vault of ordinary markdown and read as a bug
- * on a published one: every note there is written to its slug, so the trail
- * ended `wisdom-approaches / nvc.md` under a heading that said "How to
- * Communicate". A title is what the note is called in both.
+ * A note with no folders above it — a loose note at the root, the homepage, a
+ * folder note that *is* the folder — gets no breadcrumb at all, and the whole
+ * `<p>` goes with it rather than emptying out: `.note-head` is a flex column
+ * with a gap, so an empty paragraph would still claim a slot of its own and
+ * push the `<h1>` down by one.
+ *
+ * Derived against the folder tree that `src/lib/tree.ts` already computed for
+ * the sidebar, so it costs one array lookup per note, and so the folder names
+ * here are the same ones the sidebar draws: on an Open Publish build those come
+ * from `config.folderNames` rather than from the path, which is a slug.
  */
 import type { VaultNote } from '../lib/vault.js'
 import { allFolders, config } from '../lib/site.js'
+import { trailFor } from '../lib/tree.js'
 import { noteHref } from '../lib/href.js'
 
 interface Props {
@@ -29,10 +39,7 @@ interface Props {
 
 const { note } = Astro.props
 
-const segments = note.path.split('/').slice(0, -1)
-const crumbs = segments
-  .map((_, i) => allFolders.find((folder) => folder.path === segments.slice(0, i + 1).join('/')))
-  .filter((folder) => folder !== undefined)
+const crumbs = trailFor(note, allFolders)
 
 /**
  * Out of the search index. This sits at the top of the article, inside
@@ -44,14 +51,15 @@ const crumbs = segments
 const indexed = config.features.search ? '' : undefined
 ---
 
-<p class="label note-crumb" data-pagefind-ignore={indexed}>
-  {
-    crumbs.map((folder) => (
-      <>
-        <a href={noteHref(folder.slug)}>{folder.name}</a>
-        <span aria-hidden="true">/</span>
-      </>
-    ))
-  }
-  <span>{note.title}</span>
-</p>
+{
+  crumbs.length > 0 && (
+    <p class="label note-crumb" data-pagefind-ignore={indexed}>
+      {crumbs.map((folder, i) => (
+        <>
+          {i > 0 && <span aria-hidden="true">/</span>}
+          <a href={noteHref(folder.slug)}>{folder.name}</a>
+        </>
+      ))}
+    </p>
+  )
+}

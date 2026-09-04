@@ -1292,6 +1292,17 @@ section('An Open Publish snapshot is served at the addresses it was published at
           'the folder reads by its real name in the breadcrumb and the sidebar',
           criticalPage.includes('>wisdom-approaches<') ? 'it reads as its slug' : 'no crumb found',
         )
+        /**
+         * And stops there. The trail used to end with the note's own title, one
+         * line above the `<h1>` printing the same string, which on a snapshot
+         * build — every note written at its slug — could say it three times over.
+         */
+        const crumb = criticalPage.match(/<p class="label note-crumb"[\s\S]*?<\/p>/)?.[0] ?? ''
+        check(
+          crumb !== '' && !crumb.includes('Critical Thinking'),
+          'the breadcrumb stops at the folder, and does not repeat the heading beneath it',
+          crumb === '' ? 'no crumb found' : crumb,
+        )
         check(
           !/Also known as/.test(criticalPage),
           'no page shows an old URL as a name the note answers to',

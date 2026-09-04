@@ -316,3 +316,74 @@ export function shadowedFolders(
 /** Is `slug` inside this folder (or is it the folder)? Drives `<details open>`. */
 export const contains = (folder: TreeFolder, slug: string): boolean =>
   slug === folder.slug || slug.startsWith(`${folder.slug}/`)
+
+/**
+ * Case- and form-insensitive label comparison. NFC for the reason `slug.ts`
+ * spells out at `preservePath`: macOS Finder writes NFD and zsh writes NFC, so
+ * one vault can hold both spellings of the same word. Case-insensitive because
+ * `.note-crumb` uppercases the whole trail in CSS anyway.
+ */
+const sameLabel = (a: string, b: string): boolean =>
+  a.trim().normalize('NFC').toLowerCase() === b.trim().normalize('NFC').toLowerCase()
+
+/**
+ * The folders **above** a note, outermost first: its breadcrumb.
+ *
+ * Starts from the folder that *draws* the note rather than from its path,
+ * mirroring `homeFor` in `buildTree` above, because the two can disagree: a
+ * note at `notes/about.md` carrying `permalink: about` is drawn by the sidebar
+ * inside `About/` while its path still says `notes/`. A breadcrumb and a
+ * sidebar giving different answers to "where is this" is worse than either
+ * answer on its own.
+ *
+ * The note itself is never the last crumb. `Note.astro` prints the title in an
+ * `<h1>` on the very next line, so a title crumb only repeats the heading the
+ * eye lands on next; what is left is the part a reader cannot already see. Two
+ * different shapes end *at* the page you are on, and both have to be caught:
+ *
+ * - the **folder note**, whose slug is the folder's slug (`About/About.md`
+ *   carrying `permalink: about`). True by construction whenever the slug
+ *   branch above chose the home, so such a note reduces to its ancestors.
+ * - the **section landing page**, which an Open Publish build writes at its own
+ *   slug: `wp-statistics/wp-statistics.md`. The slugs differ there
+ *   (`wp-statistics/wp-statistics` against `wp-statistics`) and only the
+ *   folder's *name* reading the same as the note's *title* catches it. This is
+ *   the one that printed `WP STATISTICS / WP STATISTICS` above an `<h1>`
+ *   saying WP Statistics.
+ *
+ * Only the last crumb is eligible. An ancestor further up that happens to match
+ * the title is a real step in the path, and dropping a middle segment would
+ * describe a hierarchy the vault does not have.
+ *
+ * Hidden folders stay in the trail, unlike in the sidebar. `folders()` above
+ * does not filter on `hidden` deliberately — see `buildTree`'s note that hiding
+ * marks rather than drops — and skipping one here would punch a gap in the
+ * middle of a path rather than shorten it.
+ */
+export function trailFor(
+  note: Pick<TreeNote, 'path' | 'slug' | 'title'>,
+  all: readonly TreeFolder[],
+): TreeFolder[] {
+  // Nothing is above the homepage, whatever its path says. `claimRoot` in
+  // `vault.ts` reassigns a promoted note's *slug* and leaves its path alone, so
+  // a homepage promoted out of a folder — `About/Welcome.md` — would otherwise
+  // trail `About /` across the site root. `noteHref` reads `index` as the root
+  // by the same convention.
+  if (note.slug === 'index') return []
+
+  const home =
+    all.find((folder) => folder.slug === note.slug)?.path ??
+    note.path.split('/').slice(0, -1).join('/')
+
+  // `''.split('/')` is `['']`, which would search for a folder that cannot
+  // exist: `buildTree` returns `root.children`, so the empty-path root is
+  // never in `all`. Guarded the way `buildTree` guards the same split.
+  const segments = home === '' ? [] : home.split('/')
+  const trail = segments
+    .map((_, i) => all.find((folder) => folder.path === segments.slice(0, i + 1).join('/')))
+    .filter((folder) => folder !== undefined)
+
+  const last = trail[trail.length - 1]
+  if (last && (last.slug === note.slug || sameLabel(last.name, note.title))) trail.pop()
+  return trail
+}
