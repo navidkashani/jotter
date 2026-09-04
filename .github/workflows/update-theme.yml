@@ -22,6 +22,14 @@ name: Update theme
 on:
   workflow_dispatch:
 
+# Two presses at once would race on the same branch: both merge, both
+# force-push `update-theme`, and the pull request ends up describing whichever
+# finished second. Queued rather than cancelled, unlike `ci.yml`: a superseded
+# CI run tells you nothing, but a half-finished merge is worth letting finish.
+concurrency:
+  group: update-theme
+  cancel-in-progress: false
+
 permissions:
   contents: write
   pull-requests: write
