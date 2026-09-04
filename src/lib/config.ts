@@ -125,6 +125,20 @@ export const jotterConfigSchema = z
          * the sidebar already uses. `showPrevNext` in Obsidian.
          */
         prevNext: z.boolean().default(true),
+        /**
+         * The note's own title, printed as the `<h1>` above its content.
+         *
+         * On by default: Obsidian Publish's default, and what jotter rendered
+         * unconditionally before this switch existed. Off suits a vault whose
+         * notes open with a heading of their own, which would otherwise print
+         * the title twice. `showInlineTitle` in Obsidian.
+         *
+         * **Note pages only.** A folder listing, a tag page and the 404 have no
+         * note behind them, so their heading is the only thing naming them and
+         * it is not this switch's business. Obsidian Publish has no such pages,
+         * so hiding the inline title never meant them.
+         */
+        inlineTitle: z.boolean().default(true),
         /** v2 */
         graph: z.boolean().default(false),
         search: z.boolean().default(false),

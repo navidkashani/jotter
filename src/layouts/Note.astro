@@ -30,7 +30,7 @@
  */
 import type { VaultNote } from '../lib/vault.js'
 import type { GraphLink, Neighbourhood } from '../lib/graph.js'
-import { config, vault } from '../lib/site.js'
+import { allFolders, config, vault } from '../lib/site.js'
 import { textDir } from '../lib/bidi.js'
 import Base from './Base.astro'
 import Toc from '../components/Toc.astro'
@@ -40,6 +40,7 @@ import Breadcrumb from '../components/Breadcrumb.astro'
 import DefaultFrontmatter from '../components/Frontmatter.astro'
 import TagList from '../components/TagList.astro'
 import DefaultPrevNext from '../components/PrevNext.astro'
+import { trailFor } from '../lib/tree.js'
 import { override } from '../lib/overrides.js'
 import { frontmatterImage, resolveSocialImage, socialImageUrl } from '../lib/social.js'
 import { t } from '../i18n/index.js'
@@ -142,6 +143,38 @@ const Embeds = showEmbeds ? (await import('../components/Embeds.astro')).default
  */
 const indexed = config.features.search ? '' : undefined
 
+/**
+ * The result title, stated rather than inferred.
+ *
+ * Pagefind takes a result's title from the first `<h1>` inside the indexed
+ * body, which is `.note-title` below, and `features.inlineTitle` can now take
+ * that away. Left implicit, a site that hid its titles would put a raw URL in
+ * every search result: `src/scripts/search.ts` renders `item.meta.title ?? href`.
+ *
+ * Saying it outright costs one attribute and buys more than the fix. The index
+ * now carries the note's real title rather than whatever its first heading
+ * happens to say, which is the same string `<Base>` puts in `<title>` and the
+ * sidebar draws, so the three cannot disagree.
+ */
+const searchTitle = config.features.search ? `title:${note.title}` : undefined
+
+/**
+ * Whether the header has anything to hold.
+ *
+ * `.note-head` is a flex column with a gap and a bottom margin, so an empty one
+ * still claims a slot and pushes the note's first line down: exactly the reason
+ * `Breadcrumb` drops its whole `<p>` rather than emptying it. With
+ * `inlineTitle` off, a loose note at the root with no metadata and no tags is
+ * that case, and it is a new one. `trailFor` is the same single lookup the
+ * breadcrumb makes, against the tree the sidebar already built.
+ */
+const showTitle = config.features.inlineTitle
+const hasHead =
+  showTitle ||
+  config.features.metadata ||
+  (config.features.tags && note.tags.length > 0) ||
+  trailFor(note, allFolders).length > 0
+
 /** Which of the two DOM shapes above to emit. Resolved at build. */
 const panels = config.layout === 'panels'
 const hasToc = config.features.toc
@@ -149,13 +182,25 @@ const hasRail = config.features.backlinks || showGraph
 ---
 
 <Base title={note.title} description={description} image={image} current={note.slug}>
-  <article class="note-layout" data-layout={config.layout} data-pagefind-body={indexed}>
-    <header class="note-head">
-      <Breadcrumb note={note} />
-      <h1 class="note-title" dir={textDir(note.title, config.dir)}>{note.title}</h1>
-      {config.features.metadata && <Frontmatter note={note} />}
-      {config.features.tags && <TagList tags={note.tags} />}
-    </header>
+  <article
+    class="note-layout"
+    data-layout={config.layout}
+    data-pagefind-body={indexed}
+    data-pagefind-meta={searchTitle}
+  >
+    {
+      hasHead && (
+        <header class="note-head">
+          <Breadcrumb note={note} />
+          {/* One line, deliberately: `verify-theme` asserts the rendered
+              `<h1 class="note-title">…</h1>` exactly, and JSX keeps the
+              whitespace a broken-up element would put inside it. */}
+          {showTitle && <h1 class="note-title" dir={textDir(note.title, config.dir)}>{note.title}</h1>}
+          {config.features.metadata && <Frontmatter note={note} />}
+          {config.features.tags && <TagList tags={note.tags} />}
+        </header>
+      )
+    }
 
     {
       panels && (hasToc || hasRail) && (

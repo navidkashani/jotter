@@ -115,6 +115,9 @@ that cannot take an update keeps whatever bugs it shipped with. See
 | `showGraph` | `features.graph` **and** `layout: 'panels'` |
 | `showPageMetadata` | `features.metadata`: the dates and frontmatter block under the title |
 | `showPrevNext` | `features.prevNext` |
+| `showHoverPreview` | `features.hoverPreview` |
+| `showInlineTitle` | `features.inlineTitle`: the note's own `<h1>`, on note pages only |
+| `folders` | `folderNames`: what the vault calls each folder, recovered from the manifest |
 | `analytics` | `analytics`, or `none` when the id is blank |
 | `homepage` | *nothing: already applied* |
 
@@ -124,10 +127,14 @@ and anything you need to flip has to travel in the snapshot. The escape hatch is
 to delete the `generated ??` and keep your own literal, at the price of the site
 options in Obsidian no longer reaching the site at all.
 
-Three rows are not the straight mapping they look like.
+Four rows are not the straight mapping they look like.
 
 - **The graph needs the layout.** jotter renders the graph in the right panel,
   and the column layout has no right panel.
+- **The inline title is a note-page switch.** Obsidian Publish has no folder or
+  tag pages, so hiding the inline title never meant them. Here the `<h1>` on a
+  folder listing, a tag page or the 404 is the only thing naming that page, so
+  it stays whatever this says; only `Note.astro` reads the flag.
 - **Analytics with no id would fail the build.** A provider chosen in Obsidian
   with the id left blank falls back to no analytics, with a line in the build
   log, rather than stopping the deploy.
@@ -140,9 +147,9 @@ site gets `<html lang="fa-IR" dir="rtl">` immediately, and its buttons and
 labels stay English until someone adds `src/i18n/fa.json`.
 
 A site option this repository has never heard of is reported in the build log
-and ignored, which is how you find out to update from the template. Four jotter
+and ignored, which is how you find out to update from the template. Three jotter
 settings have no equivalent in a snapshot and stay at their defaults:
-`features.hoverPreview`, `features.rss`, `features.embeds` and `externalLinks`.
+`features.rss`, `features.embeds` and `externalLinks`.
 
 ### The sidebar order
 

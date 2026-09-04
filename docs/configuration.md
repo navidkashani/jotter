@@ -38,6 +38,7 @@ export default defineConfig({
     themeToggle: true,
     metadata: false,            // the dates + frontmatter block under a title
     prevNext: true,             // links to the notes either side, in the folder
+    inlineTitle: true,          // the note's own title, as the h1 above it
     graph: false,               // the local graph, `layout: 'panels'` only
     hoverPreview: false,        // excerpt cards on hovering a link
     search: false,              // Cmd/Ctrl+K full-text search over your notes

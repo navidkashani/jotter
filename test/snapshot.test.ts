@@ -871,6 +871,44 @@ describe('site options become a jotter config', () => {
     expect(off.features).toMatchObject({ metadata: false, prevNext: true })
   })
 
+  /**
+   * The pair that closes the last of the Obsidian Publish gap.
+   *
+   * `hoverPreview` is the one that moves an existing site. jotter's schema
+   * defaults it *off* and `mapSite` never emitted it, so every Open Publish
+   * build so far has had link previews off while the Publish site it was
+   * migrated from had them on. The plugin now says which it is, and says on.
+   */
+  it('carries the hover preview and the inline title across', () => {
+    const on = mapSite({ ...site, showHoverPreview: true, showInlineTitle: false }).options
+    expect(on.features).toMatchObject({ hoverPreview: true, inlineTitle: false })
+
+    const off = mapSite({ ...site, showHoverPreview: false, showInlineTitle: true }).options
+    expect(off.features).toMatchObject({ hoverPreview: false, inlineTitle: true })
+  })
+
+  /**
+   * The failure the pair above exists to end, and the one `folders` was already
+   * causing. An option jotter honours must never be reported as one it does not
+   * support: that tells the reader their plugin is too new when the truth is the
+   * opposite. `folders` is honoured, as `folderNames`, by
+   * `scripts/fetch-content.mjs`.
+   */
+  it('reports nothing as unsupported for options it does in fact support', () => {
+    const { notes } = mapSite({
+      ...site,
+      showHoverPreview: true,
+      showInlineTitle: true,
+      folders: { 'wisdom-approaches/index': 'Wisdom & Approaches' },
+    })
+    expect(notes.join('\n')).not.toMatch(/ignoring site option/)
+  })
+
+  it('still says so for an option it really has never heard of', () => {
+    const { notes } = mapSite({ ...site, showStackedPages: true })
+    expect(notes.join('\n')).toMatch(/ignoring site option\(s\).*showStackedPages/)
+  })
+
   it('always preserves the addresses the plugin published', () => {
     expect(mapSite(site).options.slugs).toBe('preserve')
   })
@@ -978,12 +1016,14 @@ describe('site options become a jotter config', () => {
     // manifest that predates them builds the site it always built.
     expect(options.locale).toBe('en')
     expect(options.dir).toBe('ltr')
-    // The two newest arrive the same way, and the metadata one is the single
+    // The four newest arrive the same way, and the metadata one is the single
     // place the rule cuts the other way on purpose: its default is *off*, so a
     // snapshot that predates it gets no metadata block rather than one full of
     // dates the build invented.
     expect(options.features?.metadata).toBe(false)
     expect(options.features?.prevNext).toBe(true)
+    expect(options.features?.hoverPreview).toBe(true)
+    expect(options.features?.inlineTitle).toBe(true)
   })
 
   /**

@@ -62,12 +62,25 @@ export const DEFAULT_SITE = {
   /** Off in the plugin too, the way Obsidian Publish is. */
   showPageMetadata: false,
   showPrevNext: true,
+  /** Both on in the plugin, and both Obsidian Publish's own default. */
+  showHoverPreview: true,
+  showInlineTitle: true,
   /**
    * The sidebar somebody arranged, as slugs, and the pages left out of it.
    * Empty until they arrange one, and empty is exactly jotter's own default
    * order, so an untouched site renders what it always did.
    */
   nav: { order: [], hidden: [] },
+  /**
+   * What the vault calls each folder, keyed by the slug of its index page.
+   *
+   * Listed here so it is not reported as an option jotter does not support,
+   * which it plainly does: `scripts/fetch-content.mjs` reads
+   * `snapshot.site.folders` and hands it to `folderNamesFor`. It reaches the
+   * config as `folderNames`, through the parameter below rather than from this
+   * object, so the entry is an allowlist entry and nothing more.
+   */
+  folders: {},
   analytics: { provider: 'none', id: '' },
 }
 
@@ -200,6 +213,8 @@ export function mapSite(rawSite, { url, folderNames, vault } = {}) {
       search: !!site.showSearch,
       metadata: !!site.showPageMetadata,
       prevNext: !!site.showPrevNext,
+      hoverPreview: !!site.showHoverPreview,
+      inlineTitle: !!site.showInlineTitle,
     },
 
     analytics: analyticsFor(site.analytics, warnings),

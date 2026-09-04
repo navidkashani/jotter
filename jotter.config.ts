@@ -51,6 +51,7 @@ export default defineConfig(
       // which is why the default is the other way.
       metadata: true,
       prevNext: true,
+      inlineTitle: true,
     },
   },
 )
