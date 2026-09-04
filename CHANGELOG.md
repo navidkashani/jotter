@@ -14,9 +14,28 @@ where a breaking change goes, and `0.7.x` is safe to take. The config API is
 still moving (`astro.config.ts` changed in 17 of the last 48 commits), and
 saying so in the version number is more honest than a 1.0 that would not hold.
 
-## [Unreleased]
+## [0.7.2] - 2026-09-04
+
+### Fixed
+
+- **0.7.1 could not be installed.** Its `package-lock.json` was regenerated with
+  `npm install --package-lock-only` on macOS, which prunes `optional: true`
+  packages that other platforms need — here `@emnapi/core` and
+  `@emnapi/wasi-threads`. `npm ci` then refuses on Linux with *"can only install
+  packages when your package.json and package-lock.json are in sync"*, so CI and
+  every host build failed. Restored, with only the three stale metadata fields
+  (the root `version`, twice, and `engines.node`) edited by hand.
+
+  **If you are on 0.7.1, take this.** Nothing else differs between them.
+
+  The lesson, since it is easy to repeat: on macOS `npm install` will offer to
+  drop those two entries again, and that diff must not be committed. A clean
+  `git status` on one platform is not worth a lockfile that cannot be installed
+  on the platform every build actually runs on.
 
 ## [0.7.1] - 2026-09-04
+
+**Superseded by 0.7.2, which is the same release with an installable lockfile.**
 
 ### Added
 
@@ -103,6 +122,6 @@ Nothing else in this release touches a path you own.
   jotter it is running. Optional on both sides: a site built by an older starter
   reports no version and publishes exactly as before.
 
-[Unreleased]: https://github.com/navidkashani/jotter/compare/v0.7.1...main
+[0.7.2]: https://github.com/navidkashani/jotter/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/navidkashani/jotter/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/navidkashani/jotter/releases/tag/v0.7.0
