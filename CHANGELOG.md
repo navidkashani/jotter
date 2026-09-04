@@ -24,9 +24,16 @@ saying so in the version number is more honest than a 1.0 that would not hold.
   It never writes to your default branch, and it works on a template copy, which
   GitHub's own "Sync fork" cannot: the unrelated-histories rule is about pull
   requests *between* repositories, and a branch in your own repository is not
-  one. Falls back to pushing the branch and handing you a link when GitHub's
-  default settings will not let a workflow open a pull request.
-- `docs/updating.md` now covers both paths, and when a fork is the better one.
+  one.
+
+  Two of GitHub's defaults get in the way and are handled rather than hit. It
+  falls back to pushing the branch and handing you a link when a workflow is not
+  allowed to open a pull request; and it stops *before* merging, naming the
+  files, when an update changes something under `.github/workflows/`, which the
+  built-in token may never push and cannot be granted permission to. An optional
+  `UPDATE_TOKEN` secret lifts both.
+- `docs/updating.md` now covers both paths, when a fork is the better one, and
+  how to give the button a token.
 
 ## [0.7.0] - 2026-09-04
 
