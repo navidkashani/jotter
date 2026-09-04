@@ -95,11 +95,33 @@ Three things it can tell you, all on the run's own summary page:
 - **Stopped: files disagree** — it names the files and changes nothing. See
   [Conflicts](#conflicts) below.
 
-By default GitHub does not let a workflow open a pull request
-(Settings → Actions → General → Workflow permissions → *Allow GitHub Actions to
-create and approve pull requests*, off unless you tick it). The workflow does not
-fail on that: it pushes the branch anyway and hands you a link to open the pull
-request yourself. Ticking the box removes the click.
+Two things GitHub withholds from a workflow by default, and what each costs:
+
+**Opening the pull request.** Off unless you tick Settings → Actions → General →
+Workflow permissions → *Allow GitHub Actions to create and approve pull
+requests*. The workflow does not fail on it — it pushes the branch and hands you
+a link to open the pull request yourself. Ticking the box removes the click.
+
+**Changing a workflow file.** The built-in token has no `workflows` scope and
+cannot be given one, so a push containing any change under `.github/workflows/`
+is rejected by the server whatever the workflow asks for. No setting turns this
+off; it is GitHub's rule about workflows editing workflows. Most updates do not
+touch these files and are unaffected. When one does, the run stops before
+merging and tells you.
+
+### Giving the button a token
+
+One-off, and it removes both limits at once — workflow files included, and the
+pull request opens itself.
+
+1. [Create a fine-grained personal access token](https://github.com/settings/personal-access-tokens/new),
+   scoped to **this repository only**, with **Contents: read and write**,
+   **Pull requests: read and write** and **Workflows: read and write**.
+2. Add it under Settings → Secrets and variables → Actions as `UPDATE_TOKEN`.
+
+The workflow picks it up on its own (`secrets.UPDATE_TOKEN || secrets.GITHUB_TOKEN`).
+Without it the button still works for every update that leaves
+`.github/workflows/` alone, which is most of them.
 
 ### By hand, if you would rather
 

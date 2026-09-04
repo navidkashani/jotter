@@ -40,12 +40,17 @@ jobs:
         with:
           # The whole history, or there is nothing for the merge to stand on.
           fetch-depth: 0
+          # `UPDATE_TOKEN` if somebody has added one, else the built-in token.
+          # The difference is what the push below is allowed to contain; see
+          # the workflow-file check in the next step.
+          token: ${{ secrets.UPDATE_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Merge jotter onto a branch
         id: merge
         env:
           UPSTREAM: https://github.com/navidkashani/jotter.git
           BASE: ${{ github.event.repository.default_branch }}
+          HAS_TOKEN: ${{ secrets.UPDATE_TOKEN != '' }}
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
@@ -89,6 +94,56 @@ jobs:
               echo "This site is running **jotter $have**, which is the current release."
             } >> "$GITHUB_STEP_SUMMARY"
             exit 0
+          fi
+
+          # Workflow files, which the built-in token may not push.
+          #
+          # `GITHUB_TOKEN` has no `workflows` scope and cannot be given one: a
+          # push containing any change under `.github/workflows/` is rejected
+          # outright by the server, whatever this file's `permissions:` block
+          # says. That is GitHub's rule about workflows modifying workflows, and
+          # there is no setting that turns it off.
+          #
+          # Checked *before* the merge rather than caught after the push,
+          # because the useful moment to say "this one needs a token" is before
+          # a branch exists that cannot be pushed.
+          changed_workflows=$(git diff --name-only HEAD upstream/main -- .github/workflows/)
+          if [ -n "$changed_workflows" ] && [ "$HAS_TOKEN" != "true" ]; then
+            echo "state=needs-token" >> "$GITHUB_OUTPUT"
+            {
+              echo "## This update changes a workflow, so it needs a token"
+              echo
+              echo "$what is ready, but it edits these:"
+              echo
+              echo '```'
+              echo "$changed_workflows"
+              echo '```'
+              echo
+              echo "GitHub does not let a workflow push a change to a workflow using the"
+              echo "built-in token, and no setting changes that. Nothing was merged, and"
+              echo "\`$BASE\` is untouched. Two ways on, and the first is once-only:"
+              echo
+              echo "### Give the button a token"
+              echo
+              echo "1. [Create a fine-grained personal access token](https://github.com/settings/personal-access-tokens/new)"
+              echo "   scoped to **this repository only**, with **Contents: read and write**,"
+              echo "   **Pull requests: read and write** and **Workflows: read and write**."
+              echo "2. Add it here as a secret named \`UPDATE_TOKEN\`:"
+              echo "   [Settings → Secrets and variables → Actions](../../settings/secrets/actions/new)."
+              echo
+              echo "Then press **Run workflow** again. Every future update, workflows included,"
+              echo "is one click — and a token also lets the pull request open itself."
+              echo
+              echo "### Or merge this one by hand"
+              echo
+              echo '```bash'
+              echo "git remote add upstream $UPSTREAM   # once"
+              echo "git fetch upstream"
+              echo "git merge upstream/main --allow-unrelated-histories"
+              echo "git push"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
           fi
 
           git checkout -B update-theme
@@ -136,7 +191,7 @@ jobs:
       - name: Open a pull request
         if: steps.merge.outputs.state == 'merged'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.UPDATE_TOKEN || secrets.GITHUB_TOKEN }}
           BASE: ${{ github.event.repository.default_branch }}
           HAVE: ${{ steps.merge.outputs.have }}
           WANT: ${{ steps.merge.outputs.want }}
