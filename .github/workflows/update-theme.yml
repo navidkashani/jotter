@@ -81,8 +81,10 @@ jobs:
           # reads "jotter 0.7.0 is ready to merge" to somebody running 0.7.0.
           # The count is the honest answer in that case, and the version is the
           # honest one when it moved.
+          if [ "$ahead" = 1 ]; then commits="1 commit"; else commits="$ahead commits"; fi
           if [ "$have" = "$want" ]; then
-            what="$ahead change(s) to jotter $want"
+            if [ "$ahead" = 1 ]; then what="1 change to jotter $want"
+            else what="$ahead changes to jotter $want"; fi
           else
             what="jotter $want"
           fi
@@ -90,6 +92,7 @@ jobs:
           echo "have=$have" >> "$GITHUB_OUTPUT"
           echo "want=$want" >> "$GITHUB_OUTPUT"
           echo "ahead=$ahead" >> "$GITHUB_OUTPUT"
+          echo "commits=$commits" >> "$GITHUB_OUTPUT"
           echo "what=$what" >> "$GITHUB_OUTPUT"
 
           # Already carrying every upstream commit. Not a failure, and not a
@@ -121,7 +124,7 @@ jobs:
             {
               echo "## This update changes a workflow, so it needs a token"
               echo
-              echo "$what is ready, but it edits these:"
+              echo "Ready to merge: **$what**. But it edits these:"
               echo
               echo '```'
               echo "$changed_workflows"
@@ -167,7 +170,7 @@ jobs:
             {
               echo "## Update stopped: files disagree"
               echo
-              echo "$what could not be merged into this repository without a decision"
+              echo "**$what** could not be merged into this repository without a decision"
               echo "only you can make. Nothing was changed, and \`$BASE\` is untouched."
               echo
               echo "These files were edited both here and upstream:"
@@ -203,7 +206,7 @@ jobs:
           BASE: ${{ github.event.repository.default_branch }}
           HAVE: ${{ steps.merge.outputs.have }}
           WANT: ${{ steps.merge.outputs.want }}
-          AHEAD: ${{ steps.merge.outputs.ahead }}
+          COMMITS: ${{ steps.merge.outputs.commits }}
           WHAT: ${{ steps.merge.outputs.what }}
           COMPARE: ${{ github.server_url }}/${{ github.repository }}/compare
         run: |
@@ -212,7 +215,7 @@ jobs:
           body=$(printf '%s\n' \
             "Merges **$WHAT** from [jotter](https://github.com/navidkashani/jotter) into this site." \
             "" \
-            "This site is running **$HAVE**, $AHEAD commit(s) behind." \
+            "This site is running **$HAVE**, $COMMITS behind." \
             "" \
             "What changed is in [jotter's changelog](https://github.com/navidkashani/jotter/blob/main/CHANGELOG.md)." \
             "The merge is already done on this branch, so merging this pull request is the whole update." \
@@ -260,7 +263,7 @@ jobs:
           {
             echo "## $WHAT ready to merge"
             echo
-            echo "This site is running **$HAVE**, $AHEAD commit(s) behind. The merge is done; review and merge:"
+            echo "This site is running **$HAVE**, $COMMITS behind. The merge is done; review and merge:"
             echo
             echo "### [$url]($url)"
           } >> "$GITHUB_STEP_SUMMARY"
