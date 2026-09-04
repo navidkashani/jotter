@@ -14,6 +14,20 @@ where a breaking change goes, and `0.7.x` is safe to take. The config API is
 still moving (`astro.config.ts` changed in 17 of the last 48 commits), and
 saying so in the version number is more honest than a 1.0 that would not hold.
 
+## [Unreleased]
+
+### Added
+
+- **An update button.** `.github/workflows/update-theme.yml` ships with every
+  copy: **Actions → Update theme → Run workflow** merges jotter onto an
+  `update-theme` branch inside your own repository and gives you a pull request.
+  It never writes to your default branch, and it works on a template copy, which
+  GitHub's own "Sync fork" cannot: the unrelated-histories rule is about pull
+  requests *between* repositories, and a branch in your own repository is not
+  one. Falls back to pushing the branch and handing you a link when GitHub's
+  default settings will not let a workflow open a pull request.
+- `docs/updating.md` now covers both paths, and when a fork is the better one.
+
 ## [0.7.0] - 2026-09-04
 
 ### The build stopped writing to files you own
@@ -80,4 +94,5 @@ Nothing else in this release touches a path you own.
   jotter it is running. Optional on both sides: a site built by an older starter
   reports no version and publishes exactly as before.
 
+[Unreleased]: https://github.com/navidkashani/jotter/compare/v0.7.0...main
 [0.7.0]: https://github.com/navidkashani/jotter/releases/tag/v0.7.0

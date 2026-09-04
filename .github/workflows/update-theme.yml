@@ -1,0 +1,179 @@
+# The update button, for a repository that cannot have GitHub's own.
+#
+#   Actions -> Update theme -> Run workflow
+#
+# A site made with "Use this template" starts from a single commit, so its
+# history is unrelated to jotter's. GitHub therefore shows no "Sync fork" button
+# and refuses to open a pull request between the two: those are the documented
+# consequences of a template copy, and there is no setting that converts one
+# into a fork. A fork gets the button for free, but a fork of a public
+# repository is public for ever, which is the wrong answer for a private site or
+# for a vault kept inside the repository.
+#
+# So the merge happens *inside* your repository instead, on a branch. The
+# unrelated-histories rule is about pull requests *between* repositories; a
+# branch in your own repository is not one, and `--allow-unrelated-histories` is
+# a flag a workflow can pass where the web UI cannot.
+#
+# **It never writes to your default branch.** Everything lands on a branch
+# called `update-theme`, which you merge after reading it.
+name: Update theme
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    # Not in jotter itself, which *is* the upstream: there would be nothing to
+    # merge and `git remote add upstream` would point the repository at itself.
+    # It ships here so that every copy has it, and is guarded rather than left
+    # out so that copies keep taking updates to this very file cleanly.
+    if: github.repository != 'navidkashani/jotter'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The whole history, or there is nothing for the merge to stand on.
+          fetch-depth: 0
+
+      - name: Merge jotter onto a branch
+        id: merge
+        env:
+          UPSTREAM: https://github.com/navidkashani/jotter.git
+          BASE: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+          git remote add upstream "$UPSTREAM"
+          git fetch --quiet --tags upstream main
+
+          have=$(jq -r '.version // "unknown"' package.json 2>/dev/null || echo unknown)
+          want=$(git show upstream/main:package.json | jq -r '.version // "unknown"')
+          echo "have=$have" >> "$GITHUB_OUTPUT"
+          echo "want=$want" >> "$GITHUB_OUTPUT"
+
+          # Already carrying every upstream commit. Not a failure, and not a
+          # pull request either: an empty one is a thing to close, not to read.
+          if git merge-base --is-ancestor upstream/main HEAD; then
+            echo "state=current" >> "$GITHUB_OUTPUT"
+            {
+              echo "## Already up to date"
+              echo
+              echo "This site is running **jotter $have**, which is the current release."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          git checkout -B update-theme
+
+          # `--allow-unrelated-histories` is the whole reason this workflow
+          # exists: it is what a template copy needs on its first merge and what
+          # no button in the web UI will pass. On a history that already has a
+          # common ancestor it changes nothing.
+          if ! git merge --no-edit --allow-unrelated-histories upstream/main; then
+            conflicts=$(git diff --name-only --diff-filter=U)
+            git merge --abort
+            echo "state=conflict" >> "$GITHUB_OUTPUT"
+            {
+              echo "## Update stopped: files disagree"
+              echo
+              echo "jotter $want could not be merged into this repository without a decision"
+              echo "only you can make. Nothing was changed, and \`$BASE\` is untouched."
+              echo
+              echo "These files were edited both here and upstream:"
+              echo
+              echo '```'
+              echo "$conflicts"
+              echo '```'
+              echo
+              echo "If none of them is a file you meant to own, taking upstream's copy is"
+              echo "almost certainly right. See [docs/updating.md](docs/updating.md), then:"
+              echo
+              echo '```bash'
+              echo "git remote add upstream $UPSTREAM   # once"
+              echo "git fetch upstream"
+              echo "git merge upstream/main --allow-unrelated-histories"
+              echo "# for each file above that is not yours:"
+              echo "git checkout --theirs <file> && git add <file>"
+              echo "git commit && git push"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          git push --force origin update-theme
+          echo "state=merged" >> "$GITHUB_OUTPUT"
+
+      - name: Open a pull request
+        if: steps.merge.outputs.state == 'merged'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BASE: ${{ github.event.repository.default_branch }}
+          HAVE: ${{ steps.merge.outputs.have }}
+          WANT: ${{ steps.merge.outputs.want }}
+          COMPARE: ${{ github.server_url }}/${{ github.repository }}/compare
+        run: |
+          set -euo pipefail
+
+          body=$(printf '%s\n' \
+            "Merges [jotter](https://github.com/navidkashani/jotter) **$WANT** into this site." \
+            "" \
+            "This site is running **$HAVE**." \
+            "" \
+            "What changed is in [jotter's changelog](https://github.com/navidkashani/jotter/blob/main/CHANGELOG.md)." \
+            "The merge is already done on this branch, so merging this pull request is the whole update." \
+            "" \
+            "Opened by **Actions -> Update theme**.")
+
+          existing=$(gh pr list --head update-theme --state open --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh pr edit "$existing" --title "Update jotter to $WANT" --body "$body"
+            url=$(gh pr view "$existing" --json url --jq .url)
+          elif url=$(gh pr create --base "$BASE" --head update-theme \
+                      --title "Update jotter to $WANT" --body "$body" 2>/tmp/pr-error); then
+            :
+          else
+            # `GITHUB_TOKEN` cannot open pull requests unless somebody has ticked
+            # Settings -> Actions -> General -> "Allow GitHub Actions to create
+            # and approve pull requests". That is off by default, and needing it
+            # is not a good reason for this button to fail: the branch is pushed
+            # and the update is done, so all that is missing is the click that
+            # opens the pull request. Say so, and link straight to it.
+            echo "::notice::Could not open the pull request automatically; the branch is pushed."
+            {
+              echo "## jotter $WANT is ready to merge"
+              echo
+              echo "The merge is done and pushed to the \`update-theme\` branch. One click left:"
+              echo
+              echo "### [Open the pull request]($COMPARE/$BASE...update-theme?expand=1)"
+              echo
+              echo "<details><summary>Why this needed a click</summary>"
+              echo
+              echo "This repository has **Settings -> Actions -> General -> Workflow permissions"
+              echo "-> Allow GitHub Actions to create and approve pull requests** switched off,"
+              echo "which is GitHub's default. Tick it and this workflow opens the pull request"
+              echo "itself next time. Leaving it off costs one click per update and nothing else."
+              echo
+              echo "</details>"
+              echo
+              echo '```'
+              cat /tmp/pr-error
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          {
+            echo "## jotter $WANT is ready to merge"
+            echo
+            echo "This site is running **$HAVE**. The merge is done; review and merge:"
+            echo
+            echo "### [$url]($url)"
+          } >> "$GITHUB_STEP_SUMMARY"

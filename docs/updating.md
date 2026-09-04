@@ -4,6 +4,32 @@ Your site is a copy of this repository. When jotter fixes something, nothing
 tells the copy — so this page is about making the gap between "jotter fixed it"
 and "your site has it" as small as possible.
 
+## Fork, or template copy?
+
+Both work; they differ in which button you get.
+
+|  | Fork | Template copy |
+| --- | --- | --- |
+| Update button | GitHub's own **Sync fork** | **Actions → Update theme** |
+| Can be private | **No, ever.** Fork visibility is tied to the repository network | Yes |
+| Vault inside the repo | No — it would be public | Yes |
+| How many | One fork per account per repo | As many as you like |
+
+A fork is the simpler road when the site is public and the notes live in a
+bucket. Everything else — a private repository, a vault kept in the repository,
+a second site, or a repository you already made from the template — wants the
+workflow.
+
+**You cannot convert one into the other.** A template copy has no fork
+relationship to create, and there is no setting for it; check yours with
+`gh repo view --json isFork`. That is not much of a loss: the workflow is the
+same merge with one more click.
+
+Renaming your repository is safe either way, and worth doing —
+`github.com/<you>/jotter` is a poor name for a personal site.
+
+---
+
 ## Which jotter is your site running?
 
 Every publish writes it to `/_publish.json`, and Obsidian reads it back:
@@ -46,10 +72,40 @@ alone. It costs nothing — nothing outside your vault folder is built.
 
 ## Taking an update
 
-A repository made with **Use this template** starts from a single commit, so its
-history is unrelated to this one. GitHub will not open a pull request between
-unrelated histories, and there is no Sync button. The merge has to be told, once,
-that this is expected:
+### The button
+
+**Actions → Update theme → Run workflow.**
+
+Your repository ships `.github/workflows/update-theme.yml`, which merges jotter
+onto a branch called `update-theme` inside your own repository and gives you a
+pull request to review. It never writes to your default branch.
+
+That indirection is the point. A repository made with **Use this template**
+starts from a single commit, so its history is unrelated to jotter's: GitHub
+shows no "Sync fork" button and refuses to open a pull request between the two.
+But the unrelated-histories rule is about pull requests *between repositories*,
+and a branch in your own repository is not one — so the merge that GitHub will
+not do for you is one a workflow can do inside your repo, passing the
+`--allow-unrelated-histories` flag no button in the web UI passes.
+
+Three things it can tell you, all on the run's own summary page:
+
+- **Already up to date** — nothing to do, and no empty pull request to close.
+- **Ready to merge** — a link to the pull request. Read it, merge it, done.
+- **Stopped: files disagree** — it names the files and changes nothing. See
+  [Conflicts](#conflicts) below.
+
+By default GitHub does not let a workflow open a pull request
+(Settings → Actions → General → Workflow permissions → *Allow GitHub Actions to
+create and approve pull requests*, off unless you tick it). The workflow does not
+fail on that: it pushes the branch anyway and hands you a link to open the pull
+request yourself. Ticking the box removes the click.
+
+### By hand, if you would rather
+
+The same merge, in a terminal. The first one needs `--allow-unrelated-histories`
+for the reason above; after it the histories are related and plain
+`git merge upstream/main` works:
 
 ```bash
 git remote add upstream https://github.com/navidkashani/jotter.git
@@ -57,13 +113,14 @@ git fetch upstream
 git merge upstream/main --allow-unrelated-histories
 ```
 
-After that first merge the histories are related and a plain
-`git merge upstream/main` works. Then:
+Then:
 
 ```bash
 npm install          # in case dependencies moved
 npm run build        # or just push and let your host build it
 ```
+
+### Conflicts
 
 Conflicts should only ever land in the files in the table above. Keep yours, take
 upstream's for everything else:
