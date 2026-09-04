@@ -52,7 +52,10 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
 
           git remote add upstream "$UPSTREAM"
-          git fetch --quiet --tags upstream main
+          # No refspec argument: `git fetch upstream main` leaves the answer in
+          # FETCH_HEAD and updates `refs/remotes/upstream/main` only
+          # opportunistically. Every line below reads `upstream/main` by name.
+          git fetch --quiet --tags upstream
 
           have=$(jq -r '.version // "unknown"' package.json 2>/dev/null || echo unknown)
           want=$(git show upstream/main:package.json | jq -r '.version // "unknown"')
@@ -94,7 +97,9 @@ jobs:
               echo '```'
               echo
               echo "If none of them is a file you meant to own, taking upstream's copy is"
-              echo "almost certainly right. See [docs/updating.md](docs/updating.md), then:"
+              # Absolute: a run summary is rendered off github.com, so a relative
+              # link here resolves to `github.com/docs/updating.md` and 404s.
+              echo "almost certainly right. See [docs/updating.md](https://github.com/navidkashani/jotter/blob/main/docs/updating.md), then:"
               echo
               echo '```bash'
               echo "git remote add upstream $UPSTREAM   # once"
