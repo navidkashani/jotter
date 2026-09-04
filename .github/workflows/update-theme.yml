@@ -102,7 +102,7 @@ jobs:
             {
               echo "## Already up to date"
               echo
-              echo "This site is running **jotter $have**, which is the current release."
+              echo "This site is running **jotter $have**, and carries every change jotter has made to it."
             } >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
