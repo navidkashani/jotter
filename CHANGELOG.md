@@ -5,11 +5,16 @@ The version a site is running is reported to Obsidian on every publish, in
 opening a terminal. See [docs/updating.md](docs/updating.md).
 
 This file follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
-the versions are [semantic](https://semver.org/): a **major** bump is a change
-that can break a site on update — a config key removed, a component's props
-changed, markup a `custom.css` was written against.
+the versions are [semantic](https://semver.org/): a bump of the leading number
+is a change that can break a site on update — a config key removed, a
+component's props changed, markup a `custom.css` was written against.
 
-## [Unreleased]
+jotter is pre-1.0, so for now that leading number is the **minor**: `0.8.0` is
+where a breaking change goes, and `0.7.x` is safe to take. The config API is
+still moving (`astro.config.ts` changed in 17 of the last 48 commits), and
+saying so in the version number is more honest than a 1.0 that would not hold.
+
+## [0.7.0] - 2026-09-04
 
 ### The build stopped writing to files you own
 
@@ -75,4 +80,4 @@ Nothing else in this release touches a path you own.
   jotter it is running. Optional on both sides: a site built by an older starter
   reports no version and publishes exactly as before.
 
-[Unreleased]: https://github.com/navidkashani/jotter/commits/main
+[0.7.0]: https://github.com/navidkashani/jotter/releases/tag/v0.7.0

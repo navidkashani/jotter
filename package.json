@@ -1,6 +1,6 @@
 {
   "name": "jotter",
-  "version": "1.0.0",
+  "version": "0.7.0",
   "private": true,
   "description": "An Astro theme for publishing an Obsidian vault, designed rather than merely generated.",
   "keywords": [
