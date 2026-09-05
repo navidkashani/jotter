@@ -74,7 +74,16 @@ export interface Callout {
   markerLength: number
 }
 
-const CALLOUT = /^\[!([^\]\s]+)\]([-+])?[ \t]*(.*)$/
+/**
+ * The marker itself: `[!type]` with its optional `-`/`+` fold suffix.
+ *
+ * Exported because `src/lib/excerpt.ts` has to strip it too — a note opening
+ * with a callout was putting `[!NOTE]` into its own meta description — and the
+ * two must not drift about what a marker looks like.
+ */
+export const CALLOUT_MARKER = /\[!([^\]\s]+)\]([-+])?/
+
+const CALLOUT = new RegExp(`^${CALLOUT_MARKER.source}[ \\t]*(.*)$`)
 
 /**
  * Parse the opening line of a blockquote. Returns `undefined` when it is an

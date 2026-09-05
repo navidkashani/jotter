@@ -427,6 +427,39 @@ describe('excerpt', () => {
     expect(excerpt(md)).toBe('The first paragraph with a link and Wiki.')
   })
 
+  /**
+   * A note that opens with a callout used to advertise itself as `[!NOTE] …`
+   * — in its own `<meta name="description">`, its `og:description`, its hover
+   * preview and every listing that showed it. The blockquote `>` was stripped;
+   * the marker it carried was not.
+   */
+  describe('a note that opens with a callout', () => {
+    it('drops the marker and keeps the title, which is the author\'s words', () => {
+      expect(excerpt('> [!NOTE] Worth knowing\n> And the body.')).toBe('Worth knowing And the body.')
+    })
+
+    it('drops the fold suffix too', () => {
+      expect(excerpt('> [!warning]- Collapsed\n> Body.')).toBe('Collapsed Body.')
+      expect(excerpt('> [!tip]+ Open\n> Body.')).toBe('Open Body.')
+    })
+
+    it('handles an untitled callout', () => {
+      expect(excerpt('> [!NOTE]\n> Just the body.')).toBe('Just the body.')
+    })
+
+    it('keeps a link title as its text', () => {
+      expect(excerpt('> [!info] [The handbook](https://example.com)')).toBe('The handbook')
+    })
+
+    it('leaves an ordinary blockquote alone', () => {
+      expect(excerpt('> Just a quote.')).toBe('Just a quote.')
+    })
+
+    it('does not eat a bracket that only looks like a marker', () => {
+      expect(excerpt('See [!] in the text.')).toBe('See [!] in the text.')
+    })
+  })
+
   it('prefers a wikilink alias over its target', () => {
     expect(excerpt('See [[private/Secret|the alias]].')).toBe('See the alias.')
   })

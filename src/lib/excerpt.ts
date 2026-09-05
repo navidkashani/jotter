@@ -7,6 +7,8 @@
  * sentence is how a build gets slow.
  */
 
+import { CALLOUT_MARKER } from './callout.js'
+
 const STRIP: readonly [RegExp, string][] = [
   [/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, ''], // frontmatter
   [/```[\s\S]*?```/g, ''], // fenced code
@@ -17,6 +19,11 @@ const STRIP: readonly [RegExp, string][] = [
   [/!\[[^\]]*\]\([^)]*\)/g, ''], // images
   [/\[([^\]]*)\]\([^)]*\)/g, '$1'], // links -> text
   [/^\s{0,3}>\s?/gm, ''], // blockquote markers
+  // The callout marker, after the `>` that carried it. Its title is kept: it
+  // is the author's own words and reads as the opening line, which is what an
+  // excerpt is for. Without this a note beginning `> [!NOTE] …` advertised
+  // itself to Google, to a social card and to every listing as "[!NOTE] …".
+  [new RegExp(`^\\s{0,3}${CALLOUT_MARKER.source}[ \\t]*`, 'gm'), ''],
   [/^\s{0,3}#{1,6}[ \t]+.*$/gm, ''], // heading lines, dropped whole: the title already shows them
   [/^\s{0,3}(?:[-*+]|\d+\.)\s+/gm, ''], // list markers
   [/(\*\*|__|==|~~)(.*?)\1/g, '$2'], // strong / highlight / strike
