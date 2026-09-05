@@ -1,5 +1,6 @@
 ---
-import { config } from '../lib/site.js'
+import { allNotesSlug, config } from '../lib/site.js'
+import { allNotesHref } from '../lib/href.js'
 import { t } from '../i18n/index.js'
 import ThemeToggle from './ThemeToggle.astro'
 ---
@@ -14,7 +15,7 @@ import ThemeToggle from './ThemeToggle.astro'
   <span class="header-spacer"></span>
 
   <nav class="header-actions" aria-label={t('nav.navigation')}>
-    <a class="label" href="/notes">{t('nav.allNotes')}</a>
+    <a class="label" href={allNotesHref(allNotesSlug)}>{t('nav.allNotes')}</a>
     {config.features.tags && <a class="label" href="/tags">{t('nav.tags')}</a>}
     {config.features.themeToggle && <ThemeToggle />}
   </nav>

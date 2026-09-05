@@ -7,13 +7,14 @@ import {
   folders,
   contains,
   neighbours,
+  resolveAllNotes,
   shadowedFolders,
   trailFor,
   type TreeEntry,
   type TreeFolder,
 } from '../src/lib/tree.js'
 import { encodeSlug } from '../src/lib/url.js'
-import { noteHref, assetHref, tagHref, relativeAssetPath } from '../src/lib/href.js'
+import { noteHref, allNotesHref, assetHref, tagHref, relativeAssetPath } from '../src/lib/href.js'
 import { liveLabel } from '../src/lib/resolve.js'
 import { svgIntrinsicSize, isOptimizable } from '../src/lib/embed.js'
 import { sectionOf, preresolveLinks, expandTransclusions } from '../src/lib/transclude.js'
@@ -300,6 +301,55 @@ describe('tree', () => {
 
   it('says nothing when every folder owns its own slug', () => {
     expect(shadowedFolders(t, vault().notes.filter((n) => n.published))).toEqual([])
+  })
+
+  /**
+   * The other collision on `/notes`, and the one jotter itself caused: a vault
+   * folder called `Notes/` and the theme's own all-notes listing both want it.
+   * `src/pages/notes.astro` used to win it outright, so the folder's index page
+   * was never built and the sidebar's `Notes` link and the header's `All notes`
+   * link landed on the same page.
+   */
+  describe('the all-notes listing', () => {
+    const op = (path: string, slug: string) =>
+      ({ path, slug, title: slug, published: true, dates: { updated: new Date(0) }, tags: [] }) as unknown as VaultNote
+
+    it('is at /notes when nothing in the vault wants that URL', () => {
+      const published = [op('about.md', 'about'), op('ideas/seed.md', 'ideas/seed')]
+      expect(resolveAllNotes(buildTree(published, 'derive'), published)).toEqual({ slug: 'notes' })
+    })
+
+    it('yields to a vault folder called Notes, which keeps its own index page', () => {
+      const published = vault().notes.filter((n) => n.published)
+      const tree = buildTree(published, 'derive')
+
+      expect(resolveAllNotes(tree, published)).toEqual({ slug: 'all-notes', claimedBy: 'notes' })
+      // And the folder page the old static route was shadowing is real.
+      expect(folders(tree).map((f) => f.slug)).toContain('notes')
+    })
+
+    it('yields to a note at /notes as readily as to a folder', () => {
+      const published = [op('Notes.md', 'notes')]
+      expect(resolveAllNotes(buildTree(published, 'derive'), published)).toEqual({
+        slug: 'all-notes',
+        claimedBy: 'Notes.md',
+      })
+    })
+
+    /**
+     * A vault that took both. The header links to whatever comes back, so
+     * "no free slug" would be a 404 in the site chrome; there is always one.
+     */
+    it('keeps moving until it finds a URL nobody has claimed', () => {
+      const published = [op('Notes/a.md', 'notes/a'), op('All notes.md', 'all-notes')]
+      expect(resolveAllNotes(buildTree(published, 'derive'), published).slug).toBe('all-notes-2')
+    })
+
+    it('is spelled by href.ts, so the header cannot hardcode the old address', () => {
+      expect(allNotesHref('notes')).toBe('/notes')
+      expect(allNotesHref('all-notes')).toBe('/all-notes')
+      expect(allNotesHref('all-notes', 'garden')).toBe('/garden/all-notes')
+    })
   })
 
   /**

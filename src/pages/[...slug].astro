@@ -1,15 +1,21 @@
 ---
 /**
- * Notes and folder indexes, from one catch-all.
+ * Notes, folder indexes and the all-notes listing, from one catch-all.
  *
  * Folders get pages so that a tree parent is a link and not just a toggle. A
  * note and a folder can slugify to the same path, and when they do the note
  * wins and the build says so: silently dropping either would be worse than
  * either choice.
+ *
+ * The all-notes listing is here, rather than in a `src/pages/notes.astro` of
+ * its own, because it is the third thing that can want one of these URLs and
+ * the collision policy should live in one file. A static route file cannot
+ * yield: the old one detected a vault folder called `Notes/` and warned, then
+ * took `/notes` anyway, and the folder's index page was never built.
  */
 import { getCollection, render } from 'astro:content'
 
-import { notes, allFolders, tree, backlinksFor, graph, neighboursOf } from '../lib/site.js'
+import { notes, allFolders, byUpdated, tree, backlinksFor, graph, neighboursOf } from '../lib/site.js'
 import { neighbourhood } from '../lib/graph.js'
 import { noteHref } from '../lib/href.js'
 import type { VaultNote } from '../lib/vault.js'
@@ -20,12 +26,12 @@ import NoteList from '../components/NoteList.astro'
 import { t } from '../i18n/index.js'
 
 export async function getStaticPaths() {
-  const { notes, allFolders } = await import('../lib/site.js')
+  const { notes, allFolders, allNotesSlug } = await import('../lib/site.js')
 
   const claimed = new Set<string>()
   const paths: {
     params: { slug: string }
-    props: { kind: 'note'; path: string } | { kind: 'folder'; path: string }
+    props: { kind: 'note'; path: string } | { kind: 'folder'; path: string } | { kind: 'all-notes' }
   }[] = []
 
   for (const note of notes) {
@@ -47,6 +53,15 @@ export async function getStaticPaths() {
     if (claimed.has(folder.slug)) continue
     paths.push({ params: { slug: folder.slug }, props: { kind: 'folder', path: folder.path } })
   }
+
+  /**
+   * Last, and unconditionally. `allNotesSlug` is resolved against these same
+   * two lists (`resolveAllNotes` in `src/lib/tree.ts`), so it cannot be one of
+   * the slugs above; pushed without a guard so that if it ever were, Astro
+   * would throw over the duplicate route rather than this page silently
+   * vanishing and taking the header's link with it.
+   */
+  paths.push({ params: { slug: allNotesSlug }, props: { kind: 'all-notes' } })
 
   return paths
 }
@@ -112,6 +127,16 @@ const childFolders = children.filter((c): c is Extract<TreeEntry, { kind: 'folde
     >
       <Content />
     </Note>
+  ) : kind === 'all-notes' ? (
+    <Base title={t('index.allNotes')}>
+      <div class="stack-l all-notes">
+        <header>
+          <h1 class="index-title">{t('index.allNotes')}</h1>
+          <p class="meta">{t('index.noteCount', { count: byUpdated.length })}</p>
+        </header>
+        <NoteList notes={byUpdated} variant="rows" />
+      </div>
+    </Base>
   ) : (
     <Base title={folder?.name} current={folder?.slug}>
       <div class="stack-l">
@@ -144,3 +169,12 @@ const childFolders = children.filter((c): c is Extract<TreeEntry, { kind: 'folde
     </Base>
   )
 }
+
+<style>
+  /* A column, because this listing is nothing but rows of prose. A folder index
+     is deliberately wider: it can carry a grid of subfolders beside its notes. */
+  .all-notes {
+    max-inline-size: var(--column-width);
+    margin-inline: auto;
+  }
+</style>

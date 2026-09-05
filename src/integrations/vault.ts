@@ -24,6 +24,7 @@ import { toNetlify, toVercel, robotsTxt, type RedirectRule } from '../lib/redire
 import { feedXml, FEED_PATH, type FeedOptions } from '../lib/feed.js'
 import type { Vault } from '../lib/vault.js'
 import type { Graph } from '../lib/graph.js'
+import type { AllNotesRoute } from '../lib/tree.js'
 
 const MIME: Record<string, string> = {
   '.png': 'image/png',
@@ -80,6 +81,15 @@ export interface VaultIntegrationOptions {
    * resolution itself lives in `src/pages/[...slug].astro`.
    */
   shadowedFolders?: readonly { folder: string; slug: string; note: string }[]
+  /**
+   * The all-notes listing's slug, and the vault note or folder that took
+   * `notes` if one did.
+   *
+   * Reported for the same reason `shadowedFolders` is, and in the same place:
+   * this used to be a `console.warn` inside a `getStaticPaths`, which is a
+   * line in the middle of a page-build log on a hook Astro may not re-run.
+   */
+  allNotes?: AllNotesRoute
   noIndex: boolean
   /** Absolute site URL, when one is configured. */
   siteUrl?: string
@@ -99,6 +109,7 @@ export function jotterVault({
   graph,
   redirects,
   shadowedFolders = [],
+  allNotes,
   noIndex,
   siteUrl,
   feed,
@@ -132,6 +143,19 @@ export function jotterVault({
             `"/${slug}" is claimed by both the note "${note}" and the folder "${folder}". ` +
               `The note wins and the folder has no index page, though the navigation still ` +
               `lists it. Give one of them a different permalink to choose deliberately.`,
+          )
+        }
+
+        /**
+         * The listing moved off `/notes` because the vault wanted that URL.
+         * Nothing is wrong here and nothing is lost: both pages are built, and
+         * every link jotter emits already points at the new address. Said once
+         * anyway, because `/notes` now means something else than it did.
+         */
+        if (allNotes?.claimedBy) {
+          logger.info(
+            `"/notes" is the vault's own "${allNotes.claimedBy}", so the all-notes listing ` +
+              `is at "/${allNotes.slug}". Vault content keeps the address it earned.`,
           )
         }
 

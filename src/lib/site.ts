@@ -9,7 +9,7 @@
 import jotter from '../../jotter.config'
 import { resolveVaultRoot, scanVault, type VaultNote } from './vault.js'
 import { buildGraph } from './graph.js'
-import { buildTree, folders, neighbours } from './tree.js'
+import { buildTree, folders, neighbours, resolveAllNotes } from './tree.js'
 import { tagTree, expandTag } from './tags.js'
 import { resolveSocialImage, socialImageUrl } from './social.js'
 
@@ -59,6 +59,17 @@ export const tree = buildTree(notes, vault.slugs, jotter.folderNames, {
   hidden: jotter.navHidden,
 })
 export const allFolders = folders(tree)
+
+/**
+ * Where the all-notes listing is built: `notes`, unless the vault claimed it.
+ *
+ * Resolved once, here, beside the two lists it is resolved against, because
+ * three separate pages need the same answer: the catch-all that builds the
+ * listing, the header that links to it and the 404 that offers it. Pair it
+ * with `allNotesHref` in `src/lib/href.js` to get the URL.
+ */
+export const allNotesSlug: string = resolveAllNotes(tree, notes).slug
+
 export const tags = tagTree(notes)
 
 /**

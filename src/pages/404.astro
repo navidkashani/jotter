@@ -4,7 +4,8 @@
  */
 import Base from '../layouts/Base.astro'
 import { t } from '../i18n/index.js'
-import { byUpdated } from '../lib/site.js'
+import { allNotesSlug, byUpdated } from '../lib/site.js'
+import { allNotesHref } from '../lib/href.js'
 import NoteList from '../components/NoteList.astro'
 ---
 
@@ -15,7 +16,7 @@ import NoteList from '../components/NoteList.astro'
       <p class="landing-intro">{t('notFound.body')}</p>
       <p class="actions">
         <a href="/">{t('notFound.home')}</a>
-        <a href="/notes">{t('notFound.allNotes')}</a>
+        <a href={allNotesHref(allNotesSlug)}>{t('notFound.allNotes')}</a>
       </p>
     </header>
 

@@ -17,7 +17,7 @@ import { jotterPlugins, jotterHastPlugins, satteriFeatures } from './src/markdow
 import { jotterVault } from './src/integrations/vault'
 import { jotterSearch } from './src/integrations/search'
 import { buildRedirectRules } from './src/lib/redirects'
-import { buildTree, folders, shadowedFolders } from './src/lib/tree'
+import { buildTree, folders, resolveAllNotes, shadowedFolders } from './src/lib/tree'
 import { decodeSlug, encodeSlug } from './src/lib/url'
 
 /**
@@ -72,6 +72,19 @@ const routed = [...published.map((note) => note.slug), ...folders(tree).map((f) 
 const shadowed = shadowedFolders(tree, published)
 
 /**
+ * Where the all-notes listing ends up, and what pushed it there if anything
+ * did. `Notes/` is an ordinary name for a vault folder and slugifies to
+ * `notes`, the URL jotter's own listing wants; the vault wins and the listing
+ * moves aside. See `resolveAllNotes` in `src/lib/tree.ts`.
+ *
+ * Resolved here as well as in `src/lib/site.ts` because this file owns two
+ * things that must agree with the route: the redirect map, which must not
+ * shadow it, and the build report. Both read the same pure function, so they
+ * cannot drift.
+ */
+const allNotes = resolveAllNotes(tree, published)
+
+/**
  * Feed inputs, or nothing at all.
  *
  * Built here and only when the flag is on, so `features.rss: false` means the
@@ -99,8 +112,10 @@ const redirects = buildRedirectRules({
   slugs: vault.slugs,
   taken: [
     ...routed,
-    // Routes jotter owns itself.
-    'notes',
+    // Routes jotter owns itself. The listing's slug rather than a literal
+    // `notes`: on a vault that took `/notes` the listing is somewhere else,
+    // and it is the somewhere else a redirect must not shadow.
+    allNotes.slug,
     'tags',
     '404',
   ],
@@ -214,6 +229,7 @@ export default defineConfig({
       graph,
       redirects,
       shadowedFolders: shadowed,
+      allNotes,
       noIndex: jotter.noIndex,
       siteUrl: jotter.url,
       feed,

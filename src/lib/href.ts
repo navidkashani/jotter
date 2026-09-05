@@ -28,6 +28,19 @@ export function assetHref(vaultPath: string, base = ''): string {
   return `${prefix}${VAULT_ASSET_BASE}/${encodeSlug(trimSlashes(vaultPath))}`
 }
 
+/**
+ * The all-notes listing. Takes its slug because the slug is not a constant: a
+ * vault folder called `Notes/` claims `/notes` first, and then the listing is
+ * somewhere else. `src/lib/site.ts` resolves which and exports `allNotesSlug`.
+ *
+ * A named function for a URL that is only ever one link deep, because the
+ * literal `/notes` in `Header.astro` is precisely how the collision went
+ * unnoticed: the page moved and the header went on pointing at the old address.
+ */
+export function allNotesHref(slug: string, base = ''): string {
+  return noteHref(slug, '', base)
+}
+
 export function tagHref(tag: string, base = ''): string {
   const prefix = base ? `/${trimSlashes(base)}` : ''
   return `${prefix}/tags/${encodeSlug(trimSlashes(tag))}`

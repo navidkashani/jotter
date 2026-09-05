@@ -79,7 +79,7 @@ generated vault that is the moment of the build.
 | `/` | The note claiming it, else a generated landing page |
 | `/<slug>` | A note |
 | `/<folder>/` | A folder index, so tree parents are clickable |
-| `/notes` | Every note, by last updated |
+| `/notes` | Every note, by last updated. Moves to `/all-notes` if the vault has a folder or note that claims `/notes` first |
 | `/tags`, `/tags/<a>`, `/tags/<a>/<b>` | Tag pages, parents rolling up children |
 | `/404` | Offers search and recent notes |
 | `/_vault/*` | Attachments Astro does not process (SVG, GIF, video, PDF) |
