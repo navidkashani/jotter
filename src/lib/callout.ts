@@ -53,6 +53,19 @@ export interface Callout {
   /** Whether the type is one jotter styles; unknown types fall back to `note`. */
   known: boolean
   title: string
+  /**
+   * The title exactly as written on the marker line: no type-label fallback,
+   * and no trimming of the space before whatever follows. Empty when the
+   * author wrote none.
+   *
+   * The adapter needs this as well as `title` because a title can continue
+   * into nodes this function never sees. `> [!info] [a link](…)` reaches here
+   * as the text `[!info] ` alone — the parser lifted the link out into a
+   * sibling — so `title` is the fallback label `Info`, which would be the
+   * wrong thing to print in front of the link, and a trimmed `rawTitle` would
+   * run the last word into it.
+   */
+  rawTitle: string
   /** `undefined` when not collapsible at all. */
   collapsible: boolean
   /** Only meaningful when `collapsible`. */
@@ -86,6 +99,7 @@ export function parseCallout(text: string): Callout | undefined {
     known,
     // Obsidian titles an untitled callout with its type, capitalized.
     title: rawTitle.trim() || (known ? CALLOUT_TYPES[type as CalloutType] : capitalize(type)),
+    rawTitle,
     collapsible: fold !== undefined,
     defaultOpen: fold === '+',
     markerLength: leading + full.length,

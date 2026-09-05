@@ -307,6 +307,68 @@ describe('callouts', () => {
     expect(out).toContain('<blockquote>')
     expect(out).not.toContain('callout')
   })
+
+  /**
+   * A title is not always plain text, and when it was not, it used to vanish.
+   *
+   * The parser lifts inline syntax out of the text run, so `> [!info] [a](b)`
+   * reaches the adapter as the text `[!info] ` plus a sibling `link`. The
+   * marker had eaten the whole text node, so the title read as empty, took the
+   * type label, and the paragraph holding the link was deleted as body. On
+   * navidk.com that silently dropped the only thing a callout existed to
+   * carry: `> [!info] [کتابچه راهنمای یک نینجا](…)` rendered as the bare word
+   * `Info`, with the URL nowhere on the page.
+   */
+  describe('a title that is not plain text', () => {
+    /**
+     * External links carry a `visually-hidden` "(opens in a new tab)" span, so
+     * the assertions below read the title with it stripped: what is being
+     * tested is that the link survived and sits where the title goes, not how
+     * the link plugin decorates it.
+     */
+    const titleOf = (html: string) =>
+      (/<(?:div|summary) class="callout-title">([\s\S]*?)<\/(?:div|summary)>/.exec(html)?.[1] ?? '')
+        .replace(/<span class="visually-hidden"[^>]*>[^<]*<\/span>/g, '')
+
+    it('keeps a link written as the whole title', () => {
+      const out = compile('> [!info] [A Ninja\'s Handbook](https://example.com/handbook)')
+      expect(out).toContain('https://example.com/handbook')
+      expect(titleOf(out)).toMatch(/^<a [^>]*href="https:\/\/example\.com\/handbook"[^>]*>A Ninja’s Handbook<\/a>$/)
+      // The type label must not be printed in front of the author's own title.
+      expect(titleOf(out)).not.toContain('Info')
+    })
+
+    it('keeps the words either side of it, and the spaces', () => {
+      const out = compile('> [!note] See [the docs](https://example.com/docs) first')
+      expect(titleOf(out)).toMatch(/^See <a [^>]*>the docs<\/a> first$/)
+    })
+
+    it('keeps bold, code and a wikilink in a title', () => {
+      expect(titleOf(compile('> [!tip] **Loud**'))).toBe('<strong>Loud</strong>')
+      expect(titleOf(compile('> [!tip] `code`'))).toBe('<code>code</code>')
+      expect(titleOf(compile('> [!tip] [[Luhmann]]'))).toContain('href="/notes/luhmann"')
+    })
+
+    it('still separates the body from a title that ends in a link', () => {
+      const out = compile('> [!info] [a](https://example.com)\n> The body.')
+      expect(titleOf(out)).toMatch(/^<a [^>]*>a<\/a>$/)
+      expect(out).toContain('The body.')
+      // The body belongs to the callout, outside the title.
+      expect(titleOf(out)).not.toContain('The body')
+    })
+
+    it('works on the collapsible form too', () => {
+      const out = compile('> [!warning]- [a](https://example.com)')
+      expect(out).toContain('<summary class="callout-title">')
+      expect(titleOf(out)).toMatch(/^<a [^>]*>a<\/a>$/)
+    })
+
+    it('leaves a plain title exactly as it was', () => {
+      const out = compile('> [!note] A callout\n> With a body.')
+      expect(out).toContain('<div class="callout-title">A callout</div>')
+      expect(out).toContain('With a body.')
+    })
+  })
 })
 
 describe('inline syntaxes', () => {
