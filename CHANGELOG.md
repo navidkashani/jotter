@@ -14,6 +14,14 @@ where a breaking change goes, and `0.7.x` is safe to take. The config API is
 still moving (`astro.config.ts` changed in 17 of the last 48 commits), and
 saying so in the version number is more honest than a 1.0 that would not hold.
 
+## [Unreleased]
+
+### Fixed
+
+- **`docs/open-publish.md` counted the unmapped settings wrong**, saying three
+  where the same page names seven, and described the build marker as
+  `{ snapshot, builtAt }` when `finalize.mjs` also writes `starter`.
+
 ## [0.8.0] - 2026-09-06
 
 Direction, checked at the level it is actually decided — plus the seven commits
@@ -262,6 +270,7 @@ Nothing else in this release touches a path you own.
   jotter it is running. Optional on both sides: a site built by an older starter
   reports no version and publishes exactly as before.
 
+[unreleased]: https://github.com/navidkashani/jotter/compare/v0.8.0...HEAD
 [0.8.0]: https://github.com/navidkashani/jotter/compare/v0.7.2...v0.8.0
 [0.7.2]: https://github.com/navidkashani/jotter/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/navidkashani/jotter/compare/v0.7.0...v0.7.1

@@ -147,9 +147,11 @@ site gets `<html lang="fa-IR" dir="rtl">` immediately, and its buttons and
 labels stay English until someone adds `src/i18n/fa.json`.
 
 A site option this repository has never heard of is reported in the build log
-and ignored, which is how you find out to update from the template. Three jotter
-settings have no equivalent in a snapshot and stay at their defaults:
-`features.rss`, `features.embeds` and `externalLinks`.
+and ignored, which is how you find out to update from the template. Seven
+jotter settings have no equivalent in a snapshot and stay at their defaults:
+`features.rss`, `features.embeds` and `externalLinks`, plus the four named
+further up that make `site.json` a replacement rather than a merge
+(`description`, `author`, `linkResolution` and `publishGate`).
 
 ### The sidebar order
 
@@ -254,9 +256,11 @@ the file's basename, so a slugified `My Diagram.png` would make
 
 After a passing build, `finalize.mjs` writes:
 
-- **`dist/_publish.json`**: `{ snapshot, builtAt }`. The plugin polls this every
-  3 to 15 seconds for ten minutes after a publish. Without it, every publish
-  ends in "still waiting" on a site that went live minutes earlier.
+- **`dist/_publish.json`**: `{ snapshot, builtAt, starter }`, where `starter` is
+  the jotter version this site is running and is left out when it cannot be
+  read. The plugin polls this every 3 to 15 seconds for ten minutes after a
+  publish. Without it, every publish ends in "still waiting" on a site that went
+  live minutes earlier.
 - **`dist/_headers`**: `Cache-Control: no-store` on the marker, so a CDN cannot
   serve a stale one, plus `X-Robots-Tag: noindex, nofollow` when `noIndex` is
   set. An existing `_headers` is merged, not replaced.
