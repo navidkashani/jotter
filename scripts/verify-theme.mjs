@@ -1472,6 +1472,27 @@ section('The mirror: an RTL rebuild marks the other half')
         `a prose block still running ${was} is marked dir="${was}"`,
         `no <p dir="${was}"> on any page: the feature only emits one direction`,
       )
+
+      /**
+       * The same statement for the half that lives in an attribute rather than
+       * on an element, and the only thing that can prove the preview card is
+       * symmetric.
+       *
+       * `directionSection` above is stated against each page's own `<html dir>`,
+       * so it runs here unchanged and is equally happy with a build that emits
+       * nothing at all. This is the positive half: on the flipped build the
+       * previews that must declare a direction are the ones running `${was}`,
+       * and an implementation that could only ever emit one direction, or that
+       * memoized without the base direction in its key, has nothing here.
+       */
+      const flippedPreviews = flippedPages.filter(({ html }) =>
+        new RegExp(`data-preview(?:-title)?-dir="${was}"`).test(html),
+      )
+      check(
+        flippedPreviews.length > 0,
+        `a hover preview still running ${was} declares data-preview-dir="${was}"`,
+        `no preview direction attribute on any page: the card only emits one direction`,
+      )
     }
 
     await writeFile(configPath, original)

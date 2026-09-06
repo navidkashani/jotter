@@ -1,5 +1,7 @@
 ---
 import { tagHref } from '../lib/href.js'
+import { config } from '../lib/site.js'
+import { textDir } from '../lib/bidi.js'
 import { t } from '../i18n/index.js'
 
 interface Props {
@@ -13,7 +15,7 @@ const { tags } = Astro.props
     <ul class="tag-list" aria-label={t('note.tags')}>
       {tags.map((tag) => (
         <li>
-          <a class="tag-chip" href={tagHref(tag)}>
+          <a class="tag-chip" href={tagHref(tag)} dir={textDir(tag, config.dir)}>
             #{tag}
           </a>
         </li>

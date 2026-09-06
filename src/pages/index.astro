@@ -31,10 +31,13 @@ const headings = rendered?.headings ?? []
 
 // "Start here" is the most-linked-to notes: in a garden, the hubs other notes
 // point at are the entrances, and that needs no curation to stay true.
+// One collator for the sort rather than a locale argument per comparison, and
+// `numeric` so `Chapter 2` precedes `Chapter 10`. See `src/lib/tree.ts`.
+const byTitle = new Intl.Collator(config.locale, { numeric: true })
 const hubs = [...notes]
   .map((note) => ({ note, incoming: backlinksFor(note.slug).length }))
   .filter((n) => n.incoming > 0)
-  .sort((a, b) => b.incoming - a.incoming || a.note.title.localeCompare(b.note.title))
+  .sort((a, b) => b.incoming - a.incoming || byTitle.compare(a.note.title, b.note.title))
   .slice(0, 6)
   .map((n) => n.note)
 

@@ -636,7 +636,19 @@ export function directionAttributes(html) {
     }
 
     const inherited = stack.length > 0 ? stack[stack.length - 1].dir : undefined
-    const dir = /\bdir="([^"]*)"/.exec(attrs)?.[1]
+    /**
+     * Anchored on whitespace, not on `\b`.
+     *
+     * `\bdir="` also matches the tail of any attribute *ending* in `-dir`,
+     * because the `-` before it is a word boundary. That was latent until the
+     * hover preview started emitting `data-preview-title-dir="rtl"`, at which
+     * point this read a `data-*` value as the anchor's own direction: it
+     * reported every such anchor as an `<a dir="rtl">` over text with no
+     * right-to-left character in it, and, worse and silently, pushed a wrong
+     * `dir` onto the stack, so everything nested inside one inherited a
+     * direction the element never declared.
+     */
+    const dir = /(?:^|\s)dir="([^"]*)"/.exec(attrs)?.[1]
     if (dir !== undefined) found.push({ tag, dir, inherited, end: TAG.lastIndex })
 
     if (RAW_TEXT.has(tag) && !selfClosing) rawUntil = tag
@@ -667,6 +679,93 @@ export const RTL_CHARACTER =
 export const LATIN_LETTER = /[A-Za-z]/
 
 /**
+ * Which way a string *leads*, by a second opinion rather than by importing the
+ * implementation.
+ *
+ * First-strong (UBA P2) restricted to the two character classes this file
+ * already knows about, and stated by comparing indices rather than by walking
+ * codepoints: whichever of an RTL character or a Latin letter comes first wins,
+ * and `undefined` when the string has neither. That is deliberately a weaker
+ * rule than `src/lib/bidi.ts` runs, which is the point: a check that restates
+ * the implementation proves only that the implementation agrees with itself.
+ *
+ * It is weaker in exactly one way worth knowing. `firstStrong` skips a run
+ * between an isolate initiator and its PDI; this does not, so on an FSI-wrapped
+ * string the two can disagree. Every wrapped string jotter emits is a preview
+ * title whose `-dir` was computed from the *raw* title, and the raw title's
+ * first half is what leads the wrapped one too, so they agree there.
+ */
+export function leads(text) {
+  const rtl = text.search(RTL_CHARACTER)
+  const latin = text.search(LATIN_LETTER)
+  if (rtl === -1 && latin === -1) return undefined
+  if (rtl === -1) return 'ltr'
+  if (latin === -1) return 'rtl'
+  return rtl < latin ? 'rtl' : 'ltr'
+}
+
+/** The character references Astro writes into an attribute value. */
+const unescape = (value) =>
+  value
+    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCodePoint(parseInt(code, 16)))
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+
+/** One attribute out of a captured tag's attribute text, unescaped. */
+const attributeOf = (attrs, name) => {
+  // Anchored on whitespace for the reason `directionAttributes` is: a `\b`
+  // here would let `data-preview-title-dir` satisfy a search for `title-dir`.
+  const found = new RegExp(`(?:^|\\s)${name}="([^"]*)"`).exec(attrs)
+  return found ? unescape(found[1]) : undefined
+}
+
+/**
+ * Every hover-preview anchor in a page, as the four attributes it carries.
+ *
+ * `data-preview` is not a prefix problem: the pattern requires `="` straight
+ * after the name, and `data-preview-title-dir="` has a `-` there instead.
+ */
+export function previewAttributes(html) {
+  const TAG = /<a\b((?:"[^"]*"|'[^']*'|[^>"'])*)>/g
+  const found = []
+  let match
+  while ((match = TAG.exec(html)) !== null) {
+    const attrs = match[1]
+    const title = attributeOf(attrs, 'data-preview-title')
+    if (title === undefined) continue
+    found.push({
+      title,
+      text: attributeOf(attrs, 'data-preview') ?? '',
+      titleDir: attributeOf(attrs, 'data-preview-title-dir'),
+      textDir: attributeOf(attrs, 'data-preview-dir'),
+    })
+  }
+  return found
+}
+
+/** Every local-graph payload in a page, parsed. Silently skips an unreadable one. */
+export function graphPayloads(html) {
+  const TAG = /<div\b((?:"[^"]*"|'[^']*'|[^>"'])*)>/g
+  const found = []
+  let match
+  while ((match = TAG.exec(html)) !== null) {
+    const raw = attributeOf(match[1], 'data-graph')
+    if (raw === undefined) continue
+    try {
+      found.push(JSON.parse(raw))
+    } catch {
+      /* `directionSection` reports it as unreadable rather than throwing. */
+      found.push(null)
+    }
+  }
+  return found
+}
+
+/**
  * Per-block text direction, over a real build.
  *
  * The unit tests own the rule; what only `dist/` can show is that the rule
@@ -692,12 +791,26 @@ export function directionSection(pages, outputs) {
   )
 
   /**
-   * The invariant that keeps the `[dir='rtl']` idiom in `base.css` valid.
-   * jotter computes direction at build time and emits the answer; a `dir="auto"`
-   * in `dist/` means something has started deferring to the browser instead,
-   * and `[dir='rtl']` does not match an element whose direction the browser
-   * resolved. Over every text output rather than the pages, so a stray one in
-   * the feed or a bundled script counts too.
+   * **`dir="auto"` is unassertable, and that is the whole reason.**
+   *
+   * jotter computes direction at build time and emits the answer it already
+   * knows. Under `auto`, a Persian paragraph and an English one produce
+   * byte-identical markup, so not one check in this file could tell a right
+   * answer from a shrug: every statement below about which blocks are marked,
+   * and about which are correctly *not*, would be measuring nothing.
+   *
+   * This used to also cite `[dir='rtl']` not matching a browser-resolved
+   * direction. That reason is now half spent: the rules inside `.prose` moved to
+   * `:dir()`, which does see a resolved direction (`src/styles/prose.css` says
+   * why). It still holds for the attribute selectors left in `base.css`, but it
+   * was never the load-bearing half. Unassertability is, and it survives.
+   *
+   * Over every text output rather than the pages, so a stray one in the feed or
+   * a bundled script counts too. That width has one live consequence worth
+   * knowing: `src/scripts/search.ts` legitimately sets `dir="auto"` on the
+   * search field, which is built in the browser and appears in no page, and it
+   * writes it with `setAttribute` precisely so a minified `x.dir="auto"` does
+   * not read here as an attribute in a document.
    */
   const auto = outputs.filter(({ text }) => /\bdir="auto"/.test(text))
   observe(
@@ -782,6 +895,141 @@ export function directionSection(pages, outputs) {
     marked > 0 && markedTags.size > 1,
     'the demo has blocks running the other way for these checks to bite on',
     `${marked} marked block(s) across ${markedTags.size} kind(s): ${[...markedTags].join(', ')}`,
+  )
+
+  /* ------------------------------------------- text built in the browser */
+
+  /**
+   * The two islands whose text is assembled by script, where nothing is
+   * inherited from the note the words came from.
+   *
+   * A hover preview card is appended to `<body>`, so its place in the document
+   * can only ever tell it the *site's* direction; a canvas label has no box
+   * model at all. Both are given the answer explicitly at build time, and both
+   * are invisible to every check above, which reads `dir` attributes on
+   * elements. These read the payloads instead.
+   */
+  const illegalPreview = []
+  const redundantPreview = []
+  const unfoundedPreview = []
+  const undeclaredPreview = []
+  const graphProblems = []
+  let previewsMarked = 0
+  let labelsMarked = 0
+
+  for (const { file, html } of authored) {
+    const page = /<html[^>]+\bdir="(ltr|rtl)"/.exec(html)?.[1]
+    if (!page) continue
+
+    for (const preview of previewAttributes(html)) {
+      for (const [half, value, dir] of [
+        ['title', preview.title, preview.titleDir],
+        ['text', preview.text, preview.textDir],
+      ]) {
+        const where = `${file}: data-preview ${half} "${value.slice(0, 40)}"`
+
+        if (dir !== undefined && dir !== 'ltr' && dir !== 'rtl') {
+          illegalPreview.push(`${where} declares dir="${dir}"`)
+          continue
+        }
+        if (dir === page) redundantPreview.push(`${where} repeats the page's ${page}`)
+        if (dir === 'rtl' && !RTL_CHARACTER.test(value)) {
+          unfoundedPreview.push(`${where} declares rtl over text with no RTL character in it`)
+        }
+        /**
+         * The positive half, and the one that goes red if the emit is dropped:
+         * text that leads the other way from its page has to say so, or the
+         * card renders it with the site's direction and the whole feature is
+         * decorative.
+         */
+        const runs = leads(value)
+        if (runs && runs !== page && dir !== runs) {
+          undeclaredPreview.push(`${where} leads ${runs} on a ${page} page and declares ${dir ?? 'nothing'}`)
+        }
+        if (dir) previewsMarked++
+      }
+    }
+
+    for (const payload of graphPayloads(html)) {
+      if (payload === null) {
+        graphProblems.push(`${file}: a data-graph payload is not readable JSON`)
+        continue
+      }
+      for (const node of payload.nodes ?? []) {
+        const title = String(node.title ?? '')
+        const dir = node.dir
+        const where = `${file}: graph node "${title.slice(0, 40)}"`
+        if (dir !== undefined && dir !== 'ltr' && dir !== 'rtl') {
+          graphProblems.push(`${where} declares dir="${dir}"`)
+          continue
+        }
+        if (dir === page) graphProblems.push(`${where} repeats the page's ${page}`)
+        if (dir === 'rtl' && !RTL_CHARACTER.test(title)) {
+          graphProblems.push(`${where} declares rtl over a title with no RTL character in it`)
+        }
+        const runs = leads(title)
+        if (runs && runs !== page && dir !== runs) {
+          graphProblems.push(`${where} leads ${runs} on a ${page} page and declares ${dir ?? 'nothing'}`)
+        }
+        if (dir) labelsMarked++
+      }
+    }
+  }
+
+  observe(
+    illegalPreview.length === 0,
+    'no preview direction with a value other than ltr or rtl',
+    illegalPreview.join('\n        '),
+    { strictInDemo: true },
+  )
+
+  observe(
+    redundantPreview.length === 0,
+    'no preview repeats the direction its page already has',
+    redundantPreview.slice(0, 8).join('\n        '),
+    { strictInDemo: true },
+  )
+
+  observe(
+    unfoundedPreview.length === 0,
+    'every rtl preview actually contains right-to-left characters',
+    unfoundedPreview.slice(0, 8).join('\n        '),
+    { strictInDemo: true },
+  )
+
+  observe(
+    undeclaredPreview.length === 0,
+    'every preview running the other way declares its direction',
+    undeclaredPreview.slice(0, 8).join('\n        '),
+    { strictInDemo: true },
+  )
+
+  observe(
+    graphProblems.length === 0,
+    'every graph label running the other way declares its direction, and only those',
+    graphProblems.slice(0, 8).join('\n        '),
+    { strictInDemo: true },
+  )
+
+  /**
+   * And the demo exercises both, so the five above are not passing over a build
+   * with no mixed-direction preview and no mixed-direction label in it at all.
+   *
+   * This is the guard that was missing when the per-block work shipped: there
+   * was no right-to-left preview text anywhere in `dist/`, so every statement
+   * that could have been made about the card would have been vacuously true.
+   * Stated as "runs the other way from its page" rather than "is Persian",
+   * because on the theme suite's rebuild the ones that differ are the English.
+   */
+  demo(
+    previewsMarked > 0,
+    'the demo has a hover preview running the other way',
+    `${previewsMarked} marked preview half/halves`,
+  )
+  demo(
+    labelsMarked > 0,
+    'the demo has a graph label running the other way',
+    `${labelsMarked} marked label(s)`,
   )
 }
 

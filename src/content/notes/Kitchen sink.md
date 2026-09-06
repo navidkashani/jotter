@@ -118,6 +118,27 @@ either way.
   `unicode-bidi: isolate` on `.external-link::after` is for.
 - An English item, unmarked, in the same list.
 
+A hover preview carries the direction of the note it is *showing*, which the
+card cannot inherit: it is appended to `<body>`, so the only thing its place in
+the document can tell it is the direction of the site. A link to
+[[Persian notes]] previews a right-to-left title and excerpt, and a link to
+[[Persian notes#English heading]] previews the case where the two halves of the
+card's title disagree and the ` > ` between them would otherwise reorder.
+
+A list whose *first* item is English and whose later items are not, which is the
+case that decides where a list's indent gutter belongs. The gutter is on each
+item rather than on the list, because an outside marker is laid out against its
+own item's edge:
+
+1. An English item, first, so the list itself has nothing to declare.
+2. یک بند فارسی که نشانگر آن باید در سمت راست باشد.
+3. Another English item, after it.
+
+And a task list, whose items lose their marker and keep their alignment:
+
+- [x] An English task, done.
+- [ ] یک کار فارسی که هنوز انجام نشده است.
+
 The rule is Unicode's own (the first strong character wins), so a line that
 opens with a year still resolves from the word after it, and a line of digits
 or punctuation alone keeps whatever it inherits. The one case it gets wrong is

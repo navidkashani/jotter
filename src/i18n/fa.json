@@ -1,0 +1,56 @@
+{
+  "site.skipToContent": "پرش به محتوا",
+  "site.toggleTheme": "تغییر پوسته‌ی رنگی",
+  "site.openNavigation": "باز کردن ناوبری",
+  "site.search": "جست‌وجو",
+  "site.feed": "{title} — خوراک RSS",
+
+  "search.placeholder": "جست‌وجو در یادداشت‌ها…",
+  "search.results": "{count} نتیجه",
+  "search.noResults": "چیزی با آن مطابقت ندارد.",
+  "search.close": "بستن جست‌وجو",
+  "search.unavailable": "جست‌وجو در دسترس نیست: هنوز نمایه‌ای ساخته نشده است.",
+
+  "nav.notes": "یادداشت‌ها",
+  "nav.tags": "برچسب‌ها",
+  "nav.allNotes": "همه‌ی یادداشت‌ها",
+  "nav.navigation": "ناوبری",
+
+  "note.contents": "فهرست مطالب",
+  "note.backlinks": "پیوند از",
+  "note.noBacklinks": "هنوز چیزی به اینجا پیوند نداده است.",
+  "note.graph": "گراف محلی",
+  "note.expandGraph": "بزرگ کردن گراف",
+  "note.closeGraph": "بستن گراف",
+  "note.created": "ایجاد",
+  "note.updated": "به‌روزرسانی",
+  "note.tags": "برچسب‌ها",
+  "note.context": "زمینه‌ی یادداشت",
+  "note.field.aliases": "همچنین شناخته‌شده با",
+  "note.field.status": "وضعیت",
+  "note.field.source": "منبع",
+  "note.field.author": "نویسنده",
+  "note.field.series": "مجموعه",
+  "note.previous": "پیشین",
+  "note.next": "پسین",
+
+  "index.startHere": "از اینجا شروع کنید",
+  "index.recentlyUpdated": "به‌تازگی به‌روز شده",
+  "index.allNotes": "همه‌ی یادداشت‌ها",
+  "index.noteCount": "{count} یادداشت",
+  "index.inFolder": "در این پوشه",
+  "index.subfolders": "پوشه‌ها",
+
+  "tags.title": "برچسب‌ها",
+  "tags.intro": "هر برچسب در این باغ، با برچسب‌های تودرتو که در والدشان جمع شده‌اند.",
+  "tags.count": "{count} یادداشت",
+  "tags.childTags": "برچسب‌های تودرتو",
+
+  "notFound.title": "اینجا نیست",
+  "notFound.body": "آن یادداشت جابه‌جا شده، نامش تغییر کرده، یا هرگز منتشر نشده است. از ناوبری استفاده کنید، یا از ابتدا شروع کنید.",
+  "notFound.home": "رفتن به صفحه‌ی خانه",
+  "notFound.allNotes": "مرور همه‌ی یادداشت‌ها",
+
+  "empty.title": "هنوز چیزی منتشر نشده",
+  "empty.body": "کمی مارک‌داون در پوشه‌ی مخزن خود بگذارید تا اینجا ظاهر شود."
+}

@@ -24,6 +24,8 @@
  */
 import type { Neighbourhood } from '../lib/graph.js'
 import { noteHref } from '../lib/href.js'
+import { config } from '../lib/site.js'
+import { textDir } from '../lib/bidi.js'
 import { t } from '../i18n/index.js'
 
 interface Props {
@@ -66,6 +68,19 @@ const data = {
     title: n.title,
     // Built here, so the client never has to know how a jotter URL is spelled.
     href: noteHref(n.slug),
+    /**
+     * Canvas text has no DOM to inherit from, so a label's direction has to
+     * travel with it. The titles *are* known here, which is why this is an
+     * explicit answer rather than anything the browser re-derives.
+     *
+     * It also fixes elision: `elide` appends `…`, which is bidi-neutral, and
+     * under a forced left-to-right context a neutral at the end of an RTL label
+     * lands at the physical right, i.e. at the label's *beginning*.
+     *
+     * `JSON.stringify` drops an `undefined` value, so a monolingual vault's
+     * payload is byte-identical to one built before this line existed.
+     */
+    dir: textDir(n.title, config.dir),
   })),
   links,
   /**
@@ -86,7 +101,7 @@ const data = {
       <div class="graph-canvas" data-graph={JSON.stringify(data)} />
       <div class="rail-links graph-list">
         {neighbours.map((node) => (
-          <a href={noteHref(node.slug)}>{node.title}</a>
+          <a href={noteHref(node.slug)} dir={textDir(node.title, config.dir)}>{node.title}</a>
         ))}
       </div>
     </section>

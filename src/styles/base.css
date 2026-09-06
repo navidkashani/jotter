@@ -1387,20 +1387,26 @@ body {
  * cannot drag the punctuation of the label beside it to the wrong end, and a
  * mixed title like `Radio Marz - رادیو مرز` keeps its own two runs in order.
  *
- * One rule rather than a `dir` attribute on fourteen components, and it is the
- * only form that reaches the two that no `.astro` edit can: the search results
- * and the graph's link list, both built in the browser.
+ * The components now also emit a `dir` on each of these, computed with
+ * `textDir` where the title is rendered, which is what supplies the
+ * **alignment** this rule cannot: isolation keeps a Persian title's own runs in
+ * order, and only a base direction moves it to the correct edge of its box.
+ * `dir` brings the UA's own `unicode-bidi: isolate` with it, so the rule below
+ * is what still covers a title that agrees with the page, emits no attribute
+ * (the zero-cost claim), and shares a line with something else anyway.
  *
- * The honest limit: this is isolation, not alignment. A Persian card title
- * stays left-aligned in its box on an LTR site. Per-element `dir` would give
- * both and cost fourteen files; it is additive later if a screenshot asks for
- * it. The prose itself is already handled per block: see
- * `src/markdown/direction.ts`.
+ * The two comment lines that used to be here were both wrong, which is worth
+ * saying rather than deleting. `.search-result-title` was named as one of the
+ * two this "reaches" and was never in the selector list. And `isolate` was
+ * never the right tool for either browser-built case: those elements are
+ * already `display: block`, hence already separate bidi paragraphs. What they
+ * lacked was a base *direction*, which `isolate` does not supply. See the two
+ * rules below, split by where the text is known.
  *
  * The breadcrumb, the cards, the rows, the nav tree and the TOC are all flex
  * or grid containers already, and every flex item is its own bidi paragraph,
- * so those are isolated by their layout. This covers the ones whose title
- * shares a line with something else.
+ * so those are isolated by their layout. The prose itself is handled per
+ * block: see `src/markdown/direction.ts`.
  */
 .note-card-title,
 .note-row-title,
@@ -1411,6 +1417,28 @@ body {
 .note-crumb a,
 .graph-list a {
   unicode-bidi: isolate;
+}
+
+/**
+ * Search results, which are the one place with **no** build-time answer.
+ *
+ * A Pagefind excerpt is assembled in the browser from a fragment index, so
+ * there is nothing for `textDir` to have decided and nothing to assert. That is
+ * what makes `plaintext` right here rather than a retreat to `dir="auto"`: the
+ * no-`auto` rule exists because a build-time `auto` is *unassertable*, and here
+ * there is no build-time answer to assert against in the first place.
+ *
+ * `unicode-bidi: plaintext` runs the same UBA P2/P3 first-strong rule per
+ * paragraph that everything else in jotter runs ahead of time, and it makes
+ * `text-align: start` resolve per paragraph too, so a Persian result gets
+ * alignment as well as ordering. No script, no index metadata, no attribute.
+ *
+ * `:dir()` does **not** see a direction resolved by `plaintext`, so do not
+ * write `.search-excerpt:dir(rtl)` and expect it to match.
+ */
+.search-result-title,
+.search-excerpt {
+  unicode-bidi: plaintext;
 }
 
 /* ---- Drawer (mobile sidebar) ------------------------------------------- */

@@ -19,12 +19,19 @@
  *
  * Obsidian Publish sets `dir="auto"` on every block and lets the browser run
  * the algorithm, because Publish *is* a browser renderer. jotter renders ahead
- * of time, so it emits the answer it already knows. Three consequences decide
- * it: `dir="auto"` is unassertable: a Persian paragraph and an English one
- * produce byte-identical markup, so no build check can tell a right answer from
- * a shrug; a single-script vault pays nothing here and would pay an attribute
- * per block there; and an explicit `dir` keeps the three existing `[dir='rtl']`
- * selectors in `base.css` matching, so no `:dir()` migration and no CSS.
+ * of time, so it emits the answer it already knows. Two consequences decide it:
+ * `dir="auto"` is unassertable: a Persian paragraph and an English one produce
+ * byte-identical markup, so no build check can tell a right answer from a shrug;
+ * and a single-script vault pays nothing here and would pay an attribute per
+ * block there.
+ *
+ * There used to be a third, that an explicit `dir` keeps the `[dir='rtl']`
+ * selectors in `base.css` matching, so no `:dir()` migration and no CSS. That
+ * one has been spent, and it was always the weakest: an *ancestor* `[dir='rtl']`
+ * can only ever match `<html dir>`, so it could never see the per-block
+ * direction this module exists to compute, and the rules that needed to see it
+ * have moved to `:dir()`. The two above are unaffected, and neither was ever
+ * about CSS. `src/styles/prose.css` records the migration and what it costs.
  *
  * ## The rule
  *

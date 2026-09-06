@@ -54,10 +54,13 @@ export const byUpdated = [...notes].sort(
   (a, b) => b.dates.updated.getTime() - a.dates.updated.getTime(),
 )
 
-export const tree = buildTree(notes, vault.slugs, jotter.folderNames, {
-  order: jotter.navOrder,
-  hidden: jotter.navHidden,
-})
+export const tree = buildTree(
+  notes,
+  vault.slugs,
+  jotter.folderNames,
+  { order: jotter.navOrder, hidden: jotter.navHidden },
+  jotter.locale,
+)
 export const allFolders = folders(tree)
 
 /**

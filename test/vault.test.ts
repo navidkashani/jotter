@@ -111,7 +111,7 @@ describe('scanVault against the hostile fixture', () => {
   const vault = scan()
 
   it('finds every markdown file', () => {
-    expect(vault.notes.length).toBe(15)
+    expect(vault.notes.length).toBe(16)
   })
 
   it('assigns readable, unique slugs', () => {

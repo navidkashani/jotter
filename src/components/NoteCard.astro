@@ -7,6 +7,8 @@
  */
 import type { VaultNote } from '../lib/vault.js'
 import { noteHref } from '../lib/href.js'
+import { config } from '../lib/site.js'
+import { textDir } from '../lib/bidi.js'
 
 interface Props {
   note: VaultNote
@@ -16,6 +18,8 @@ const { note, showExcerpt = true } = Astro.props
 ---
 
 <a class="note-card" href={noteHref(note.slug)}>
-  <span class="note-card-title">{note.title}</span>
-  {showExcerpt && note.excerpt && <span class="note-card-excerpt">{note.excerpt}</span>}
+  <span class="note-card-title" dir={textDir(note.title, config.dir)}>{note.title}</span>
+  {showExcerpt && note.excerpt && (
+    <span class="note-card-excerpt" dir={textDir(note.excerpt, config.dir)}>{note.excerpt}</span>
+  )}
 </a>

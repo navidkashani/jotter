@@ -14,7 +14,8 @@
  * have not been woven in.
  */
 import type { GraphLink } from '../lib/graph.js'
-import { vault } from '../lib/site.js'
+import { config, vault } from '../lib/site.js'
+import { textDir } from '../lib/bidi.js'
 import { noteHref } from '../lib/href.js'
 import { t } from '../i18n/index.js'
 
@@ -39,8 +40,10 @@ const entries = links.map((link) => ({
       <div class="backlink-cards">
         {entries.map((entry) => (
           <a class="backlink-card" href={noteHref(entry.slug)}>
-            <span class="backlink-card-title">{entry.title}</span>
-            {entry.excerpt && <span class="backlink-card-excerpt">{entry.excerpt}</span>}
+            <span class="backlink-card-title" dir={textDir(entry.title, config.dir)}>{entry.title}</span>
+            {entry.excerpt && (
+              <span class="backlink-card-excerpt" dir={textDir(entry.excerpt, config.dir)}>{entry.excerpt}</span>
+            )}
           </a>
         ))}
       </div>

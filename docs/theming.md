@@ -32,11 +32,52 @@ write rules:
 
 The build fails on a colour literal anywhere outside `tokens.css`.
 
-Every rule in the theme uses logical properties, so `dir: 'rtl'` is a config
-change and not a second stylesheet. The build fails if a physical property
-sneaks in. Because the CSS is logical throughout, a block that runs the other
-way flips its alignment, indents, list markers and quote bars for free. See
-[frontmatter.md](frontmatter.md#mixed-direction-vaults).
+### Direction
+
+`dir: 'rtl'` is a config change and not a second stylesheet. Every rule in the
+theme uses logical properties, and the build fails if a physical one sneaks in.
+
+Logical properties are what makes that possible; they are not on their own what
+makes it *true*. Four things need saying explicitly, and jotter says them:
+
+- **Per-block overrides.** A vault that mixes scripts has blocks running against
+  the page, marked with their own `dir` (see
+  [frontmatter.md](frontmatter.md#mixed-direction-vaults)). Rules that must see
+  those are written with `:dir()`, which matches an element's *resolved*
+  direction. An ancestor `[dir='rtl'] …` cannot: it only ever matches
+  `<html dir>`. The attribute form is kept for `.nav-tree` and `.sidebar`, which
+  are chrome and can only ever take the site's direction.
+- **Text built in the browser.** A hover preview card, a canvas label and a
+  search result are assembled by script, where no CSS box model is involved and
+  nothing is inherited from the note the words came from. Where the text is known
+  at build time it travels with an explicit direction; where it is not, which is
+  only the search excerpts, `unicode-bidi: plaintext` runs the same rule per
+  paragraph in the browser.
+- **Glyphs that must not mirror.** A media control tracks playback, not text, so
+  the video play triangle is drawn with a `clip-path` whose percentages are
+  physical. The transclusion arrow is the opposite case and *does* flip. The
+  external-link `↗` deliberately does not.
+- **Script typography.** Arabic and Persian are cursive, and `letter-spacing`
+  pulls the joins between letters apart; the script's own mechanism is elongation
+  instead. The tracking tokens are turned off and the tighter leading tokens
+  loosened under `:dir(rtl)` in `tokens.css`, which reaches every rule that spends
+  them, per block included.
+
+A block that runs the other way then flips its alignment, indents, list markers
+and quote bars, and a Persian heading inside an English page gets the same
+treatment a wholly Persian site gets.
+
+Chrome text is translated from `src/i18n/<code>.json`; `en.json` and `fa.json`
+ship, and adding a locale is dropping a file in beside them. Dates follow
+`locale`, so `fa-IR` renders `۱۵ شهریور ۱۴۰۵`: Jalali, with Persian digits. The
+machine-readable `<time datetime>` stays Gregorian ISO, which is what the
+attribute is defined to carry.
+
+Search is indexed with Pagefind's `forceLanguage`, deliberately, because jotter
+is a single-locale theme: prose in a second language is stemmed with the site's
+rules. That is a known limit rather than an oversight; see
+[frontmatter.md](frontmatter.md#mixed-direction-vaults) and the rationale in
+`src/integrations/search.ts`.
 
 To replace a component rather than restyle it, drop an `.astro` file into
 `src/user/`. See [src/user/README.md](../src/user/README.md) for the slots and

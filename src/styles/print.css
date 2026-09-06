@@ -59,12 +59,23 @@
     max-inline-size: none;
   }
 
-  /* A printed link is useless without its destination. */
+  /**
+   * A printed link is useless without its destination.
+   *
+   * Isolated and forced left-to-right, because this is a bracketed LTR URL
+   * appended to text that may run the other way. The parentheses are a mirror
+   * pair and the URL is a run of its own: on an RTL page the UBA reorders the
+   * whole thing against the sentence it belongs to, and the closing bracket
+   * arrives first. `print.css` is exempt from the physical-property lint, and
+   * `direction` here is about a known-LTR string rather than about the page.
+   */
   .prose a[href^='http']::after {
     content: ' (' attr(href) ')';
     font-size: 0.85em;
     color: #555;
     word-break: break-all;
+    unicode-bidi: isolate;
+    direction: ltr;
   }
 
   .prose a {

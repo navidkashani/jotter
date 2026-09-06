@@ -602,6 +602,65 @@ describe('hover previews', () => {
  * what each one inherits, and that a block agreeing with its page emits
  * nothing at all.
  */
+/**
+ * The two attributes a hover preview carries when the note it shows runs the
+ * other way from the site.
+ *
+ * Asserted through the real pipeline rather than against `previewFor`, because
+ * what only this can show is that the answer survives `hProperties` and reaches
+ * the anchor, spelled the way `src/scripts/hover-preview.ts` reads it back.
+ */
+describe('preview direction', () => {
+  // The feature is off by default, as it is for every other preview test here.
+  const on = { features: { hoverPreview: true } }
+  const ltr = render('notes/Mixed direction.md', on)
+  const rtl = render('notes/Mixed direction.md', { ...on, dir: 'rtl' })
+
+  it('declares both halves for a Persian-titled link on an English site', () => {
+    expect(ltr).toContain('data-preview-title-dir="rtl"')
+    expect(ltr).toContain('data-preview-dir="rtl"')
+  })
+
+  /**
+   * The mirror. Same note, same link, site the other way round: the Persian is
+   * now the majority language and has nothing to declare. This is what catches
+   * an implementation that can only ever emit `rtl`.
+   */
+  it('declares neither half for the same link on a Persian site', () => {
+    expect(rtl).not.toContain('data-preview-title-dir="rtl"')
+    expect(rtl).not.toContain('data-preview-dir="rtl"')
+  })
+
+  it('marks the English blocks instead on a Persian site', () => {
+    expect(rtl).toContain('data-preview-title-dir="ltr"')
+  })
+
+  /** An all-English link emits neither, on either site. */
+  it('leaves an all-English preview unmarked on an English site', () => {
+    const english = render('Previews.md', on)
+    expect(english).toContain('data-preview-title=')
+    expect(english).not.toContain('data-preview-title-dir=')
+    expect(english).not.toContain('data-preview-dir=')
+  })
+
+  /**
+   * Byte-identity: no isolate control characters anywhere in a monolingual
+   * render. The separator is wrapped only when the two halves disagree.
+   */
+  it('puts no isolate characters in an all-English render', () => {
+    expect(render('Previews.md', on)).not.toContain('\u2068')
+  })
+
+  it('isolates the separator only when the note and its section disagree', () => {
+    // `[[Persian titled#An English heading]]`: a Persian title, an English
+    // heading, and a bidi-neutral ` > ` between them.
+    expect(ltr).toContain('\u2068یادداشت فارسی\u2069 > \u2068An English heading\u2069')
+    // `[[Persian titled#یک عنوان فارسی]]`: both halves agree, so neither is
+    // wrapped and the title is the plain join.
+    expect(ltr).toContain('data-preview-title="یادداشت فارسی > یک عنوان فارسی"')
+  })
+})
+
 describe('text direction', () => {
   const ltr = render('notes/Mixed direction.md')
   const rtl = render('notes/Mixed direction.md', { dir: 'rtl' })
@@ -624,6 +683,26 @@ describe('text direction', () => {
     expect(ltr).toContain('<p>An English paragraph, on an English site')
     expect(ltr).toContain('<li>An English item in the same list.</li>')
     expect(ltr).not.toContain('dir="ltr"')
+  })
+
+  /**
+   * The regression pin for the list gutter.
+   *
+   * `textDir` over a list's concatenated text is first-strong over its *first
+   * item*, so an English-first list resolves LTR and the `<ul>`/`<ol>` is
+   * correctly left unmarked while a later Persian item is marked. That is the
+   * shape a "just mark the list too" fix cannot handle, and it is why the indent
+   * gutter lives on the item in `src/styles/prose.css` rather than on the list.
+   */
+  it('marks the dissenting item of an English-first list and never the list', () => {
+    expect(ltr).toMatch(/<li dir="rtl">یک بند فارسی پس از آن\./)
+    expect(ltr).toMatch(/<ol>\s*<li>An English item, first\./)
+    expect(ltr).not.toMatch(/<[uo]l dir=/)
+  })
+
+  it('marks a task-list item that runs the other way, and not its list', () => {
+    expect(ltr).toMatch(/<li[^>]*\bdir="rtl"[^>]*>[\s\S]{0,120}یک کار فارسی/)
+    expect(ltr).not.toMatch(/<[uo]l dir=/)
   })
 
   it('marks a table cell, a callout title and a blockquote body', () => {

@@ -704,25 +704,27 @@ describe('previewFor', () => {
     ({ title, body, excerpt: excerpt(body) }) as VaultNote
 
   it('shows the note’s opening paragraph for a link with no subpath', () => {
-    expect(previewFor(note(SECTIONED), '')).toEqual({
+    expect(previewFor(note(SECTIONED), '', 'ltr')).toEqual({
       title: 'Sections',
       text: 'The opening of the whole note.',
     })
   })
 
   it('shows the section’s opening for a heading link, and names it in the title', () => {
-    expect(previewFor(note(SECTIONED), '#How it works')).toEqual({
+    expect(previewFor(note(SECTIONED), '#How it works', 'ltr')).toEqual({
       title: 'Sections > How it works',
       text: 'Each note gets an address.',
     })
   })
 
   it('accepts an already-slugified subpath, which is what a resolved href carries', () => {
-    expect(previewFor(note(SECTIONED), '#how-it-works')?.text).toBe('Each note gets an address.')
+    expect(previewFor(note(SECTIONED), '#how-it-works', 'ltr')?.text).toBe(
+      'Each note gets an address.',
+    )
   })
 
   it('previews the note’s opening for a block reference, matching sectionOf', () => {
-    expect(previewFor(note(SECTIONED), '#^abc123')).toEqual({
+    expect(previewFor(note(SECTIONED), '#^abc123', 'ltr')).toEqual({
       title: 'Sections',
       text: 'The opening of the whole note.',
     })
@@ -730,20 +732,119 @@ describe('previewFor', () => {
 
   it('falls back to the note when the heading is missing, empty or fenced', () => {
     const whole = { title: 'Sections', text: 'The opening of the whole note.' }
-    expect(previewFor(note(SECTIONED), '#Nowhere')).toEqual(whole)
-    expect(previewFor(note(SECTIONED), '#Nothing under here')).toEqual(whole)
-    expect(previewFor(note(SECTIONED), '#Hidden')).toEqual(whole)
+    expect(previewFor(note(SECTIONED), '#Nowhere', 'ltr')).toEqual(whole)
+    expect(previewFor(note(SECTIONED), '#Nothing under here', 'ltr')).toEqual(whole)
+    expect(previewFor(note(SECTIONED), '#Hidden', 'ltr')).toEqual(whole)
   })
 
   it('gives up rather than offer a card with a blank body', () => {
-    expect(previewFor(note('# Title only'), '')).toBeUndefined()
-    expect(previewFor(note('# Title only'), '#Nowhere')).toBeUndefined()
+    expect(previewFor(note('# Title only'), '', 'ltr')).toBeUndefined()
+    expect(previewFor(note('# Title only'), '#Nowhere', 'ltr')).toBeUndefined()
   })
 
   it('memoizes per note and subpath', () => {
     const one = note(SECTIONED)
-    expect(previewFor(one, '#How it works')).toBe(previewFor(one, '#How it works'))
-    expect(previewFor(one, '')).not.toBe(previewFor(note(SECTIONED), ''))
+    expect(previewFor(one, '#How it works', 'ltr')).toBe(previewFor(one, '#How it works', 'ltr'))
+    expect(previewFor(one, '', 'ltr')).not.toBe(previewFor(note(SECTIONED), '', 'ltr'))
+  })
+
+  /**
+   * The card is built in the browser and appended to `<body>`, so the direction
+   * of the note it shows cannot be inherited and has to be computed here.
+   */
+  describe('direction', () => {
+    const PERSIAN = 'یادداشت فارسی'
+    const persian = (body: string) => note(body, PERSIAN)
+    const BODY = `این بند آغازین است.\n\n## An English heading\n\nAn English section body.\n\n## یک عنوان فارسی\n\nبدنه‌ی بخش فارسی.`
+
+    it('declares both halves when the note runs the other way from the site', () => {
+      expect(previewFor(persian(BODY), '', 'ltr')).toMatchObject({
+        titleDir: 'rtl',
+        textDir: 'rtl',
+      })
+    })
+
+    /**
+     * The mirror, and the case that catches an implementation which can only
+     * ever emit `rtl`. On a right-to-left site the Persian note *is* the
+     * majority language and has nothing to declare.
+     */
+    it('declares neither half for the same note on a right-to-left site', () => {
+      const preview = previewFor(persian(BODY), '', 'rtl')!
+      expect(preview.titleDir).toBeUndefined()
+      expect(preview.textDir).toBeUndefined()
+    })
+
+    it('declares neither half for an all-English link on either site', () => {
+      for (const base of ['ltr', 'rtl'] as const) {
+        const preview = previewFor(note(SECTIONED), '', base)!
+        if (base === 'ltr') {
+          expect(preview.titleDir).toBeUndefined()
+          expect(preview.textDir).toBeUndefined()
+        } else {
+          expect(preview).toMatchObject({ titleDir: 'ltr', textDir: 'ltr' })
+        }
+      }
+    })
+
+    /**
+     * Each half answers for itself, and each answers against the *page*.
+     *
+     * An English section of a Persian note previews a right-to-left title over
+     * a left-to-right body. On an English site only the title has anything to
+     * declare; on a Persian one only the body does. Neither is "the excerpt is
+     * always marked": that would be the zero-cost claim broken on one half.
+     */
+    it('answers per half, and per site, when a section disagrees with its note', () => {
+      const onLtr = previewFor(persian(BODY), '#An English heading', 'ltr')!
+      expect(onLtr.titleDir).toBe('rtl')
+      expect(onLtr.textDir).toBeUndefined()
+
+      const onRtl = previewFor(persian(BODY), '#An English heading', 'rtl')!
+      expect(onRtl.titleDir).toBeUndefined()
+      expect(onRtl.textDir).toBe('ltr')
+    })
+
+    /**
+     * Byte-identity. ` > ` is bidi-neutral, so it is isolated only when the two
+     * halves it sits between disagree; wrapping unconditionally would put two
+     * control characters into every previewed section anchor of a monolingual
+     * vault.
+     */
+    it('does not isolate a separator between two halves that agree', () => {
+      const same = previewFor(persian(BODY), '#یک عنوان فارسی', 'ltr')!
+      expect(same.title).toBe(`${PERSIAN} > یک عنوان فارسی`)
+      expect(same.title).not.toContain('\u2068')
+
+      const english = previewFor(note(SECTIONED), '#How it works', 'ltr')!
+      expect(english.title).toBe('Sections > How it works')
+      expect(english.title).not.toContain('\u2068')
+    })
+
+    it('isolates each half when they disagree, and still reads the title raw', () => {
+      const mixed = previewFor(persian(BODY), '#An English heading', 'ltr')!
+      expect(mixed.title).toBe(`\u2068${PERSIAN}\u2069 > \u2068An English heading\u2069`)
+      /**
+       * `firstStrong` skips an isolated run by design (UBA P2), so a `titleDir`
+       * read off the *wrapped* string would answer `undefined` and the card
+       * would lose the direction the wrapping just went to the trouble of
+       * keeping. It is read off the raw title instead.
+       */
+      expect(mixed.titleDir).toBe('rtl')
+    })
+
+    /**
+     * The memo key carries the base, or a process that renders the same vault
+     * both ways round is served the first direction's answer for the second.
+     * `scripts/verify-theme.mjs` is exactly that process.
+     */
+    it('memoizes per base direction, not only per subpath', () => {
+      const one = persian(BODY)
+      expect(previewFor(one, '', 'ltr')).toBe(previewFor(one, '', 'ltr'))
+      expect(previewFor(one, '', 'ltr')).not.toBe(previewFor(one, '', 'rtl'))
+      expect(previewFor(one, '', 'ltr')?.titleDir).toBe('rtl')
+      expect(previewFor(one, '', 'rtl')?.titleDir).toBeUndefined()
+    })
   })
 })
 

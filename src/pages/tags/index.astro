@@ -9,7 +9,10 @@ if (!config.features.tags) return Astro.rewrite('/404')
 
 const flatten = (nodes: TagNode[]): TagNode[] =>
   nodes.flatMap((node) => [node, ...flatten(node.children)])
-const all = flatten(tags).sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag))
+// See `src/lib/tree.ts`: one collator for the sort, and `numeric` so a vault
+// tagged `#week-2` and `#week-10` reads in the order it was numbered.
+const byTag = new Intl.Collator(config.locale, { numeric: true })
+const all = flatten(tags).sort((a, b) => b.count - a.count || byTag.compare(a.tag, b.tag))
 ---
 
 <Base title={t('tags.title')} current="tags">

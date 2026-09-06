@@ -11,6 +11,12 @@
  * against. Quartz's `popover.inline.ts` needs all four because it fetches; the
  * build asserts that jotter never does.
  *
+ * It puts `data-preview-title-dir` and `data-preview-dir` there too, when the
+ * note being previewed runs the other way from the site. The card is appended
+ * to `document.body`, so its own position in the DOM can only ever tell it the
+ * *site's* direction; the direction of the note it is showing has to travel
+ * with the words. Absent is the common case and means "agrees with the page".
+ *
  * Three things it takes from Quartz anyway: the card stays open while the
  * pointer is *on* it (WCAG 1.4.13 *hoverable*), the whole feature is off for
  * touch, and the delay is real hover intent rather than a CSS `animation-delay`:
@@ -133,9 +139,29 @@ function setup() {
     active = link
     // `textContent`, not `innerHTML`. Nothing in `src/` uses `innerHTML`, and
     // two plain strings is the whole reason this needs no id rewriting.
-    heading.textContent = link.dataset.previewTitle ?? ''
-    body.textContent = link.dataset.preview ?? ''
+    say(heading, link.dataset.previewTitle, link.dataset.previewTitleDir)
+    say(body, link.dataset.preview, link.dataset.previewDir)
     card.togglePopover(true)
+  }
+
+  /**
+   * Text and direction together, because they are one fact about one note and
+   * setting them apart is how the card ends up showing note B's words with note
+   * A's direction on the way from link A to link B.
+   *
+   * `removeAttribute`, never `el.dir = ''`: the empty string writes an *invalid*
+   * `dir=""` rather than clearing it, and an invalid value is not the same as
+   * absent. Absent is what is wanted, because the card then inherits `<html
+   * dir>`, which is the correct answer whenever the build emitted nothing.
+   *
+   * No CSS goes with this. HTML's UA stylesheet already gives `[dir]`
+   * `unicode-bidi: isolate`, so the attribute brings its own isolation and a
+   * rule in `base.css` would only restate it.
+   */
+  const say = (el: HTMLElement, text: string | undefined, dir: string | undefined) => {
+    el.textContent = text ?? ''
+    if (dir) el.dir = dir
+    else el.removeAttribute('dir')
   }
 
   const elementOf = (event: Event) => (event.target instanceof Element ? event.target : null)

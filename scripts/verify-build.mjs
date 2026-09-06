@@ -551,6 +551,168 @@ section('Design tokens')
   }
   demo(physical.length === 0, 'no physical inset or spacing properties (RTL safety)', physical.join('\n        '))
 
+  /**
+   * The finding that an *ancestor* `[dir=]` cannot see per-block direction.
+   *
+   * `[dir='rtl'] .prose …` can only ever match on `<html dir>`, because that is
+   * the only ancestor of `.prose` that carries the attribute. The `dir="rtl"`
+   * that `src/markdown/direction.ts` puts on blocks *inside* `.prose` is
+   * structurally invisible to it, so a rule written that way is correct at site
+   * level and silently wrong at block level: a Persian transclusion on an
+   * English site drew its arrow pointing back into its own text. Rules inside
+   * `.prose` use `:dir()`, which matches a resolved direction.
+   *
+   * Outside `.prose` the attribute form is still right and still cheaper:
+   * `.nav-tree` and `.sidebar` are chrome and can only ever take the site's
+   * direction, so this is scoped to the selectors that reach into prose.
+   */
+  const ancestorDir = []
+  for (const file of cssFiles) {
+    const name = relative(ROOT, file)
+    if (name.endsWith('custom.css')) continue
+    const source = await readFile(file, 'utf8')
+    source.split('\n').forEach((line, i) => {
+      const code = line.replace(/\/\*[\s\S]*?\*\//g, '')
+      if (/^\s*[*/]/.test(line)) return
+      if (/\[dir[~|^$*]?=[^\]]*\]\s+[^{;]*\.prose\b/.test(code)) {
+        ancestorDir.push(`${name}:${i + 1}  ${line.trim()}`)
+      }
+    })
+  }
+  demo(
+    ancestorDir.length === 0,
+    'no [dir=] ancestor selector reaching into .prose (use :dir())',
+    ancestorDir.join('\n        '),
+  )
+
+  /**
+   * The emitted attribute names and the names the script reads them back as.
+   *
+   * `src/markdown/wikilinks.ts` writes `data-preview-title-dir`, and the DOM
+   * presents that to `hover-preview.ts` as `dataset.previewTitleDir`. Nothing
+   * else can catch a mismatch: the card is built at runtime, there is no DOM
+   * here, and a wrong `dataset` key reads `undefined` and silently renders the
+   * site's direction. Minifiers do not rename `dataset` property accesses, so
+   * grepping the bundled chunk is a real statement about the shipped script.
+   */
+  /**
+   * Every shipped script, wherever Astro decided to put it. `hover-preview.ts`
+   * is small enough that it is inlined into each page rather than emitted as an
+   * `_astro/` chunk, so reading only the chunk directory found nothing and the
+   * check reported a mismatch that was its own.
+   *
+   * The camel-cased key is what makes this safe over HTML: `previewTitleDir`
+   * appears only where the script reads `dataset`, never as the hyphenated
+   * attribute the markup carries.
+   */
+  const shippedScript = outputs
+    .filter(({ file }) => file.endsWith('.js') || file.endsWith('.html'))
+    .map(({ text }) => text)
+    .join('\n')
+  const wikilinksSource = await readFile(join(ROOT, 'src', 'markdown', 'wikilinks.ts'), 'utf8')
+
+  const PREVIEW_KEYS = [
+    ['data-preview-title-dir', 'previewTitleDir'],
+    ['data-preview-dir', 'previewDir'],
+  ]
+  /**
+   * Bounded on both sides, not `includes`.
+   *
+   * A plain substring test cannot see a rename that *extends* the name:
+   * `previewTitleDir` is a prefix of `previewTitleDirection`, so a script
+   * reading the wrong, longer key still satisfied it. Measured, not assumed:
+   * renaming the key that way left this check green until the boundary went in.
+   * `-` is a non-word character, so the trailing `\b` is what does the work.
+   */
+  const whole = (haystack, needle) => new RegExp(`\\b${needle}\\b`).test(haystack)
+  const mismatched = PREVIEW_KEYS.filter(
+    ([attribute, key]) => !whole(wikilinksSource, attribute) || !whole(shippedScript, key),
+  ).map(([attribute, key]) => `${attribute} emitted / ${key} read: one of the two is missing`)
+  demo(
+    mismatched.length === 0,
+    'the preview direction attributes and the script’s dataset keys agree',
+    mismatched.join('\n        '),
+  )
+
+  /**
+   * Every class whose text is written into it by script declares a bidi
+   * treatment, and which one depends on where the text is known.
+   *
+   * Split deliberately. A preview card and a graph list carry note titles,
+   * which *are* known at build time, so those get an explicit `dir` and the
+   * UA's `unicode-bidi: isolate` comes with it. A Pagefind excerpt is assembled
+   * in the browser from a fragment index and has no build-time answer at all,
+   * so it gets `unicode-bidi: plaintext`, which runs the same first-strong rule
+   * per paragraph and makes `text-align: start` resolve per paragraph too.
+   *
+   * The comment this replaces claimed `unicode-bidi: isolate` "reaches the two
+   * that no `.astro` edit can", and was wrong twice: `.search-result-title` was
+   * not in the selector list at all, and `isolate` was never the right tool for
+   * either, since both are already `display: block` and so already separate
+   * bidi paragraphs. What they lacked was a base direction.
+   */
+  const allCss = (await Promise.all(cssFiles.map((f) => readFile(f, 'utf8')))).join('\n')
+  const hoverSource = await readFile(join(ROOT, 'src', 'scripts', 'hover-preview.ts'), 'utf8')
+
+  /** Every `selectors { declarations }` rule, comments and at-rule heads stripped. */
+  const cssRules = [...allCss.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(
+    ([, selectors, body]) => ({ selectors, body }),
+  )
+  const treatedInCss = (selector) =>
+    cssRules.some(
+      ({ selectors, body }) => selectors.includes(selector) && /unicode-bidi\s*:/.test(body),
+    )
+
+  const untreated = [
+    // Known only in the browser: `plaintext` runs first-strong per paragraph.
+    ...['.search-result-title', '.search-excerpt'].filter(
+      (selector) =>
+        !cssRules.some(
+          ({ selectors, body }) =>
+            selectors.includes(selector) && /unicode-bidi\s*:\s*plaintext/.test(body),
+        ),
+    ).map((selector) => `${selector}: no unicode-bidi: plaintext in any rule naming it`),
+
+    // Known at build time, and server-rendered: an explicit `dir`, plus the
+    // isolate group for the case where it agrees with the page and emits none.
+    ...['.graph-list a']
+      .filter((selector) => !treatedInCss(selector))
+      .map((selector) => `${selector}: no unicode-bidi in any rule naming it`),
+
+    // Known at build time, but written into the DOM by script, so the treatment
+    // is the attribute the script sets rather than anything in a stylesheet.
+    ...['note-preview-title', 'note-preview-text']
+      .filter(
+        (className) =>
+          !hoverSource.includes(className) || !/removeAttribute\('dir'\)/.test(hoverSource),
+      )
+      .map((className) => `.${className}: hover-preview.ts does not set a dir on it`),
+  ]
+  demo(
+    untreated.length === 0,
+    'every element built from note text in the browser declares a bidi treatment',
+    untreated.join('\n        '),
+  )
+
+  /**
+   * The play triangle is drawn with a `clip-path` and not from logical borders.
+   *
+   * The weakest of these by some distance, and worth labelling as such: a media
+   * control tracks playback rather than text, so the shape must be *identical*
+   * in both mirror builds, which means no rebuild can ever see the difference
+   * and a source grep is the only instrument left. A border triangle is drawn
+   * from `border-inline-start`, so it pointed toward inline-end: right in LTR
+   * and left in RTL, mirroring against its own comment.
+   */
+  const playRule = /\.video-embed-play::before\s*\{([^}]*)\}/.exec(
+    await readFile(join(ROOT, 'src', 'styles', 'prose.css'), 'utf8'),
+  )?.[1]
+  demo(
+    Boolean(playRule) && playRule.includes('clip-path') && !/border-inline/.test(playRule),
+    'the video play triangle is drawn with clip-path, so it cannot mirror',
+    playRule ? playRule.trim().split('\n')[0] : 'no .video-embed-play::before rule found',
+  )
+
   const tokensCss = await readFile(join(ROOT, 'src', 'styles', 'tokens.css'), 'utf8')
   const light = readTokens(tokensCss, ':root {')
   const dark = readTokens(tokensCss, ":root[data-theme='dark']")

@@ -154,6 +154,33 @@ function setup(labels: Labels) {
   input.spellcheck = false
   input.setAttribute('autocapitalize', 'off')
   input.setAttribute('enterkeyhint', 'search')
+  /**
+   * The one place `dir="auto"` is right, and it does not breach the rule the
+   * build enforces.
+   *
+   * That rule bans a build-time `auto` because a build-time `auto` is
+   * *unassertable*: jotter already knows which way its own text runs, so an
+   * `auto` there is a shrug no check can tell from an answer. A reader's query
+   * is not knowable at build time at all. There is no first-strong pass that
+   * could have run, and the browser running exactly that rule per keystroke is
+   * the correct implementation rather than a deferral.
+   *
+   * Without it a Persian query types into a left-aligned box with the caret and
+   * every piece of terminal punctuation on the wrong side.
+   *
+   * The field is built here, in the browser, so no page in `dist/` ever carries
+   * the attribute and the "no dir=auto anywhere in dist/" invariant is
+   * untouched.
+   *
+   * `setAttribute` rather than `input.dir =`, and not only for consistency with
+   * the four lines above it: that invariant is checked by grepping *every* text
+   * output for `dir="auto"`, bundled JavaScript included, and a minifier writes
+   * `input.dir = 'auto'` out as `x.dir="auto"`, which the grep cannot tell from
+   * an attribute in a page. This form minifies to `.setAttribute("dir","auto")`
+   * and stays legible to it. `scripts/lib/verify.mjs` says the same thing from
+   * the other end.
+   */
+  input.setAttribute('dir', 'auto')
 
   const dismiss = document.createElement('button')
   dismiss.type = 'button'

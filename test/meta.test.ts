@@ -184,4 +184,59 @@ describe('nothing in en.json is translated for nobody', () => {
   it('defines every key a component builds', () => {
     for (const key of BUILT) expect(strings).toContain(key)
   })
+
+  /**
+   * And every *other* locale file defines exactly the same set.
+   *
+   * Worth asserting only now that a second one ships. `src/i18n/index.ts`
+   * merges a translation over `en`, so a missing key degrades silently to
+   * English: the symptom is one line of the wrong language in the chrome, which
+   * nobody reviewing an English diff will ever see. An extra key is the other
+   * half of the same drift, a string translated for a component that no longer
+   * asks for it.
+   *
+   * Reader-supplied translations are the reason this reads the directory rather
+   * than naming `fa`: dropping `src/i18n/<code>.json` in is the whole documented
+   * procedure for adding one, so the check has to find them the same way the
+   * glob in `src/i18n/index.ts` does.
+   */
+  it('keeps every shipped translation in step with en.json', () => {
+    const dir = join(ROOT, 'src', 'i18n')
+    const translations = readdirSync(dir)
+      .filter((name) => name.endsWith('.json') && name !== 'en.json')
+      .map((name) => ({
+        name,
+        keys: Object.keys(JSON.parse(readFileSync(join(dir, name), 'utf8'))),
+      }))
+
+    // The demo ships one. A fork that deleted it should not fail here, but a
+    // fork that has none makes the assertion below vacuous, so say which.
+    expect(translations.length).toBeGreaterThan(0)
+
+    const drift = translations.flatMap(({ name, keys }) => [
+      ...strings.filter((key) => !keys.includes(key)).map((key) => `${name}: missing ${key}`),
+      ...keys.filter((key) => !strings.includes(key)).map((key) => `${name}: extra ${key}`),
+    ])
+    expect(drift, 'a translation out of step with en.json renders mixed-language chrome').toEqual([])
+  })
+
+  /**
+   * A `{placeholder}` is interpolated by name, so a translation that renames or
+   * drops one prints the brace literally rather than the count.
+   */
+  it('keeps every {placeholder} a translation inherits', () => {
+    const dir = join(ROOT, 'src', 'i18n')
+    const en = JSON.parse(read(join('src', 'i18n', 'en.json'))) as Record<string, string>
+    const names = (value: string) => [...value.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort().join()
+
+    const wrong = readdirSync(dir)
+      .filter((name) => name.endsWith('.json') && name !== 'en.json')
+      .flatMap((name) => {
+        const strings_ = JSON.parse(readFileSync(join(dir, name), 'utf8')) as Record<string, string>
+        return Object.keys(en)
+          .filter((key) => strings_[key] !== undefined && names(en[key]) !== names(strings_[key]))
+          .map((key) => `${name}: ${key} has {${names(strings_[key])}}, en.json has {${names(en[key])}}`)
+      })
+    expect(wrong, 'a renamed placeholder prints its own braces instead of a value').toEqual([])
+  })
 })

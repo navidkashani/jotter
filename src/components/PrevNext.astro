@@ -1,6 +1,7 @@
 ---
 import type { VaultNote } from '../lib/vault.js'
 import { config } from '../lib/site.js'
+import { textDir } from '../lib/bidi.js'
 import { noteHref } from '../lib/href.js'
 import { t } from '../i18n/index.js'
 
@@ -34,13 +35,13 @@ const indexed = config.features.search ? '' : undefined
       {previous && (
         <a class="previous" href={noteHref(previous.slug)} rel="prev">
           <span class="label">{t('note.previous')}</span>
-          <span class="prev-next-title">{previous.title}</span>
+          <span class="prev-next-title" dir={textDir(previous.title, config.dir)}>{previous.title}</span>
         </a>
       )}
       {next && (
         <a class="next" href={noteHref(next.slug)} rel="next">
           <span class="label">{t('note.next')}</span>
-          <span class="prev-next-title">{next.title}</span>
+          <span class="prev-next-title" dir={textDir(next.title, config.dir)}>{next.title}</span>
         </a>
       )}
     </nav>

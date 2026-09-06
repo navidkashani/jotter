@@ -113,9 +113,53 @@
 
 /* ---- Lists ------------------------------------------------------------- */
 
+/**
+ * The indent gutter belongs to the **item**, not to the list, and that is a
+ * correctness fix rather than a preference.
+ *
+ * `list-style: revert` restores `list-style-position: outside`, and an outside
+ * marker is laid out against its *own item's* inline-start edge. Put the gutter
+ * on the `<ul>` and an `li[dir="rtl"]` inside an unmarked list draws its bullet
+ * past the list's right edge, where there is no gutter at all, while the 21px
+ * sits empty on the left. `.main` absorbs it at desk widths and stops at 16px
+ * on mobile (`base.css`), where nothing clips it and a wide `<ol>` marker can
+ * push the page sideways.
+ *
+ * `margin-inline-start` resolves against the **item's own** direction, so every
+ * item gets its gutter on its own start side and its marker lands in it.
+ * Margin and not padding: an outside marker sits outside the item's principal
+ * box, so item padding does not hold it. Measured rather than assumed, in
+ * Chrome 151, Firefox 153 and WebKit 26.6: with the gutter as item padding the
+ * marker escapes in all three, and with it as item margin it lands correctly in
+ * all three.
+ *
+ * Nesting arithmetic is unchanged, 21 + 21 either way, and a `<ul>` inside an
+ * `li[dir="rtl"]` still inherits its direction through the DOM.
+ *
+ * Marking `ul`/`ol` in `src/markdown/direction.ts` instead was rejected: the
+ * first-strong rule over a list's concatenated text answers for its *first*
+ * item, so a list reading English, English, Persian would still overflow. This
+ * is a box-model mistake and it is fixed in the box model.
+ */
 .prose :is(ul, ol) {
-  padding-inline-start: 21px;
+  padding-inline-start: 0;
   list-style: revert;
+}
+
+/**
+ * `text-align: start` is not a no-op, and it is the second half of the same
+ * bug. Firefox and WebKit both ship `li { text-align: match-parent }` in their
+ * UA stylesheets (Firefox's is `res/html.css`), and `match-parent` resolves
+ * `start` against the **parent's** direction: an `li[dir="rtl"]` inside an
+ * `ltr` `<ul>` computes to `text-align: left` and its Persian stays pinned to
+ * the wrong edge, marker correctly moved or not. Chrome does not do this, which
+ * is why it survived a Chrome-only look. Restating `start` here overrides the
+ * UA rule and resolves against the item's own direction, which is what every
+ * other block in `.prose` already gets for free.
+ */
+.prose li {
+  margin-inline-start: 21px;
+  text-align: start;
 }
 
 .prose li + li {
@@ -130,10 +174,20 @@
   margin-block-start: 0.45em;
 }
 
-/* Task lists lose their marker and keep their alignment. */
+/**
+ * Task lists lose their marker and keep their alignment.
+ *
+ * Padding rather than the negative margin this used to cancel the list's
+ * gutter with: there is no list gutter left to cancel, and the item's own
+ * margin is what the other items indent by. Zero margin plus 21px padding puts
+ * a checkbox item's text exactly where a bulleted item's text is, resolved
+ * against the item's own direction in both cases. The old `-21px` resolved
+ * against the item's direction too, which on a Persian task item inside an
+ * English list overflowed by a further 21px on top of the marker bug above.
+ */
 .prose li:has(> input[type='checkbox']) {
   list-style: none;
-  margin-inline-start: -21px;
+  margin-inline-start: 0;
   padding-inline-start: 21px;
 }
 
@@ -425,14 +479,28 @@
   transition: opacity 120ms ease-out;
 }
 
+/**
+ * The triangle points the way the video plays, not the way the text reads,
+ * which is what the comment here always said and what the CSS did not do.
+ *
+ * A border triangle is drawn from `border-inline-start`, so it pointed toward
+ * inline-**end**: right in LTR and *left* in RTL, mirroring a control that must
+ * not mirror. Playback direction is not text direction, and media controls
+ * track playback.
+ *
+ * `clip-path` percentages are physical and never mirror, so the shape is the
+ * same in both builds by construction rather than by a `transform: none` that
+ * was a no-op. `translateX` replaces the `margin-inline-start` that optically
+ * centred it, for the same reason: the nudge belongs to the shape, and the
+ * shape is physical. Neither trips the physical-property lint.
+ */
 .prose .video-embed-play::before {
   content: '';
-  border-block: 0.55rem solid transparent;
-  border-inline-start: 0.9rem solid var(--surface);
-  border-inline-end: 0;
-  margin-inline-start: 0.2rem;
-  /* The triangle points the way the video plays, not the way the text reads. */
-  transform: none;
+  inline-size: 0.9rem;
+  block-size: 1.1rem;
+  background: var(--surface);
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+  transform: translateX(0.1rem);
 }
 
 .prose .video-embed-link:hover .video-embed-play,
@@ -736,8 +804,24 @@ details.callout[open] > summary.callout-title::after {
  * will not turn this one around the way it turns a parenthesis around. The
  * nav-tree chevron at `base.css` has had its counterpart since the beginning;
  * this one did not, and pointed back into the text on an RTL site.
+ *
+ * `:dir()` and not `[dir='rtl'] .prose …`, which is what this was.
+ *
+ * An ancestor attribute selector can only ever match `<html dir>`: the site's
+ * direction. It structurally cannot see the per-block `dir="rtl"` that
+ * `src/markdown/direction.ts` puts *inside* `.prose`, so a Persian
+ * transclusion on an English site drew `↳` pointing back into its own text:
+ * the exact bug this rule fixed at site level, still live at block level.
+ * `:dir()` matches the element's **resolved** direction, so it sees both.
+ *
+ * The dependency was already paid. `:has()`, a few rules up, has the same
+ * newly-available date, Chrome 120.
+ *
+ * The attribute form stays where it is still the right answer: `.nav-tree` and
+ * `.sidebar` in `base.css` are chrome, their resolved direction can only ever
+ * be the site's, and an attribute selector is cheaper than a pseudo-class.
  */
-[dir='rtl'] .prose .transclusion-source::before {
+.prose .transclusion-source:dir(rtl)::before {
   content: '↲ ';
 }
 

@@ -151,7 +151,15 @@ export function wikilinks(doc: DocumentContext) {
    * class, and overwriting `data` would strip it.
    */
   const attachPreview = (node: LinkNode, ctx: VisitorContext, note: VaultNote, subpath: string) => {
-    const preview = previewFor(note, subpath)
+    /**
+     * `config.dir` and not the host note's `direction:` frontmatter, which is
+     * what `src/markdown/direction.ts` resolves for the blocks around this
+     * link. The card is not one of those blocks: `hover-preview.ts` appends it
+     * to `document.body`, so what it inherits is `<html dir>` and nothing else.
+     * Asking against the note's baseline would emit no attribute for exactly
+     * the previews that need one, on a note that declared itself the other way.
+     */
+    const preview = previewFor(note, subpath, config.dir)
     if (!preview) return
     ctx.setProperty(node, 'data', {
       ...node.data,
@@ -159,6 +167,16 @@ export function wikilinks(doc: DocumentContext) {
         ...node.data?.hProperties,
         'data-preview-title': preview.title,
         'data-preview': preview.text,
+        /**
+         * Spread conditionally rather than assigned `undefined` and left to the
+         * serializer. Two attributes on every previewed anchor of every
+         * monolingual vault is exactly the cost this feature promises not to
+         * have, and "the serializer drops it" is a property of somebody else's
+         * release rather than a decision made here. The names mirror the pair
+         * above, which is what `hover-preview.ts` reads them back as.
+         */
+        ...(preview.titleDir ? { 'data-preview-title-dir': preview.titleDir } : {}),
+        ...(preview.textDir ? { 'data-preview-dir': preview.textDir } : {}),
       },
     })
   }

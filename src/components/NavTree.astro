@@ -18,6 +18,8 @@
 import type { TreeEntry } from '../lib/tree.js'
 import { contains } from '../lib/tree.js'
 import { noteHref } from '../lib/href.js'
+import { config } from '../lib/site.js'
+import { textDir } from '../lib/bidi.js'
 
 interface Props {
   entries: TreeEntry[]
@@ -36,7 +38,7 @@ const shown = entries.filter((entry) => !entry.hidden)
         <li>
           <details open={contains(entry, current)}>
             <summary>
-              <a href={noteHref(entry.slug)}>{entry.name}</a>
+              <a href={noteHref(entry.slug)} dir={textDir(entry.name, config.dir)}>{entry.name}</a>
               <span class="nav-count" aria-hidden="true">
                 {entry.count}
               </span>
@@ -49,6 +51,7 @@ const shown = entries.filter((entry) => !entry.hidden)
           <a
             href={noteHref(entry.slug)}
             aria-current={entry.slug === current ? 'page' : undefined}
+            dir={textDir(entry.title, config.dir)}
           >
             {entry.title}
           </a>

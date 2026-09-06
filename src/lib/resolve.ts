@@ -90,6 +90,13 @@ const stripExt = (p: string) => p.replace(/\.md$/i, '')
  * Obsidian's tiebreak when several notes share a basename: the shallowest path
  * wins, and equal depths are broken alphabetically so the choice does not
  * depend on directory enumeration order.
+ *
+ * A bare `localeCompare()`, deliberately, and **not** the locale-aware,
+ * `numeric` collator the display sorts in `src/lib/tree.ts` now use. This one
+ * decides *which note a wikilink resolves to*. Localising it would make link
+ * resolution depend on a display setting, so the same vault would point its
+ * links at different notes on a Swedish site and an English one. What is wanted
+ * here is only determinism, and the runtime default supplies it.
  */
 function shallowest<N extends ResolvableNote>(candidates: readonly N[]): N {
   return [...candidates].sort((a, b) => {
@@ -190,6 +197,9 @@ export function resolveAsset(
   } catch {
     /* compare the raw form */
   }
+  // Same as `shallowest` above: determinism, not collation. Not to be
+  // "fixed" into a locale-aware compare; which asset a link finds must not
+  // depend on `config.locale`.
   const norm = decoded.replace(/^\.\//, '').toLowerCase()
   const tries = [norm, normalizeJoin(dirOf(fromPath), norm).toLowerCase(), baseOf(norm)]
   for (const key of tries) {

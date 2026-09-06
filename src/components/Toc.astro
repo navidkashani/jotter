@@ -9,6 +9,8 @@
  * because the disclosure marker is suppressed either way, the label happens to
  * collapse rather than announcing itself as a control.
  */
+import { config } from '../lib/site.js'
+import { textDir } from '../lib/bidi.js'
 import { t } from '../i18n/index.js'
 import { outlineHeadings, type Heading } from '../lib/headings.js'
 
@@ -26,7 +28,11 @@ const shown = outlineHeadings(headings)
       <summary class="label">{t('note.contents')}</summary>
       <nav class="toc-list" aria-label={t('note.contents')}>
         {shown.map((heading) => (
-          <a href={`#${heading.slug}`} data-depth={heading.depth}>
+          <a
+            href={`#${heading.slug}`}
+            data-depth={heading.depth}
+            dir={textDir(heading.text, config.dir)}
+          >
             {heading.text}
           </a>
         ))}

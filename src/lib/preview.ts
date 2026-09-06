@@ -26,6 +26,7 @@
  * The cost is honest and worth stating: **the first paragraph, not the whole
  * note.** That is exactly what `excerpt()` was written for.
  */
+import { firstStrong, textDir, type Direction } from './bidi.js'
 import { excerpt } from './excerpt.js'
 import { slugifyHeading } from './slug.js'
 import { sectionById } from './transclude.js'
@@ -36,7 +37,29 @@ export interface Preview {
   title: string
   /** The opening paragraph of whatever the link points at. */
   text: string
+  /**
+   * The direction each half needs, or `undefined` when it needs none.
+   *
+   * The card is built in the browser and appended to `document.body`, so it
+   * inherits `<html dir>` and nothing else: the direction of the *note being
+   * previewed* is not something the DOM can tell it. But the text is known
+   * here, at build time, which is why these are an explicit answer and not a
+   * `dir="auto"` on the card. Same rule as every block in the prose: say it
+   * only when it differs from the page, so a monolingual vault emits neither.
+   */
+  titleDir?: Direction
+  textDir?: Direction
 }
+
+/**
+ * First-strong isolate and its terminator, for the section-title separator.
+ *
+ * ` > ` sits between two runs that may disagree, and it is bidi-**neutral**:
+ * between a Persian note title and an English heading the UBA reorders it and
+ * the card reads `How it works < عنوان`. Isolating each half pins them.
+ */
+const FSI = '\u2068'
+const PDI = '\u2069'
 
 /**
  * `sectionById` re-runs `protectedRanges()` over the whole body per call, which
@@ -46,6 +69,12 @@ export interface Preview {
  * Keyed on the note *object* rather than on `path + subpath`, so a re-scanned
  * vault gets fresh answers by construction instead of by anyone remembering to
  * clear a cache, and so the entries go when the vault does.
+ *
+ * The key carries the base direction as well, because the answer now depends on
+ * it: a process that renders the same vault both ways round (which is exactly
+ * what `scripts/verify-theme.mjs` does) would otherwise be served the first
+ * direction's answer for the second. `base` is one of two literals with no
+ * space in either, so a space is an unambiguous separator from the subpath.
  */
 const memo = new WeakMap<VaultNote, Map<string, Preview | undefined>>()
 
@@ -53,18 +82,21 @@ const memo = new WeakMap<VaultNote, Map<string, Preview | undefined>>()
  * @param subpath the link's `#fragment`, as written *or* already slugified.
  *                Both forms arrive here: a wikilink carries `#How it works`, a
  *                link that transclusion pre-resolved carries `#how-it-works`.
+ * @param base    the direction the page inherits, against which each half of
+ *                the card is asked whether it has anything to say.
  */
-export function previewFor(note: VaultNote, subpath: string): Preview | undefined {
-  let bySubpath = memo.get(note)
-  if (!bySubpath) memo.set(note, (bySubpath = new Map()))
-  if (bySubpath.has(subpath)) return bySubpath.get(subpath)
+export function previewFor(note: VaultNote, subpath: string, base: Direction): Preview | undefined {
+  let byKey = memo.get(note)
+  if (!byKey) memo.set(note, (byKey = new Map()))
+  const key = `${base} ${subpath}`
+  if (byKey.has(key)) return byKey.get(key)
 
-  const preview = compute(note, subpath)
-  bySubpath.set(subpath, preview)
+  const preview = compute(note, subpath, base)
+  byKey.set(key, preview)
   return preview
 }
 
-function compute(note: VaultNote, subpath: string): Preview | undefined {
+function compute(note: VaultNote, subpath: string, base: Direction): Preview | undefined {
   /**
    * `#^blockref` falls straight through to the note's opening, because
    * `sectionOf` has resolved a block reference to the whole note since v1 and
@@ -77,7 +109,26 @@ function compute(note: VaultNote, subpath: string): Preview | undefined {
     // ` > ` rather than a typographic `›`, matching the separator `liveLabel`
     // already puts in the link's own text. The card sits beside the link it
     // came from; two spellings of one separator would read as two things.
-    if (section && text) return { title: `${note.title} > ${section.heading}`, text }
+    if (section && text) {
+      const raw = `${note.title} > ${section.heading}`
+      /**
+       * Wrapped **only when the two halves disagree**. Wrapping unconditionally
+       * would put two control characters into every previewed section anchor of
+       * a monolingual vault, which is the zero-cost claim broken for no gain:
+       * a neutral between two runs that agree cannot reorder.
+       *
+       * `titleDir` is read off `raw`, before the wrapping. `firstStrong`
+       * deliberately skips an isolated run (UBA P2, pinned in
+       * `test/bidi.test.ts`), so the wrapped string answers `undefined` and the
+       * card would lose the direction it just went to the trouble of keeping.
+       */
+      const halves = [firstStrong(note.title), firstStrong(section.heading)]
+      const title =
+        halves[0] && halves[1] && halves[0] !== halves[1]
+          ? `${FSI}${note.title}${PDI} > ${FSI}${section.heading}${PDI}`
+          : raw
+      return { title, text, ...dirs(raw, text, base) }
+    }
   }
 
   /**
@@ -86,5 +137,21 @@ function compute(note: VaultNote, subpath: string): Preview | undefined {
    * opening is a better answer than a card with a blank body. When even that is
    * empty the anchor gets *no attributes* rather than an empty card.
    */
-  return note.excerpt ? { title: note.title, text: note.excerpt } : undefined
+  return note.excerpt
+    ? { title: note.title, text: note.excerpt, ...dirs(note.title, note.excerpt, base) }
+    : undefined
+}
+
+/**
+ * The two optional halves, spread rather than assigned, so a preview that has
+ * nothing to say carries no keys at all. `JSON`-shaped equality in the tests
+ * then reads the same as the emitted markup does.
+ */
+function dirs(title: string, text: string, base: Direction) {
+  const forTitle = textDir(title, base)
+  const forText = textDir(text, base)
+  return {
+    ...(forTitle ? { titleDir: forTitle } : {}),
+    ...(forText ? { textDir: forText } : {}),
+  }
 }

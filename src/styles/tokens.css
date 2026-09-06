@@ -203,6 +203,84 @@
   }
 }
 
+/**
+ * Right-to-left typography, as tokens rather than as fourteen edited rules.
+ *
+ * **Tracking.** Arabic and Persian are cursive: the font joins letters by
+ * overlapping their glyph boxes, and `letter-spacing` pulls those joins apart.
+ * W3C's *Arabic & Persian Layout Requirements* is explicit that moving two
+ * joined characters closer or further apart produces undesirable results, and
+ * that the script's own mechanism for filling a line is elongation (kashida),
+ * not tracking. `--tracking-label: 0.1em` is the damaging one: a large positive
+ * value on `.label`, the rail headings, `.nav-count` and callout titles, which
+ * visibly severs the joins. The negative ones are wrong for a different reason
+ * and are turned off with them, because they are tuned for Latin letterforms.
+ *
+ * **Leading.** Arabic carries diacritics above and below the baseline and has
+ * deeper descenders, and wants roughly 1.7-1.8 where Latin wants 1.5. Only the
+ * tight end moves here: `--leading-body` was already 1.72 and needs almost
+ * nothing, while the heading tokens at 1.15-1.3 clip a vowel mark.
+ *
+ * **`:dir(rtl)` rather than `:lang(ar), :lang(fa)`.** Leading is a property of
+ * the *script*, not of the direction, so this over-applies to Hebrew, which is
+ * not cursive and does not need the extra leading. That is deliberate and it is
+ * the smaller error: jotter has no per-block `lang` (`dir` needs script
+ * detection, `lang` needs language detection, and only the first is decidable
+ * from the text), so the `:lang()` idiom the guidance recommends is available
+ * only on `<html lang>`, which is blind to exactly the mixed vault this whole
+ * feature exists for. Latin tracking is not right for Hebrew either, and
+ * generous leading is a far smaller error than cramped Arabic.
+ *
+ * Custom properties inherit, so `:dir(rtl)` reaches a per-block Persian heading
+ * inside an English page as readily as it reaches a whole Persian site.
+ *
+ * And inheritance is why the second rule exists. Without it the override is
+ * one-way: on a *Persian* site every English block inherits `normal` tracking
+ * and Arabic leading from the root and quietly loses its Latin typography.
+ * That is the mirror of the case this whole feature is for, and the mirror is
+ * the thing `scripts/verify-theme.mjs` exists to keep honest, so it is restored
+ * rather than accepted.
+ *
+ * Scoped under `:dir(rtl)` rather than written as a bare `:dir(ltr)`, which
+ * would match every element on an ordinary site and beat a reader's own
+ * `:root` token override on every descendant of `<html>`. As a descendant
+ * selector it cannot match at all until something above it actually runs
+ * right-to-left, so an English site's cascade is exactly what it was. The four
+ * Latin values are restated here, which is the one cost: they are the same
+ * literals as `:root` above, and both have to move together.
+ *
+ * It works at any nesting depth. An RTL block inside an English block inside an
+ * RTL page matches plain `:dir(rtl)` on itself, and a declaration beats an
+ * inherited value, so it takes the Arabic values back.
+ */
+:dir(rtl) {
+  --tracking-label: normal;
+  --tracking-meta: normal;
+  --tracking-title: normal;
+  --tracking-tight: normal;
+
+  --leading-display: 1.4;
+  --leading-title: 1.45;
+  --leading-section: 1.5;
+  --leading-body: 1.8;
+  --leading-ui: 1.75;
+  --leading-meta: 1.8;
+}
+
+:dir(rtl) :dir(ltr) {
+  --tracking-label: 0.1em;
+  --tracking-meta: 0.06em;
+  --tracking-title: -0.025em;
+  --tracking-tight: -0.01em;
+
+  --leading-display: 1.15;
+  --leading-title: 1.2;
+  --leading-section: 1.3;
+  --leading-body: 1.72;
+  --leading-ui: 1.65;
+  --leading-meta: 1.7;
+}
+
 /* The type scale steps down one notch on small screens; the measure holds. */
 @media (max-width: 640px) {
   :root {

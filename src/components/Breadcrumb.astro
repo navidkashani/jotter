@@ -32,6 +32,7 @@ import type { VaultNote } from '../lib/vault.js'
 import { allFolders, config } from '../lib/site.js'
 import { trailFor } from '../lib/tree.js'
 import { noteHref } from '../lib/href.js'
+import { textDir } from '../lib/bidi.js'
 
 interface Props {
   note: VaultNote
@@ -57,7 +58,10 @@ const indexed = config.features.search ? '' : undefined
       {crumbs.map((folder, i) => (
         <>
           {i > 0 && <span aria-hidden="true">/</span>}
-          <a href={noteHref(folder.slug)}>{folder.name}</a>
+          {/* One line, like `Note.astro`'s `<h1>` and for the same reason:
+              the scenario suite asserts this crumb's rendered markup exactly,
+              and a broken-up element puts whitespace inside the anchor. */}
+          <a href={noteHref(folder.slug)} dir={textDir(folder.name, config.dir)}>{folder.name}</a>
         </>
       ))}
     </p>

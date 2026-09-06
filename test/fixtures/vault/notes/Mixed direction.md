@@ -12,6 +12,21 @@ An English paragraph, on an English site: nothing should be marked here.
 - یک پیوند انگلیسی داخل جمله‌ی فارسی: [[Luhmann]]
 - An English item in the same list.
 
+An English-first list, which is the shape that decides where a list's indent
+gutter goes: the list itself resolves LTR from its first item, so only the
+later item is marked and its marker has to hang in its own gutter.
+
+1. An English item, first.
+2. یک بند فارسی پس از آن.
+3. Another English item.
+
+- [x] An English task, done.
+- [ ] یک کار فارسی.
+
+A link that previews a right-to-left note: [[Persian titled]], one into its
+English section: [[Persian titled#An English heading]], and one into a section
+that agrees with it: [[Persian titled#یک عنوان فارسی]].
+
 Obsidian یک برنامه است: the known-wrong case: first-strong resolves this to
 LTR because the sentence opens with a Latin word, exactly as Obsidian does.
 

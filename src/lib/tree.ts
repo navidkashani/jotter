@@ -80,7 +80,13 @@ const navKey = (entry: TreeEntry): string =>
  * so nothing can import it; what arrives here was arranged in Open Publish. See
  * `docs/open-publish.md`.
  */
-const compare = (a: TreeEntry, b: TreeEntry, notesFirst: boolean, rank: Map<string, number>) => {
+const compare = (
+  a: TreeEntry,
+  b: TreeEntry,
+  notesFirst: boolean,
+  rank: Map<string, number>,
+  collator: Intl.Collator,
+) => {
   // An arranged pair is ordered by the arrangement and nothing else. Arranged
   // beats unarranged, and both beat the kind rule below, which is the whole
   // point of an explicit order.
@@ -96,7 +102,7 @@ const compare = (a: TreeEntry, b: TreeEntry, notesFirst: boolean, rank: Map<stri
   }
   const aName = a.kind === 'folder' ? a.name : a.title
   const bName = b.kind === 'folder' ? b.name : b.title
-  return aName.localeCompare(bName)
+  return collator.compare(aName, bName)
 }
 
 /**
@@ -136,7 +142,32 @@ export function buildTree(
    * everything under it". `NavTree.astro` is what skips them.
    */
   arrangement: NavArrangement = NO_ARRANGEMENT,
+  /**
+   * `config.locale`. Threaded in rather than imported, for the reason `style`
+   * already is: this module is pure, imports no config, and is unit-tested
+   * without a running Astro.
+   *
+   * What it buys is mostly `numeric` (below), which is locale-independent, plus
+   * the handful of places a language really does order differently from the
+   * Unicode root: Swedish sorts `Ä` after `Z`, Turkish separates dotted and
+   * dotless `i`. It is *not* what makes Persian sort correctly. That was the
+   * first guess and it was wrong: root collation already orders Persian
+   * properly, and `Intl.Collator('fa')` and a bare `localeCompare()` produce
+   * identical output for it. `undefined` means the runtime default, which is
+   * the same answer `localeCompare()` with no argument was giving.
+   */
+  locale?: string,
 ): TreeEntry[] {
+  /**
+   * One collator for the whole sort. `localeCompare(b, locale)` inside a
+   * comparator constructs one per *comparison*, which is the documented way to
+   * make locale-aware sorting slow.
+   *
+   * `numeric` is the visible win, and it is why this is worth doing at all:
+   * numbered notes are everywhere in an Obsidian vault (`01 Inbox`,
+   * `Chapter 2`), and without it the sidebar reads Note 1, Note 10, Note 2.
+   */
+  const collator = new Intl.Collator(locale, { numeric: true })
   const root: TreeFolder = { kind: 'folder', name: '', path: '', slug: '', children: [], count: 0 }
   const folders = new Map<string, TreeFolder>([['', root]])
 
@@ -222,7 +253,7 @@ export function buildTree(
   const hidden = new Set(arrangement.hidden)
 
   const sortDeep = (entries: TreeEntry[], atRoot: boolean): TreeEntry[] => {
-    entries.sort((a, b) => compare(a, b, atRoot, rank))
+    entries.sort((a, b) => compare(a, b, atRoot, rank, collator))
     for (const entry of entries) {
       if (hidden.has(navKey(entry))) entry.hidden = true
       if (entry.kind === 'folder') sortDeep(entry.children, false)

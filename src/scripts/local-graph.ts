@@ -51,7 +51,7 @@ import type { SimulationLinkDatum, SimulationNodeDatum } from 'd3-force'
 /** What `LocalGraph.astro` puts in `data-graph`. */
 interface Payload {
   current: string
-  nodes: { slug: string; title: string; href: string }[]
+  nodes: { slug: string; title: string; href: string; dir?: 'ltr' | 'rtl' }[]
   links: { source: string; target: string }[]
   /** Translated, because nothing in this file may reach `src/i18n/`. Optional
    *  only so that a page built before these keys existed still draws. */
@@ -62,6 +62,8 @@ interface Node extends SimulationNodeDatum {
   slug: string
   title: string
   href: string
+  /** Set only when this title runs the other way from the page. See `Payload`. */
+  dir?: 'ltr' | 'rtl'
   /** Number of links touching this node, which is what sizes it. */
   degree: number
   /** Direct neighbours, for the hover highlight. */
@@ -178,10 +180,15 @@ function mountGraph(mount: HTMLElement) {
     labelWidths = new Map()
     labelShort = new Map()
     for (const n of nodes) {
+      // Measured the way it will be drawn. Bidi reordering does not change a
+      // run's advance width, so this changes no number today; it keeps the two
+      // in step if the elision ever grows a direction-sensitive branch.
+      ctx.direction = n.dir ?? 'inherit'
       labelWidths.set(n.slug, ctx.measureText(n.title).width)
       const text = elide(n.title, budget)
       labelShort.set(n.slug, { text, width: ctx.measureText(text).width })
     }
+    ctx.direction = 'inherit'
   }
 
   const readTheme = () => {
@@ -366,6 +373,20 @@ function mountGraph(mount: HTMLElement) {
           : Math.min(Math.max(x, half + PAD), width - half - PAD)
 
       ctx.globalAlpha = isNear(n) ? 1 : DIM
+      /**
+       * The one thing a canvas cannot inherit. `<html dir>` styles the page and
+       * reaches the `<canvas>` element, but text drawn *into* a canvas takes
+       * its base direction from this property alone, which defaults to
+       * `inherit` and therefore to the site's. A Persian title on an English
+       * site is laid out left-to-right without it: its trailing `…` moves to
+       * the label's beginning, and any Latin word or digit run inside it lands
+       * on the wrong side of the Persian around it.
+       *
+       * `'inherit'` for the ordinary case rather than a hard `'ltr'`, so the
+       * majority language keeps taking the page's answer whichever way the site
+       * runs, and `textAlign` stays `'center'` above, which does not mirror.
+       */
+      ctx.direction = n.dir ?? 'inherit'
       ctx.strokeStyle = paint.halo
       ctx.strokeText(text, inside, y)
       ctx.fillStyle = n.slug === data.current || n === hovered ? paint.focus : paint.label
@@ -373,6 +394,7 @@ function mountGraph(mount: HTMLElement) {
     }
 
     ctx.globalAlpha = 1
+    ctx.direction = 'inherit'
   }
 
   const resize = () => {
